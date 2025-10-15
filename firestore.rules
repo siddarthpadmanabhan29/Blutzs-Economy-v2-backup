@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ---------- USERS COLLECTION ----------
+    match /users/{userId} {
+      // Anyone logged in can read their own user doc
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Allow creating a new user doc only for the authenticated uid
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && validNewUser(request.resource.data);
+
+      // Allow updates only for safe fields on self-doc
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && validProfileUpdate(request.resource.data);
+
+      // Allow full write for admins
+      allow write: if isAdmin();
+
+      // ---------- Validation Helpers ----------
+      function validNewUser(data) {
+        return data.username is string
+            && data.username.size() > 0
+            && (!('balance' in data) || (data.balance is number && data.balance >= 0))
+            && (!('isAdmin' in data) || data.isAdmin is bool)
+            && (!('renewalPending' in data) || data.renewalPending is bool)
+            && (!('renewalDate' in data) || data.renewalDate is string)
+            && (!('expirationDate' in data) || data.expirationDate is string);
+      }
+
+      function validProfileUpdate(data) {
+        // Clients can only safely update limited fields — no balance/inventory/history edits allowed.
+        return data.keys().hasOnly([
+          'username',
+          'renewalPending',
+          'renewalDate',
+          'expirationDate'
+        ])
+        && (!('username' in data) || (data.username is string && data.username.size() > 0))
+        && (!('renewalPending' in data) || data.renewalPending is bool)
+        && (!('renewalDate' in data) || data.renewalDate is string)
+        && (!('expirationDate' in data) || data.expirationDate is string);
+      }
+    }
+
+    // ---------- SHOP COLLECTION ----------
+    match /shop/{docId} {
+      // Anyone can read shop items
+      allow read: if true;
+      // Only admins can add, edit, or delete
+      allow write: if isAdmin();
+    }
+
+    // ---------- JOBS COLLECTION ----------
+    match /jobs/{docId} {
+      // Anyone can read job listings
+      allow read: if true;
+      // Only admins can add, edit, or delete
+      allow write: if isAdmin();
+    }
+
+    // ---------- ADMIN CHECK ----------
+    function isAdmin() {
+      return request.auth != null
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+  }
+}
