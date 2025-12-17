@@ -133,3 +133,10 @@ function resetBtn(btn) {
 }
 
 auth.onAuthStateChanged(user => { if(user) loadBpsShop(); });
+
+// ---------- NEW: Heartbeat Timer ----------
+setInterval(() => {
+  if (currentUserData) {
+    renderBpsShop();
+  }
+}, 5000);

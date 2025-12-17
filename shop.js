@@ -191,4 +191,11 @@ function resetBtn(btn) {
 
 auth.onAuthStateChanged((user) => { if (user) loadShopItems(); });
 
+setInterval(() => {
+  if (currentUserData) {
+    // This forces the shop to re-draw and re-check the date against "now"
+    renderShop(); 
+  }
+}, 5000); 
+
 export { loadShopItems };
