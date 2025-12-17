@@ -1,121 +1,194 @@
-// ---------- shop.js ----------
+// ---------- shop.js (ID EXPIRATION CHECK ADDED) ----------
 console.log("shop.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  doc, getDoc, updateDoc, collection, onSnapshot, arrayUnion 
+  doc, getDoc, updateDoc, collection, onSnapshot, arrayUnion, addDoc 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { updateBalanceDisplay } from "./main.js";
 
-// Container for shop items
 const shopItemsContainer = document.getElementById("shop-items");
 
-// Load shop items with realtime updates
+let currentUserData = null;
+let currentShopItems = [];
+
 async function loadShopItems() {
   const user = auth.currentUser;
   if (!user) return;
 
-  // Get the user's balance first
   const userRef = doc(db, "users", user.uid);
-  const userSnap = await getDoc(userRef);
-  const userBalance = userSnap.exists() ? Number(userSnap.data().balance || 0) : 0;
-
   const shopRef = collection(db, "shop");
-  onSnapshot(shopRef, (snapshot) => {
-    shopItemsContainer.innerHTML = "";
 
-    if (snapshot.empty) {
-      shopItemsContainer.innerHTML = "<p>No items available in the shop.</p>";
-      return;
+  // LISTENER 1: User Data
+  onSnapshot(userRef, (docSnap) => {
+    if (docSnap.exists()) {
+      currentUserData = docSnap.data();
+      renderShop(); 
     }
+  });
 
-    snapshot.forEach((docSnap) => {
-      const item = docSnap.data();
-      const cost = Number(item.cost);
-      const affordable = userBalance >= cost;
-
-      const itemCard = document.createElement("div");
-      itemCard.classList.add("shop-item");
-      if (!affordable) itemCard.classList.add("unaffordable");
-
-      itemCard.innerHTML = `
-        <div class="shop-item-image">
-          <img src="${item.image || 'https://via.placeholder.com/150?text=No+Image'}" alt="${item.name}">
-        </div>
-        <div class="shop-item-info">
-          <h4>${item.name}</h4>
-          <p class="shop-price">$${cost.toLocaleString()}</p>
-          <button class="btn-primary buy-item-btn" data-id="${docSnap.id}" ${!affordable ? "disabled" : ""}>
-            ${affordable ? "Buy" : "Not Enough Money 💸"}
-          </button>
-        </div>
-      `;
-
-      shopItemsContainer.appendChild(itemCard);
+  // LISTENER 2: Shop Items
+  onSnapshot(shopRef, (querySnap) => {
+    currentShopItems = [];
+    querySnap.forEach((doc) => {
+      currentShopItems.push({ id: doc.id, ...doc.data() });
     });
-
-    attachBuyListeners();
+    renderShop(); 
   });
 }
 
-// Attach buy button listeners
+function renderShop() {
+  if (!shopItemsContainer) return;
+  shopItemsContainer.innerHTML = "";
+
+  if (currentShopItems.length === 0) {
+    shopItemsContainer.innerHTML = "<p>No items available.</p>";
+    return;
+  }
+
+  const userBalance = Number(currentUserData?.balance || 0);
+  const activeDiscount = Number(currentUserData?.activeDiscount || 0);
+
+  // --- NEW: Check Expiration ---
+  const now = new Date();
+  const expirationDate = currentUserData?.expirationDate ? new Date(currentUserData.expirationDate) : null;
+  // If no expiration date exists, we assume they are NOT expired (or you can change logic to require one)
+  const isExpired = expirationDate && expirationDate < now;
+
+  currentShopItems.forEach((item) => {
+    const originalCost = Number(item.cost);
+    let finalCost = originalCost;
+    let priceDisplay = `$${originalCost.toLocaleString()}`;
+
+    if (activeDiscount > 0) {
+      finalCost = Math.floor(originalCost * (1 - activeDiscount));
+      priceDisplay = `
+        <span style="text-decoration: line-through; color: gray; font-size: 0.8em;">$${originalCost}</span> 
+        <span style="color: #2ecc71; font-weight: bold;">$${finalCost}</span>
+        <span style="font-size: 0.7em; color: #e74c3c;">(-${activeDiscount * 100}%)</span>
+      `;
+    }
+
+    const affordable = userBalance >= finalCost;
+    
+    // Disable if unaffordable OR expired
+    const isDisabled = !affordable || isExpired;
+
+    // Determine Button Text
+    let btnText = affordable ? "Buy" : "Need Cash 💸";
+    if (isExpired) btnText = "ID Expired 🚫";
+
+    const itemCard = document.createElement("div");
+    itemCard.classList.add("shop-item");
+    if (isDisabled) itemCard.classList.add("unaffordable"); // Re-use gray style
+
+    itemCard.innerHTML = `
+      <div class="shop-item-image">
+        <img src="${item.image || 'https://via.placeholder.com/150?text=Item'}" alt="${item.name}">
+      </div>
+      <div class="shop-item-info">
+        <h4>${item.name}</h4>
+        <p class="shop-price">${priceDisplay}</p>
+        <button class="btn-primary buy-item-btn" data-id="${item.id}" ${isDisabled ? "disabled" : ""}>
+          ${btnText}
+        </button>
+      </div>
+    `;
+
+    shopItemsContainer.appendChild(itemCard);
+  });
+
+  attachBuyListeners();
+}
+
 function attachBuyListeners() {
   document.querySelectorAll(".buy-item-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const itemId = btn.dataset.id;
-      await buyItem(itemId);
+        btn.disabled = true;
+        btn.textContent = "Processing...";
+        await buyItem(btn.dataset.id, btn);
     });
   });
 }
 
-// Buy an item
-async function buyItem(itemId) {
+async function buyItem(itemId, btnElement) {
   const user = auth.currentUser;
-  if (!user) return alert("You must be logged in.");
+  if (!user) return;
 
   const userRef = doc(db, "users", user.uid);
   const itemRef = doc(db, "shop", itemId);
-
-  const [userSnap, itemSnap] = await Promise.all([getDoc(userRef), getDoc(itemRef)]);
-  if (!userSnap.exists() || !itemSnap.exists()) return alert("User or item not found.");
-
-  const userData = userSnap.data();
-  const itemData = itemSnap.data();
-  const balance = Number(userData.balance || 0);
-  const cost = Number(itemData.cost);
-
-  if (balance < cost) {
-    return alert("Not enough balance to buy this item!");
-  }
-
-  const newBalance = balance - cost;
+  const inventoryRef = collection(db, "users", user.uid, "inventory");
 
   try {
-    // Update user balance, inventory, and history atomically
+    const [userSnap, itemSnap] = await Promise.all([getDoc(userRef), getDoc(itemRef)]);
+    
+    if (!userSnap.exists() || !itemSnap.exists()) {
+        alert("Error: User or Item not found.");
+        return resetBtn(btnElement);
+    }
+    
+    const userData = userSnap.data();
+    const itemData = itemSnap.data();
+    
+    // --- SECURITY CHECK: Stop if expired ---
+    const now = new Date();
+    const expirationDate = userData.expirationDate ? new Date(userData.expirationDate) : null;
+    if (expirationDate && expirationDate < now) {
+        alert("⛔ Your ID is expired! Please renew your ID to purchase items.");
+        return resetBtn(btnElement);
+    }
+
+    const currentBalance = Number(userData.balance || 0);
+    const currentBPS = Number(userData.bpsBalance || 0);
+    const activeDiscount = Number(userData.activeDiscount || 0);
+    
+    let finalCost = Number(itemData.cost);
+    if (activeDiscount > 0) {
+        finalCost = Math.floor(finalCost * (1 - activeDiscount));
+    }
+
+    if (currentBalance < finalCost) {
+        alert("Insufficient funds!");
+        return resetBtn(btnElement);
+    }
+
+    const newBalance = currentBalance - finalCost;
+    const newBPS = currentBPS + 5; 
+
     await updateDoc(userRef, {
       balance: newBalance,
-      [`inventory.${itemId}`]: (userData.inventory?.[itemId] || 0) + 1,
+      bpsBalance: newBPS,
+      activeDiscount: 0, 
       history: arrayUnion({
-        message: `Bought ${itemData.name} for $${cost.toLocaleString()}`,
+        message: `Bought ${itemData.name} for $${finalCost}`,
         type: "purchase",
         timestamp: new Date().toISOString()
       })
     });
 
-    // Update UI balance
-    updateBalanceDisplay(newBalance, "user-balance", "loss");
+    await addDoc(inventoryRef, {
+      name: itemData.name,
+      value: Math.floor(finalCost / 2),
+      originalId: itemId,
+      acquiredAt: new Date().toISOString()
+    });
+    
+    alert(`Purchased ${itemData.name} for $${finalCost}!`);
 
-    alert(`You purchased ${itemData.name} for $${cost}!`);
-    console.log(`Purchased ${itemData.name} for $${cost}`);
   } catch (err) {
-    console.error("Purchase failed:", err);
-    alert("Purchase failed. Try again later.");
+    console.error(err);
+    alert("Transaction failed: " + err.message);
+    resetBtn(btnElement);
   }
 }
 
-// Initialize shop only when logged in
-auth.onAuthStateChanged((user) => {
-  if (user) loadShopItems();
-});
+function resetBtn(btn) {
+    if(btn) {
+        btn.disabled = false;
+        btn.textContent = "Buy";
+    }
+}
+
+auth.onAuthStateChanged((user) => { if (user) loadShopItems(); });
 
 export { loadShopItems };

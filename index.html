@@ -6,7 +6,6 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- ---------- Login Screen ---------- -->
   <div id="login-screen" class="screen">
     <div id="login-form">
       <h1>Login / Register</h1>
@@ -16,13 +15,16 @@
     </div>
   </div>
 
-  <!-- ---------- Dashboard ---------- -->
   <div id="dashboard" class="screen hidden">
-    <!-- Navbar -->
     <header id="dashboard-navbar">
       <div class="navbar-left">
         <span>Welcome, <strong id="user-name"></strong></span>
         <span>Balance: <strong id="user-balance"></strong></span>
+        
+        <span style="margin-left: 15px; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 15px;">
+          BPS: <strong id="user-bps" style="color: #d1bce3;">0</strong>
+        </span>
+
       </div>
       <div class="navbar-right">
         <button id="open-admin" class="btn-secondary hidden">Admin Panel</button>
@@ -30,9 +32,7 @@
       </div>
     </header>
 
-    <!-- Dashboard Content -->
     <main id="dashboard-content">
-      <!-- Profile Section -->
       <section class="section-card">
         <h3>Profile</h3>
         <p><strong>Username:</strong> <span id="profile-username"></span></p>
@@ -43,26 +43,33 @@
         <button id="renew-btn" class="btn-primary">Request Renewal</button>
       </section>
 
-      <!-- Shop Section -->
+      <section class="section-card" style="border: 2px solid #8e44ad;">
+        <h3 style="color: #8e44ad;">🟣 BPS Token Shop</h3>
+        <p>Spend your tokens on coupons!</p>
+        <div id="bps-shop-items" style="display: flex; gap: 15px; flex-wrap: wrap;">
+          <p>Loading tokens...</p>
+        </div>
+      </section>
+
       <section class="section-card">
-        <h3>Shop</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3>Shop</h3>
+          
+          <span id="active-discount-indicator" class="hidden" 
+                style="background: #e74c3c; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 0.9em;">
+            🔥 Discount Active!
+          </span>
+        </div>
+        
         <div id="shop-items"></div>
       </section>
 
-      <!-- Jobs Section -->
-      <section class="section-card">
-        <h3>Jobs</h3>
-        <div id="jobs"></div>
-      </section>
-
-      <!-- Inventory Section -->
       <section class="section-card">
         <h3>Inventory</h3>
         <p id="inventory-value">Total Value: $0</p>
         <div id="inventory-items">Loading...</div>
       </section>
 
-      <!-- Transfer Section -->
       <section class="section-card">
         <h3>Transfer Money</h3>
         <div class="transfer-container">
@@ -73,7 +80,6 @@
         <p id="transfer-message"></p>
       </section>
 
-      <!-- History Section -->
       <section class="section-card">
         <h3>History</h3>
         <table>
@@ -83,7 +89,6 @@
     </main>
   </div>
 
-  <!-- ---------- Admin Panel ---------- -->
   <div id="admin-panel" class="screen hidden">
     <h2>Admin Panel</h2>
     <button id="back-to-dashboard" class="btn-secondary">Back</button>
@@ -92,14 +97,7 @@
     <input id="new-item-name" placeholder="Item Name">
     <input id="new-item-price" type="number" placeholder="Price">
     <input id="new-item-image" placeholder="Image URL (optional)">
-    <input id="new-item-category" placeholder="Category (optional)">
     <button id="add-item-btn" class="btn-primary">Add Item</button>
-    <p id="add-item-status"></p>
-
-    <h3>Add Job</h3>
-    <input id="new-job-name" placeholder="Job Name">
-    <input id="new-job-pay" type="number" placeholder="Pay">
-    <button id="add-job-btn" class="btn-primary">Add Job</button>
 
     <h3>Give Money</h3>
     <input id="admin-give-username" placeholder="Username" autocomplete="off">
@@ -110,15 +108,27 @@
     </p>
     <button id="admin-give-btn" class="btn-danger">Give Money</button>
 
+
+    <h3>Give BPS Tokens (Loyalty)</h3>
+    <input id="admin-give-bps-username" placeholder="Username" autocomplete="off">
+    <input id="admin-give-bps-amount" type="number" placeholder="BPS Amount">
+    <p>
+      <strong>User:</strong> 
+      <span id="admin-bps-user-info" style="color: gray;">N/A</span>
+    </p>
+    <button id="admin-give-bps-btn" class="btn-primary" style="background-color: #8e44ad;">Give BPS Tokens</button>
+
     <h3>Renewal Requests</h3>
     <div id="renewal-requests"></div>
   </div>
 
-  <!-- ---------- Scripts ---------- -->
   <script type="module" src="firebaseConfig.js"></script>
   <script type="module" src="auth.js"></script>
   <script type="module" src="shop.js"></script>
   <script type="module" src="dashboard.js"></script>
   <script type="module" src="transfer.js"></script>
+  <script type="module" src="inventory.js"></script>
+  
+  <script type="module" src="bpsShop.js"></script> 
 </body>
 </html>

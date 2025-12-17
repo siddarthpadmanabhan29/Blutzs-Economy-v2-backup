@@ -447,6 +447,7 @@ button:hover {
 .history-purchase { color: red; }
 .history-transfer { color: blue; }
 .history-admin { color: purple; }
+.history-usage { color: darkslateblue; }
 
 /* ---------- Admin Panel ---------- */
 #admin-panel {

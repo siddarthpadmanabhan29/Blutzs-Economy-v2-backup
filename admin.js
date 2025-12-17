@@ -1,11 +1,11 @@
-// ---------- admin.js ----------
+// ---------- admin.js (UPDATED with BPS) ----------
 console.log("admin.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
   collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, arrayUnion, onSnapshot
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { showScreen } from "./main.js";
+import { showScreen } from "./auth.js"; // Changed from main.js to auth.js if that's where it lives
 
 // ---------- Elements ----------
 const adminPanel = document.getElementById("admin-panel");
@@ -15,19 +15,22 @@ const backToDashboardBtn = document.getElementById("back-to-dashboard");
 const addItemBtn = document.getElementById("add-item-btn");
 const newItemName = document.getElementById("new-item-name");
 const newItemPrice = document.getElementById("new-item-price");
+const newItemImage = document.getElementById("new-item-image"); // Added image support
 
-// Add Job
-const addJobBtn = document.getElementById("add-job-btn");
-const newJobName = document.getElementById("new-job-name");
-const newJobPay = document.getElementById("new-job-pay");
-
-// Give Money
+// Give Money Elements
 const adminGiveUsername = document.getElementById("admin-give-username");
 const adminGiveAmount = document.getElementById("admin-give-amount");
 const adminGiveBtn = document.getElementById("admin-give-btn");
-const adminUserInfo = document.getElementById("admin-user-info"); // Shows username + balance
+const adminUserInfo = document.getElementById("admin-user-info");
 
-let balanceListener = null; // Tracks real-time listener
+// Give BPS Elements (NEW)
+const adminGiveBpsUsername = document.getElementById("admin-give-bps-username");
+const adminGiveBpsAmount = document.getElementById("admin-give-bps-amount");
+const adminGiveBpsBtn = document.getElementById("admin-give-bps-btn");
+const adminBpsUserInfo = document.getElementById("admin-bps-user-info");
+
+let balanceListener = null; // Tracks real-time money listener
+let bpsListener = null;     // Tracks real-time BPS listener
 
 // Renewal Requests
 const renewalRequestsContainer = document.getElementById("renewal-requests");
@@ -49,155 +52,197 @@ export async function checkAdminAccess() {
 async function addShopItem() {
   const name = newItemName.value.trim();
   const cost = parseFloat(newItemPrice.value);
+  const image = newItemImage.value.trim(); // Optional image
 
   if (!name || isNaN(cost) || cost <= 0) return alert("Enter valid item name and cost.");
 
-  await addDoc(collection(db, "shop"), { name, cost });
+  await addDoc(collection(db, "shop"), { name, cost, image });
   alert(`Added item: ${name} ($${cost})`);
   newItemName.value = "";
   newItemPrice.value = "";
+  newItemImage.value = "";
 }
 
-// ---------- Add Job ----------
-async function addJob() {
-  const name = newJobName.value.trim();
-  const pay = parseFloat(newJobPay.value);
+// ---------- 1. Give Money Logic ----------
+adminGiveUsername?.addEventListener("input", async () => {
+  handleUserLookup(adminGiveUsername, adminUserInfo, adminGiveBtn, "money");
+});
 
-  if (!name || isNaN(pay) || pay <= 0) return alert("Enter valid job name and pay.");
+// ---------- 2. Give BPS Logic (NEW) ----------
+adminGiveBpsUsername?.addEventListener("input", async () => {
+  handleUserLookup(adminGiveBpsUsername, adminBpsUserInfo, adminGiveBpsBtn, "bps");
+});
 
-  await addDoc(collection(db, "jobs"), { name, pay });
-  alert(`Added job: ${name} ($${pay})`);
-  newJobName.value = "";
-  newJobPay.value = "";
-}
+// Generic User Lookup Helper
+async function handleUserLookup(inputEl, infoEl, btnEl, type) {
+  const usernameInput = inputEl.value.trim().toLowerCase();
 
-// ---------- Show User Info & Real-time Balance ----------
-adminGiveUsername.addEventListener("input", async () => {
-  const usernameInput = adminGiveUsername.value.trim().toLowerCase();
-
-  // Remove previous listener
-  if (balanceListener) {
-    balanceListener();
-    balanceListener = null;
-  }
+  // Clear previous listeners based on type
+  if (type === "money" && balanceListener) { balanceListener(); balanceListener = null; }
+  if (type === "bps" && bpsListener) { bpsListener(); bpsListener = null; }
 
   if (!usernameInput) {
-    adminUserInfo.textContent = "N/A";
-    adminUserInfo.style.color = "gray";
-    adminGiveBtn.disabled = true;
+    infoEl.textContent = "N/A";
+    infoEl.style.color = "gray";
+    btnEl.disabled = true;
     return;
   }
 
   const usersRef = collection(db, "users");
-  const q = query(usersRef, where("usernameLower", "==", usernameInput));
+  const q = query(usersRef, where("username", "==", usernameInput)); // Check strict equality on username
   const snap = await getDocs(q);
 
   if (snap.empty) {
-    adminUserInfo.textContent = "Invalid user";
-    adminUserInfo.style.color = "red";
-    adminGiveBtn.disabled = true;
+    infoEl.textContent = "Invalid user";
+    infoEl.style.color = "red";
+    btnEl.disabled = true;
   } else {
     const userDoc = snap.docs[0];
     const userRef = doc(db, "users", userDoc.id);
 
-    // Enable button
-    adminGiveBtn.disabled = false;
+    btnEl.disabled = false;
 
-    // Real-time listener for balance updates
-    balanceListener = onSnapshot(userRef, (docSnap) => {
-      if (!docSnap.exists()) {
-        adminUserInfo.textContent = "Invalid user";
-        adminUserInfo.style.color = "red";
-        adminGiveBtn.disabled = true;
-        return;
+    // Attach new listener
+    const unsubscribe = onSnapshot(userRef, (docSnap) => {
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      
+      if (type === "money") {
+        infoEl.textContent = `${data.username} — $${(data.balance || 0).toLocaleString()}`;
+        infoEl.style.color = "green";
+      } else {
+        infoEl.textContent = `${data.username} — ${(data.bpsBalance || 0)} BPS`;
+        infoEl.style.color = "#8e44ad"; // Purple for BPS
       }
-
-      const userData = docSnap.data();
-      const balance = Number(userData.balance) || 0;
-      adminUserInfo.textContent = `${userData.username} — $${balance.toLocaleString()}`;
-      adminUserInfo.style.color = "green";
     });
-  }
-});
 
-// ---------- Give Money ----------
+    // Save listener ref so we can detach it later
+    if (type === "money") balanceListener = unsubscribe;
+    else bpsListener = unsubscribe;
+  }
+}
+
+// ---------- Execute Give Money ----------
 async function giveMoney() {
+  await executeGive(
+    adminGiveUsername, 
+    adminGiveAmount, 
+    adminUserInfo, 
+    "balance", 
+    "money"
+  );
+}
+
+// ---------- Execute Give BPS (NEW) ----------
+async function giveBps() {
+  await executeGive(
+    adminGiveBpsUsername, 
+    adminGiveBpsAmount, 
+    adminBpsUserInfo, 
+    "bpsBalance", 
+    "BPS"
+  );
+}
+
+// Generic Give Function
+async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
   try {
-    const usernameInput = adminGiveUsername.value.trim().toLowerCase();
-    const amount = parseFloat(adminGiveAmount.value);
+    const usernameInput = inputEl.value.trim(); // Match casing logic
+    const amount = parseFloat(amountEl.value);
 
     if (!usernameInput || isNaN(amount) || amount <= 0) {
       return alert("Enter a valid username and amount.");
     }
 
     const usersRef = collection(db, "users");
-    const q = query(usersRef, where("usernameLower", "==", usernameInput));
+    const q = query(usersRef, where("username", "==", usernameInput));
     const snap = await getDocs(q);
 
-    if (snap.empty) {
-      adminUserInfo.textContent = "Invalid user";
-      adminUserInfo.style.color = "red";
-      return alert("User not found.");
-    }
+    if (snap.empty) return alert("User not found.");
 
     const userDoc = snap.docs[0];
     const userRef = doc(db, "users", userDoc.id);
     const userData = userDoc.data();
 
-    const newBalance = (Number(userData.balance) || 0) + amount;
+    const currentVal = Number(userData[field]) || 0;
+    const newVal = currentVal + amount;
 
-    // Update balance + history
+    // Update Field + History
     await updateDoc(userRef, {
-      balance: newBalance,
+      [field]: newVal,
       history: arrayUnion({
-        message: `Admin gave $${amount}`,
+        message: `Admin gave ${amount} ${typeLabel}`,
         type: "admin",
         timestamp: new Date().toISOString()
       })
     });
 
-    alert(`✅ Gave $${amount} to ${userData.username}.`);
+    alert(`✅ Gave ${amount} ${typeLabel} to ${userData.username}.`);
 
-    // Reset inputs and info
-    adminGiveUsername.value = "";
-    adminGiveAmount.value = "";
-    adminUserInfo.textContent = "N/A";
-    adminUserInfo.style.color = "gray";
-
-    // Remove listener after sending
-    if (balanceListener) {
-      balanceListener();
-      balanceListener = null;
-    }
+    // Reset inputs
+    inputEl.value = "";
+    amountEl.value = "";
+    infoEl.textContent = "N/A";
+    infoEl.style.color = "gray";
 
   } catch (err) {
-    console.error("❌ Give money failed:", err);
-    alert("Failed to give money. Check console for details.");
+    console.error(`Give ${typeLabel} failed:`, err);
+    alert(`Failed to give ${typeLabel}.`);
   }
 }
 
 // ---------- Load Renewal Requests ----------
+// ---------- Load Renewal Requests (Custom Expiration) ----------
 export async function loadRenewalRequests() {
-  renewalRequestsContainer.innerHTML = "Loading...";
+  const renewalRequestsContainer = document.getElementById("renewal-requests");
+  if(!renewalRequestsContainer) return;
+  
+  renewalRequestsContainer.innerHTML = "Loading requests...";
 
   const usersRef = collection(db, "users");
   const q = query(usersRef, where("renewalPending", "==", true));
   const snap = await getDocs(q);
 
   if (snap.empty) {
-    renewalRequestsContainer.innerHTML = "<p>No pending renewal requests.</p>";
+    renewalRequestsContainer.innerHTML = "<p style='color: gray; font-style: italic;'>No pending renewal requests.</p>";
     return;
   }
 
   renewalRequestsContainer.innerHTML = "";
+  
   snap.forEach((docSnap) => {
     const userData = docSnap.data();
+    const reqDate = userData.renewalRequestDate ? new Date(userData.renewalRequestDate).toLocaleDateString() : "Unknown";
+
     const div = document.createElement("div");
     div.classList.add("renew-request");
+    // Styling
+    div.style.border = "1px solid #ccc";
+    div.style.padding = "10px";
+    div.style.marginBottom = "10px";
+    div.style.borderRadius = "8px";
+    div.style.display = "flex";
+    div.style.flexDirection = "column"; // Stacked for better mobile view
+    div.style.gap = "10px";
+    div.style.backgroundColor = "#fff";
 
     div.innerHTML = `
-      <span><strong>${userData.username}</strong> — Requested on ${new Date(userData.renewalRequestDate).toLocaleDateString()}</span>
-      <button data-id="${docSnap.id}" class="approve-renew">Approve</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div>
+          <strong>${userData.username}</strong><br>
+          <span style="font-size: 0.85em; color: gray;">Requested: ${reqDate}</span>
+        </div>
+      </div>
+      
+      <div style="display: flex; gap: 10px; align-items: center; width: 100%; border-top: 1px solid #eee; padding-top: 10px;">
+        <label style="font-size: 0.9em;">Expires:</label>
+        <input type="date" id="date-${docSnap.id}" style="padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
+        
+        <div style="margin-left: auto; display: flex; gap: 5px;">
+          <button data-id="${docSnap.id}" class="btn-primary approve-renew" style="background: #2ecc71; padding: 5px 12px; font-size: 0.9em;">Approve</button>
+          <button data-id="${docSnap.id}" class="btn-danger deny-renew" style="background: #e74c3c; padding: 5px 12px; font-size: 0.9em;">Deny</button>
+        </div>
+      </div>
     `;
     renewalRequestsContainer.appendChild(div);
   });
@@ -205,40 +250,126 @@ export async function loadRenewalRequests() {
   attachRenewalListeners();
 }
 
-// ---------- Approve Renewal ----------
 function attachRenewalListeners() {
+  // --- APPROVE LOGIC ---
   document.querySelectorAll(".approve-renew").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const userRef = doc(db, "users", btn.dataset.id);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) return;
+      const userId = btn.dataset.id;
+      const dateInput = document.getElementById(`date-${userId}`);
+      
+      if (!dateInput.value) {
+        return alert("⚠️ Please select an expiration date first!");
+      }
 
-      const userData = userSnap.data();
+      const userRef = doc(db, "users", userId);
+      
+      // Create expiration date from input (Set to end of that day)
+      const expirationDate = new Date(dateInput.value);
+      expirationDate.setHours(23, 59, 59); 
 
       const now = new Date();
-      const expiration = new Date(now);
-      expiration.setMonth(now.getMonth() + 3);
 
-      await updateDoc(userRef, {
-        renewalDate: now.toISOString(),
-        expirationDate: expiration.toISOString(),
-        renewalPending: false,
-        renewalStatus: "Active"
-      });
+      // Basic Validation: Ensure date is in the future
+      if (expirationDate < now) {
+        return alert("Expiration date must be in the future.");
+      }
 
-      alert(`Renewed ${userData.username}'s account until ${expiration.toDateString()}.`);
+      try {
+        await updateDoc(userRef, {
+          renewalDate: now.toISOString(),
+          expirationDate: expirationDate.toISOString(),
+          renewalPending: false, 
+          history: arrayUnion({
+            message: `ID Renewal Approved (Expires ${expirationDate.toLocaleDateString()})`,
+            type: "admin",
+            timestamp: now.toISOString()
+          })
+        });
 
-      loadRenewalRequests();
+        alert(`✅ Renewal Approved! Expires on ${expirationDate.toLocaleDateString()}`);
+        loadRenewalRequests(); // Refresh list
+      } catch (err) {
+        console.error(err);
+        alert("Error approving: " + err.message);
+      }
+    });
+  });
+
+  // --- DENY LOGIC ---
+  document.querySelectorAll(".deny-renew").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.dataset.id;
+      const userRef = doc(db, "users", userId);
+
+      if(!confirm("Are you sure you want to deny this request?")) return;
+
+      try {
+        await updateDoc(userRef, {
+          renewalPending: false, 
+          history: arrayUnion({
+            message: `ID Renewal Request Denied`,
+            type: "admin",
+            timestamp: new Date().toISOString()
+          })
+        });
+
+        alert("❌ Renewal Denied.");
+        loadRenewalRequests(); 
+      } catch (err) {
+        console.error(err);
+        alert("Error denying: " + err.message);
+      }
     });
   });
 }
 
-// ---------- Navigation ----------
+  // --- DENY LOGIC ---
+  document.querySelectorAll(".deny-renew").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.dataset.id;
+      const userRef = doc(db, "users", userId);
+
+      if(!confirm("Are you sure you want to deny this request?")) return;
+
+      try {
+        await updateDoc(userRef, {
+          renewalPending: false, // Just clear the flag
+          history: arrayUnion({
+            message: `ID Renewal Request Denied`,
+            type: "admin",
+            timestamp: new Date().toISOString()
+          })
+        });
+
+        alert("❌ Renewal Denied.");
+        loadRenewalRequests(); // Refresh list
+      } catch (err) {
+        console.error(err);
+        alert("Error denying: " + err.message);
+      }
+    });
+  });
+
+// ---------- Navigation & Listeners ----------
 if (backToDashboardBtn) {
   backToDashboardBtn.addEventListener("click", () => showScreen("dashboard"));
 }
 
-// ---------- Button Listeners ----------
 if (addItemBtn) addItemBtn.addEventListener("click", addShopItem);
-if (addJobBtn) addJobBtn.addEventListener("click", addJob);
 if (adminGiveBtn) adminGiveBtn.addEventListener("click", giveMoney);
+// (NEW)
+if (adminGiveBpsBtn) adminGiveBpsBtn.addEventListener("click", giveBps);
+
+// ---------- Initialize Admin Panel ----------
+// 1. Listen for when the "Admin Panel" button is clicked
+const openAdminBtn = document.getElementById("open-admin");
+if (openAdminBtn) {
+  openAdminBtn.addEventListener("click", () => {
+    loadRenewalRequests(); // Fetch requests when opening panel
+  });
+}
+
+// 2. Also load if we are already viewing the panel (e.g. dev testing)
+if (!document.getElementById("admin-panel").classList.contains("hidden")) {
+  loadRenewalRequests();
+}

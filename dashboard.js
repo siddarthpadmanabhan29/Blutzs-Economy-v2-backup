@@ -84,7 +84,29 @@ function updateDashboardUI(user, data) {
   } else {
     openAdminBtn.classList.add("hidden");
   }
+
+  // New BPS Logic
+  const bps = data.bpsBalance || 0;
+  const discount = data.activeDiscount || 0;
+  
+  // Assuming you add an element with id="user-bps" in index.html
+  const bpsEl = document.getElementById("user-bps");
+  if(bpsEl) bpsEl.textContent = `${bps} BPS`;
+
+  // Optional: Show active discount indicator
+  const discountEl = document.getElementById("active-discount-indicator");
+  if(discountEl) {
+    if(discount > 0) {
+      discountEl.textContent = `🔥 ${discount * 100}% Discount Active!`;
+      discountEl.classList.remove("hidden");
+    } else {
+      discountEl.classList.add("hidden");
+    }
+  }
 }
+
+// ---------- Load History (Latest 20 Entries) ----------
+// ---------- dashboard.js (Inside loadHistory) ----------
 
 // ---------- Load History (Latest 20 Entries) ----------
 function loadHistory(historyArray) {
@@ -97,19 +119,26 @@ function loadHistory(historyArray) {
     return;
   }
 
-  // Sort by newest first and take last 20
-  const recentHistory = historyArray
+  // 1. FILTER: Remove entries with missing or invalid dates
+  const validHistory = historyArray.filter(entry => {
+    return entry.timestamp && !isNaN(new Date(entry.timestamp).getTime());
+  });
+
+  // 2. SORT: Now safe to sort by newest first
+  const recentHistory = validHistory
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .slice(0, 20);
 
   recentHistory.forEach(entry => {
     const row = document.createElement("tr");
 
+    
     let color = "black";
     if (entry.type === "transfer-in" || entry.type === "transfer") color = "green";
     else if (entry.type === "transfer-out") color = "red";
     else if (entry.type === "purchase") color = "orange";
     else if (entry.type === "admin") color = "blue";
+    else if (entry.type === "usage") color = "magenta";
 
     row.innerHTML = `
       <td style="color: ${color}; font-weight: 500;">${entry.message}</td>
