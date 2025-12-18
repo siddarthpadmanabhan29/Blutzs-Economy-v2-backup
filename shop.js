@@ -1,11 +1,11 @@
-// ---------- shop.js (ID EXPIRATION CHECK ADDED) ----------
+// ---------- shop.js (FINAL VERSION) ----------
 console.log("shop.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  doc, getDoc, updateDoc, collection, onSnapshot, arrayUnion, addDoc 
+  doc, getDoc, updateDoc, collection, onSnapshot, addDoc 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { updateBalanceDisplay } from "./main.js";
+import { logHistory } from "./historyManager.js"; // <--- New Import
 
 const shopItemsContainer = document.getElementById("shop-items");
 
@@ -19,7 +19,7 @@ async function loadShopItems() {
   const userRef = doc(db, "users", user.uid);
   const shopRef = collection(db, "shop");
 
-  // LISTENER 1: User Data
+  // LISTENER 1: User Data (Balance & Active Discount)
   onSnapshot(userRef, (docSnap) => {
     if (docSnap.exists()) {
       currentUserData = docSnap.data();
@@ -27,7 +27,7 @@ async function loadShopItems() {
     }
   });
 
-  // LISTENER 2: Shop Items
+  // LISTENER 2: Shop Items (Inventory Stock)
   onSnapshot(shopRef, (querySnap) => {
     currentShopItems = [];
     querySnap.forEach((doc) => {
@@ -49,10 +49,9 @@ function renderShop() {
   const userBalance = Number(currentUserData?.balance || 0);
   const activeDiscount = Number(currentUserData?.activeDiscount || 0);
 
-  // --- NEW: Check Expiration ---
+  // --- CHECK EXPIRATION ---
   const now = new Date();
   const expirationDate = currentUserData?.expirationDate ? new Date(currentUserData.expirationDate) : null;
-  // If no expiration date exists, we assume they are NOT expired (or you can change logic to require one)
   const isExpired = expirationDate && expirationDate < now;
 
   currentShopItems.forEach((item) => {
@@ -60,6 +59,7 @@ function renderShop() {
     let finalCost = originalCost;
     let priceDisplay = `$${originalCost.toLocaleString()}`;
 
+    // Calculate Discount
     if (activeDiscount > 0) {
       finalCost = Math.floor(originalCost * (1 - activeDiscount));
       priceDisplay = `
@@ -70,8 +70,6 @@ function renderShop() {
     }
 
     const affordable = userBalance >= finalCost;
-    
-    // Disable if unaffordable OR expired
     const isDisabled = !affordable || isExpired;
 
     // Determine Button Text
@@ -80,7 +78,7 @@ function renderShop() {
 
     const itemCard = document.createElement("div");
     itemCard.classList.add("shop-item");
-    if (isDisabled) itemCard.classList.add("unaffordable"); // Re-use gray style
+    if (isDisabled) itemCard.classList.add("unaffordable");
 
     itemCard.innerHTML = `
       <div class="shop-item-image">
@@ -155,17 +153,17 @@ async function buyItem(itemId, btnElement) {
     const newBalance = currentBalance - finalCost;
     const newBPS = currentBPS + 5; 
 
+    // 1. UPDATE USER (Balance only)
     await updateDoc(userRef, {
       balance: newBalance,
       bpsBalance: newBPS,
-      activeDiscount: 0, 
-      history: arrayUnion({
-        message: `Bought ${itemData.name} for $${finalCost}`,
-        type: "purchase",
-        timestamp: new Date().toISOString()
-      })
+      activeDiscount: 0
     });
 
+    // 2. LOG HISTORY (Using new manager)
+    await logHistory(user.uid, `Bought ${itemData.name} for $${finalCost}`, "purchase");
+
+    // 3. ADD TO INVENTORY
     await addDoc(inventoryRef, {
       name: itemData.name,
       value: Math.floor(finalCost / 2),
@@ -189,11 +187,12 @@ function resetBtn(btn) {
     }
 }
 
+// Initialize
 auth.onAuthStateChanged((user) => { if (user) loadShopItems(); });
 
+// Heartbeat Timer: Refresh UI every 5 seconds to check ID expiration
 setInterval(() => {
   if (currentUserData) {
-    // This forces the shop to re-draw and re-check the date against "now"
     renderShop(); 
   }
 }, 5000); 

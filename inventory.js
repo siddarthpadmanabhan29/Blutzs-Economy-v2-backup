@@ -1,11 +1,12 @@
-// ---------- inventory.js (FIXED: Prevents Multiple Clicks) ----------
+// ---------- inventory.js (FINAL VERSION with History Manager) ----------
 console.log("inventory.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  doc, getDoc, updateDoc, onSnapshot, collection, deleteDoc, arrayUnion 
+  doc, getDoc, updateDoc, onSnapshot, collection, deleteDoc 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { updateBalanceDisplay } from "./main.js";
+import { logHistory } from "./historyManager.js"; // <--- NEW IMPORT
 
 const inventoryContainer = document.getElementById("inventory-items");
 const inventoryValueEl = document.getElementById("inventory-value");
@@ -59,7 +60,6 @@ function loadInventory() {
 }
 
 function attachInventoryListeners() {
-  // Pass the event object (e) to the function so we can disable the button
   document.querySelectorAll(".use-item").forEach((btn) => {
     btn.addEventListener("click", (e) => useItem(btn.dataset.id, e.target));
   });
@@ -69,12 +69,12 @@ function attachInventoryListeners() {
   });
 }
 
-// ---------- UPDATED: Use Item (Disables Button) ----------
+// ---------- UPDATED: Use Item (With History Manager) ----------
 async function useItem(itemId, btnElement) {
   const user = auth.currentUser;
   if (!user) return;
 
-  // 1. DISABLE BUTTON IMMEDIATELY to prevent double clicks
+  // 1. DISABLE BUTTON
   if(btnElement) {
     btnElement.disabled = true;
     btnElement.textContent = "Processing...";
@@ -91,40 +91,35 @@ async function useItem(itemId, btnElement) {
     }
     const itemData = itemSnap.data();
 
-    // COUPON LOGIC
+    // --- COUPON LOGIC ---
     if (itemData.type === "coupon") {
+      // 1. Apply Discount
       await updateDoc(userRef, {
-        activeDiscount: itemData.discountValue,
-        history: arrayUnion({
-            message: `Activated Coupon: ${itemData.name}`,
-            type: "usage",
-            timestamp: new Date().toISOString()
-        })
+        activeDiscount: itemData.discountValue
       });
 
+      // 2. Log History
+      await logHistory(user.uid, `Activated Coupon: ${itemData.name}`, "usage");
+
+      // 3. Delete Item
       await deleteDoc(itemRef);
+      
       alert(`✅ Coupon Activated! You now have ${(itemData.discountValue * 100)}% off.`);
       return; 
     }
 
-    // REGULAR ITEM LOGIC
-    await Promise.all([
-      updateDoc(userRef, {
-        history: arrayUnion({
-          message: `Used ${itemData.name}`,
-          type: "usage",
-          timestamp: new Date().toISOString()
-        })
-      }),
-      deleteDoc(itemRef)
-    ]);
+    // --- REGULAR ITEM LOGIC ---
+    // 1. Log History
+    await logHistory(user.uid, `Used ${itemData.name}`, "usage");
+
+    // 2. Delete Item
+    await deleteDoc(itemRef);
 
     alert(`You used ${itemData.name}!`);
 
   } catch(e) {
     console.error(e);
     alert("Error using item: " + e.message);
-    // If error, re-enable button so they can try again
     if(btnElement) {
       btnElement.disabled = false;
       btnElement.textContent = "Use";
@@ -132,11 +127,11 @@ async function useItem(itemId, btnElement) {
   }
 }
 
+// ---------- UPDATED: Sell Item (With History Manager) ----------
 async function sellItem(itemId, btnElement) {
   const user = auth.currentUser;
   if (!user) return;
 
-  // 1. DISABLE BUTTON IMMEDIATELY
   if(btnElement) {
     btnElement.disabled = true;
     btnElement.textContent = "Selling...";
@@ -153,22 +148,21 @@ async function sellItem(itemId, btnElement) {
   const newBalance = (userData.balance || 0) + (item.value || 0);
 
   try {
-    await Promise.all([
-        updateDoc(userRef, { 
-            balance: newBalance,
-            history: arrayUnion({
-                message: `Sold ${item.name} for $${item.value}`,
-                type: "transfer-in", 
-                timestamp: new Date().toISOString()
-            })
-        }),
-        deleteDoc(itemRef)
-    ]);
+    // 1. Update Balance
+    await updateDoc(userRef, { 
+        balance: newBalance
+    });
+
+    // 2. Log History
+    await logHistory(user.uid, `Sold ${item.name} for $${item.value}`, "transfer-in");
+
+    // 3. Delete Item
+    await deleteDoc(itemRef);
 
     updateBalanceDisplay(newBalance, "user-balance", "gain");
+
   } catch(e) {
     alert("Error selling item: " + e.message);
-    // Re-enable on error
     if(btnElement) {
       btnElement.disabled = false;
       btnElement.textContent = "Sell";

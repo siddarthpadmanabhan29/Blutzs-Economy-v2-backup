@@ -1,11 +1,12 @@
-// ---------- admin.js (UPDATED with BPS) ----------
+// ---------- admin.js (FINAL: Search Bars + Subcollection History) ----------
 console.log("admin.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, arrayUnion, onSnapshot
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { showScreen } from "./auth.js"; // Changed from main.js to auth.js if that's where it lives
+import { showScreen } from "./auth.js"; 
+import { logHistory } from "./historyManager.js"; // <--- NEW IMPORT
 
 // ---------- Elements ----------
 const adminPanel = document.getElementById("admin-panel");
@@ -15,7 +16,7 @@ const backToDashboardBtn = document.getElementById("back-to-dashboard");
 const addItemBtn = document.getElementById("add-item-btn");
 const newItemName = document.getElementById("new-item-name");
 const newItemPrice = document.getElementById("new-item-price");
-const newItemImage = document.getElementById("new-item-image"); // Added image support
+const newItemImage = document.getElementById("new-item-image"); 
 
 // Give Money Elements
 const adminGiveUsername = document.getElementById("admin-give-username");
@@ -23,14 +24,14 @@ const adminGiveAmount = document.getElementById("admin-give-amount");
 const adminGiveBtn = document.getElementById("admin-give-btn");
 const adminUserInfo = document.getElementById("admin-user-info");
 
-// Give BPS Elements (NEW)
+// Give BPS Elements 
 const adminGiveBpsUsername = document.getElementById("admin-give-bps-username");
 const adminGiveBpsAmount = document.getElementById("admin-give-bps-amount");
 const adminGiveBpsBtn = document.getElementById("admin-give-bps-btn");
 const adminBpsUserInfo = document.getElementById("admin-bps-user-info");
 
-let balanceListener = null; // Tracks real-time money listener
-let bpsListener = null;     // Tracks real-time BPS listener
+let balanceListener = null; 
+let bpsListener = null;     
 
 // Renewal Requests
 const renewalRequestsContainer = document.getElementById("renewal-requests");
@@ -52,7 +53,7 @@ export async function checkAdminAccess() {
 async function addShopItem() {
   const name = newItemName.value.trim();
   const cost = parseFloat(newItemPrice.value);
-  const image = newItemImage.value.trim(); // Optional image
+  const image = newItemImage.value.trim(); 
 
   if (!name || isNaN(cost) || cost <= 0) return alert("Enter valid item name and cost.");
 
@@ -68,7 +69,7 @@ adminGiveUsername?.addEventListener("input", async () => {
   handleUserLookup(adminGiveUsername, adminUserInfo, adminGiveBtn, "money");
 });
 
-// ---------- 2. Give BPS Logic (NEW) ----------
+// ---------- 2. Give BPS Logic ----------
 adminGiveBpsUsername?.addEventListener("input", async () => {
   handleUserLookup(adminGiveBpsUsername, adminBpsUserInfo, adminGiveBpsBtn, "bps");
 });
@@ -77,7 +78,6 @@ adminGiveBpsUsername?.addEventListener("input", async () => {
 async function handleUserLookup(inputEl, infoEl, btnEl, type) {
   const usernameInput = inputEl.value.trim().toLowerCase();
 
-  // Clear previous listeners based on type
   if (type === "money" && balanceListener) { balanceListener(); balanceListener = null; }
   if (type === "bps" && bpsListener) { bpsListener(); bpsListener = null; }
 
@@ -89,7 +89,7 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
   }
 
   const usersRef = collection(db, "users");
-  const q = query(usersRef, where("username", "==", usernameInput)); // Check strict equality on username
+  const q = query(usersRef, where("username", "==", usernameInput)); 
   const snap = await getDocs(q);
 
   if (snap.empty) {
@@ -102,7 +102,6 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
 
     btnEl.disabled = false;
 
-    // Attach new listener
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
       if (!docSnap.exists()) return;
       const data = docSnap.data();
@@ -112,11 +111,10 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
         infoEl.style.color = "green";
       } else {
         infoEl.textContent = `${data.username} — ${(data.bpsBalance || 0)} BPS`;
-        infoEl.style.color = "#8e44ad"; // Purple for BPS
+        infoEl.style.color = "#8e44ad"; 
       }
     });
 
-    // Save listener ref so we can detach it later
     if (type === "money") balanceListener = unsubscribe;
     else bpsListener = unsubscribe;
   }
@@ -133,7 +131,7 @@ async function giveMoney() {
   );
 }
 
-// ---------- Execute Give BPS (NEW) ----------
+// ---------- Execute Give BPS ----------
 async function giveBps() {
   await executeGive(
     adminGiveBpsUsername, 
@@ -144,10 +142,10 @@ async function giveBps() {
   );
 }
 
-// Generic Give Function
+// Generic Give Function (UPDATED WITH HISTORY LOG)
 async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
   try {
-    const usernameInput = inputEl.value.trim(); // Match casing logic
+    const usernameInput = inputEl.value.trim(); 
     const amount = parseFloat(amountEl.value);
 
     if (!usernameInput || isNaN(amount) || amount <= 0) {
@@ -163,19 +161,18 @@ async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
     const userDoc = snap.docs[0];
     const userRef = doc(db, "users", userDoc.id);
     const userData = userDoc.data();
+    const userId = userDoc.id;
 
     const currentVal = Number(userData[field]) || 0;
     const newVal = currentVal + amount;
 
-    // Update Field + History
+    // 1. Update The Value (Money or BPS)
     await updateDoc(userRef, {
-      [field]: newVal,
-      history: arrayUnion({
-        message: `Admin gave ${amount} ${typeLabel}`,
-        type: "admin",
-        timestamp: new Date().toISOString()
-      })
+      [field]: newVal
     });
+
+    // 2. Log History (Subcollection)
+    await logHistory(userId, `Admin gave ${amount} ${typeLabel}`, "admin");
 
     alert(`✅ Gave ${amount} ${typeLabel} to ${userData.username}.`);
 
@@ -191,7 +188,6 @@ async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
   }
 }
 
-// ---------- Load Renewal Requests ----------
 // ---------- Load Renewal Requests (Custom Expiration) ----------
 export async function loadRenewalRequests() {
   const renewalRequestsContainer = document.getElementById("renewal-requests");
@@ -216,13 +212,12 @@ export async function loadRenewalRequests() {
 
     const div = document.createElement("div");
     div.classList.add("renew-request");
-    // Styling
     div.style.border = "1px solid #ccc";
     div.style.padding = "10px";
     div.style.marginBottom = "10px";
     div.style.borderRadius = "8px";
     div.style.display = "flex";
-    div.style.flexDirection = "column"; // Stacked for better mobile view
+    div.style.flexDirection = "column"; 
     div.style.gap = "10px";
     div.style.backgroundColor = "#fff";
 
@@ -251,7 +246,7 @@ export async function loadRenewalRequests() {
 }
 
 function attachRenewalListeners() {
-  // --- APPROVE LOGIC ---
+  // --- APPROVE LOGIC (UPDATED WITH HISTORY LOG) ---
   document.querySelectorAll(".approve-renew").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.dataset.id;
@@ -262,14 +257,11 @@ function attachRenewalListeners() {
       }
 
       const userRef = doc(db, "users", userId);
-      
-      // Create expiration date from input (Set to end of that day)
       const expirationDate = new Date(dateInput.value);
       expirationDate.setHours(23, 59, 59); 
 
       const now = new Date();
 
-      // Basic Validation: Ensure date is in the future
       if (expirationDate < now) {
         return alert("Expiration date must be in the future.");
       }
@@ -278,16 +270,14 @@ function attachRenewalListeners() {
         await updateDoc(userRef, {
           renewalDate: now.toISOString(),
           expirationDate: expirationDate.toISOString(),
-          renewalPending: false, 
-          history: arrayUnion({
-            message: `ID Renewal Approved (Expires ${expirationDate.toLocaleDateString()})`,
-            type: "admin",
-            timestamp: now.toISOString()
-          })
+          renewalPending: false 
         });
 
+        // Log History (Subcollection)
+        await logHistory(userId, `ID Renewal Approved (Expires ${expirationDate.toLocaleDateString()})`, "admin");
+
         alert(`✅ Renewal Approved! Expires on ${expirationDate.toLocaleDateString()}`);
-        loadRenewalRequests(); // Refresh list
+        loadRenewalRequests(); 
       } catch (err) {
         console.error(err);
         alert("Error approving: " + err.message);
@@ -295,7 +285,7 @@ function attachRenewalListeners() {
     });
   });
 
-  // --- DENY LOGIC ---
+  // --- DENY LOGIC (UPDATED WITH HISTORY LOG) ---
   document.querySelectorAll(".deny-renew").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.dataset.id;
@@ -304,14 +294,12 @@ function attachRenewalListeners() {
       if(!confirm("Are you sure you want to deny this request?")) return;
 
       try {
-        await updateDoc(userRef, {
-          renewalPending: false, 
-          history: arrayUnion({
-            message: `ID Renewal Request Denied`,
-            type: "admin",
-            timestamp: new Date().toISOString()
-          })
+        await updateDoc(userRef, { 
+            renewalPending: false 
         });
+        
+        // Log History (Subcollection)
+        await logHistory(userId, `ID Renewal Request Denied`, "admin");
 
         alert("❌ Renewal Denied.");
         loadRenewalRequests(); 
@@ -323,33 +311,6 @@ function attachRenewalListeners() {
   });
 }
 
-  // --- DENY LOGIC ---
-  document.querySelectorAll(".deny-renew").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const userId = btn.dataset.id;
-      const userRef = doc(db, "users", userId);
-
-      if(!confirm("Are you sure you want to deny this request?")) return;
-
-      try {
-        await updateDoc(userRef, {
-          renewalPending: false, // Just clear the flag
-          history: arrayUnion({
-            message: `ID Renewal Request Denied`,
-            type: "admin",
-            timestamp: new Date().toISOString()
-          })
-        });
-
-        alert("❌ Renewal Denied.");
-        loadRenewalRequests(); // Refresh list
-      } catch (err) {
-        console.error(err);
-        alert("Error denying: " + err.message);
-      }
-    });
-  });
-
 // ---------- Navigation & Listeners ----------
 if (backToDashboardBtn) {
   backToDashboardBtn.addEventListener("click", () => showScreen("dashboard"));
@@ -357,7 +318,6 @@ if (backToDashboardBtn) {
 
 if (addItemBtn) addItemBtn.addEventListener("click", addShopItem);
 if (adminGiveBtn) adminGiveBtn.addEventListener("click", giveMoney);
-// (NEW)
 if (adminGiveBpsBtn) adminGiveBpsBtn.addEventListener("click", giveBps);
 
 // ---------- Initialize Admin Panel ----------
@@ -365,7 +325,7 @@ if (adminGiveBpsBtn) adminGiveBpsBtn.addEventListener("click", giveBps);
 const openAdminBtn = document.getElementById("open-admin");
 if (openAdminBtn) {
   openAdminBtn.addEventListener("click", () => {
-    loadRenewalRequests(); // Fetch requests when opening panel
+    loadRenewalRequests(); 
   });
 }
 

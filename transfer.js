@@ -1,11 +1,12 @@
-// ---------- transfer.js (SECURE ATOMIC TRANSACTION) ----------
+// ---------- transfer.js (FINAL VERSION with Subcollection History) ----------
 console.log("transfer.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  collection, query, where, getDocs, doc, runTransaction, arrayUnion 
+  collection, query, where, getDocs, doc, runTransaction 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { updateBalanceDisplay } from "./main.js";
+import { logHistory } from "./historyManager.js"; // <--- New Import
 
 // ---------- Elements ----------
 const transferToInput = document.getElementById("transfer-to");
@@ -42,6 +43,7 @@ async function handleTransfer() {
 
     const recipientDoc = recipientSnap.docs[0];
     const recipientUid = recipientDoc.id;
+    const recipientUsername = recipientDoc.data().username; // Get correct casing
     
     // Prevent self-transfer
     if (recipientUid === user.uid) {
@@ -51,8 +53,7 @@ async function handleTransfer() {
     const senderRef = doc(db, "users", user.uid);
     const recipientRef = doc(db, "users", recipientUid);
 
-    // 3. START ATOMIC TRANSACTION
-    // This block runs as a single unit. It locks both accounts briefly.
+    // 3. START ATOMIC TRANSACTION (Money Movement Only)
     await runTransaction(db, async (transaction) => {
       const senderDoc = await transaction.get(senderRef);
       const recipientDoc = await transaction.get(recipientRef);
@@ -64,7 +65,7 @@ async function handleTransfer() {
       const senderData = senderDoc.data();
       const recipientData = recipientDoc.data();
 
-      // Check Expiration Logic (Optional: Block transfers if ID expired?)
+      // Check Expiration Logic (Optional)
       /* const now = new Date();
       const expirationDate = senderData.expirationDate ? new Date(senderData.expirationDate) : null;
       if (expirationDate && expirationDate < now) {
@@ -83,32 +84,29 @@ async function handleTransfer() {
       const newSenderBalance = senderBalance - amount;
       const newRecipientBalance = recipientBalance + amount;
 
-      // 5. Update Sender
+      // 5. Update Sender Balance (No history here)
       transaction.update(senderRef, {
-        balance: newSenderBalance,
-        history: arrayUnion({
-          message: `Sent $${amount.toLocaleString()} to ${toUsername}`,
-          type: "transfer-out",
-          timestamp: new Date().toISOString()
-        })
+        balance: newSenderBalance
       });
 
-      // 6. Update Recipient
+      // 6. Update Recipient Balance (No history here)
       transaction.update(recipientRef, {
-        balance: newRecipientBalance,
-        history: arrayUnion({
-          message: `Received $${amount.toLocaleString()} from ${senderData.username}`,
-          type: "transfer-in",
-          timestamp: new Date().toISOString()
-        })
+        balance: newRecipientBalance
       });
 
-      // Update UI (Optimistic update, though listener in dashboard.js will also catch it)
+      // Update UI
       updateBalanceDisplay(newSenderBalance, "user-balance", "loss");
     });
 
-    // Success!
-    showMessage(`Successfully sent $${amount.toLocaleString()} to ${toUsername}!`, "success");
+    // 7. TRANSACTION SUCCESSFUL -> NOW LOG HISTORY
+    // We log two separate entries in the new subcollections
+    await Promise.all([
+        logHistory(user.uid, `Sent $${amount.toLocaleString()} to ${recipientUsername}`, "transfer-out"),
+        logHistory(recipientUid, `Received $${amount.toLocaleString()} from ${user.email.split('@')[0]}`, "transfer-in")
+    ]);
+
+    // Success Message
+    showMessage(`Successfully sent $${amount.toLocaleString()} to ${recipientUsername}!`, "success");
     transferToInput.value = "";
     transferAmountInput.value = "";
 
