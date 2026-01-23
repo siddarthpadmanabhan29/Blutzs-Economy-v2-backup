@@ -1,4 +1,4 @@
-// ---------- admin.js (FINAL: Search Bars + Subcollection History) ----------
+// ---------- admin.js (FINAL UPDATED) ----------
 console.log("admin.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -246,25 +246,18 @@ export async function loadRenewalRequests() {
 }
 
 function attachRenewalListeners() {
-  // --- APPROVE LOGIC (UPDATED WITH HISTORY LOG) ---
   document.querySelectorAll(".approve-renew").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.dataset.id;
       const dateInput = document.getElementById(`date-${userId}`);
-      
-      if (!dateInput.value) {
-        return alert("⚠️ Please select an expiration date first!");
-      }
+      if (!dateInput.value) return alert("⚠️ Please select an expiration date first!");
 
       const userRef = doc(db, "users", userId);
       const expirationDate = new Date(dateInput.value);
       expirationDate.setHours(23, 59, 59); 
 
       const now = new Date();
-
-      if (expirationDate < now) {
-        return alert("Expiration date must be in the future.");
-      }
+      if (expirationDate < now) return alert("Expiration date must be in the future.");
 
       try {
         await updateDoc(userRef, {
@@ -272,10 +265,7 @@ function attachRenewalListeners() {
           expirationDate: expirationDate.toISOString(),
           renewalPending: false 
         });
-
-        // Log History (Subcollection)
         await logHistory(userId, `ID Renewal Approved (Expires ${expirationDate.toLocaleDateString()})`, "admin");
-
         alert(`✅ Renewal Approved! Expires on ${expirationDate.toLocaleDateString()}`);
         loadRenewalRequests(); 
       } catch (err) {
@@ -285,22 +275,15 @@ function attachRenewalListeners() {
     });
   });
 
-  // --- DENY LOGIC (UPDATED WITH HISTORY LOG) ---
   document.querySelectorAll(".deny-renew").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.dataset.id;
       const userRef = doc(db, "users", userId);
-
       if(!confirm("Are you sure you want to deny this request?")) return;
 
       try {
-        await updateDoc(userRef, { 
-            renewalPending: false 
-        });
-        
-        // Log History (Subcollection)
+        await updateDoc(userRef, { renewalPending: false });
         await logHistory(userId, `ID Renewal Request Denied`, "admin");
-
         alert("❌ Renewal Denied.");
         loadRenewalRequests(); 
       } catch (err) {
@@ -312,24 +295,93 @@ function attachRenewalListeners() {
 }
 
 // ---------- Navigation & Listeners ----------
-if (backToDashboardBtn) {
-  backToDashboardBtn.addEventListener("click", () => showScreen("dashboard"));
-}
-
+if (backToDashboardBtn) backToDashboardBtn.addEventListener("click", () => showScreen("dashboard"));
 if (addItemBtn) addItemBtn.addEventListener("click", addShopItem);
 if (adminGiveBtn) adminGiveBtn.addEventListener("click", giveMoney);
 if (adminGiveBpsBtn) adminGiveBpsBtn.addEventListener("click", giveBps);
 
-// ---------- Initialize Admin Panel ----------
-// 1. Listen for when the "Admin Panel" button is clicked
 const openAdminBtn = document.getElementById("open-admin");
-if (openAdminBtn) {
-  openAdminBtn.addEventListener("click", () => {
-    loadRenewalRequests(); 
-  });
-}
+if (openAdminBtn) openAdminBtn.addEventListener("click", () => loadRenewalRequests());
+if (!adminPanel.classList.contains("hidden")) loadRenewalRequests();
 
-// 2. Also load if we are already viewing the panel (e.g. dev testing)
-if (!document.getElementById("admin-panel").classList.contains("hidden")) {
-  loadRenewalRequests();
-}
+// ---------- Manage Employment Status ----------
+const empUsernameInput = document.getElementById("admin-employment-username");
+const empStatusSelect = document.getElementById("admin-employment-status");
+const empSetBtn = document.getElementById("admin-set-employment-btn");
+const empUserInfo = document.getElementById("admin-employment-user-info");
+
+let empListener = null;
+
+// Username input listener
+empUsernameInput.addEventListener("input", async () => {
+  const username = empUsernameInput.value.trim().toLowerCase();
+
+  if (empListener) { empListener(); empListener = null; }
+
+  if (!username) {
+    empUserInfo.textContent = "N/A";
+    empUserInfo.style.color = "gray";
+    empSetBtn.disabled = true;
+    return;
+  }
+
+  const usersRef = collection(db, "users");
+  const q = query(usersRef, where("username", "==", username));
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    empUserInfo.textContent = "Invalid user";
+    empUserInfo.style.color = "red";
+    empSetBtn.disabled = true;
+  } else {
+    const userDoc = snap.docs[0];
+    const userRef = doc(db, "users", userDoc.id);
+
+    empSetBtn.disabled = false;
+
+    empListener = onSnapshot(userRef, (docSnap) => {
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      empUserInfo.textContent = `${data.username} → ${data.employmentStatus || "Unemployed"}`;
+      empUserInfo.style.color = "green";
+    });
+  }
+});
+
+// Set employment status
+empSetBtn.addEventListener("click", async () => {
+  const username = empUsernameInput.value.trim().toLowerCase();
+  const status = empStatusSelect.value;
+  if (!username) return alert("Enter a username");
+  if (!status) return alert("Select a status");
+
+  const usersRef = collection(db, "users");
+  const q = query(usersRef, where("username", "==", username));
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    empUserInfo.textContent = "Invalid user";
+    empUserInfo.style.color = "red";
+    empSetBtn.disabled = true;
+    return;
+  }
+
+  const userDoc = snap.docs[0];
+  const userRef = doc(db, "users", userDoc.id);
+
+  try {
+    await updateDoc(userRef, { employmentStatus: status });
+    empUserInfo.textContent = `${username} → ${status}`;
+    empUserInfo.style.color = "green";
+    alert(`✅ Employment status set to ${status} for ${username}`);
+
+    // Reset input
+    empUsernameInput.value = "";
+    empSetBtn.disabled = true;
+    if (empListener) { empListener(); empListener = null; }
+
+  } catch (err) {
+    console.error("Error updating employment status:", err);
+    alert("Failed to update employment status: " + err.message);
+  }
+});

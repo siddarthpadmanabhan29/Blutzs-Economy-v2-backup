@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- LOGIN SCREEN -->
   <div id="login-screen" class="screen">
     <div id="login-form">
       <h1>Login / Register</h1>
@@ -15,16 +16,15 @@
     </div>
   </div>
 
+  <!-- DASHBOARD -->
   <div id="dashboard" class="screen hidden">
     <header id="dashboard-navbar">
       <div class="navbar-left">
         <span>Welcome, <strong id="user-name"></strong></span>
         <span>Balance: <strong id="user-balance"></strong></span>
-        
         <span style="margin-left: 15px; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 15px;">
           BPS: <strong id="user-bps" style="color: #d1bce3;">0</strong>
         </span>
-
       </div>
       <div class="navbar-right">
         <button id="open-admin" class="btn-secondary hidden">Admin Panel</button>
@@ -33,16 +33,22 @@
     </header>
 
     <main id="dashboard-content">
+      <!-- PROFILE -->
       <section class="section-card">
         <h3>Profile</h3>
         <p><strong>Username:</strong> <span id="profile-username"></span></p>
         <p><strong>ID:</strong> <span id="profile-uid"></span></p>
         <p><strong>Renewed On:</strong> <span id="profile-renewal"></span></p>
         <p><strong>Expires On:</strong> <span id="profile-expiration"></span></p>
-        <p><strong>Status:</strong> <span id="renewal-status"></span></p>
+        <p>
+          <strong>Status:</strong> 
+          <span id="renewal-status"></span> | 
+          <strong>Employment:</strong> <span id="employment-status"></span>
+        </p>
         <button id="renew-btn" class="btn-primary">Request Renewal</button>
       </section>
 
+      <!-- BPS TOKEN SHOP -->
       <section class="section-card" style="border: 2px solid #8e44ad;">
         <h3 style="color: #8e44ad;">🟣 BPS Token Shop</h3>
         <p>Spend your tokens on coupons!</p>
@@ -51,25 +57,26 @@
         </div>
       </section>
 
+      <!-- SHOP -->
       <section class="section-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h3>Shop</h3>
-          
           <span id="active-discount-indicator" class="hidden" 
                 style="background: #e74c3c; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 0.9em;">
             🔥 Discount Active!
           </span>
         </div>
-        
         <div id="shop-items"></div>
       </section>
 
+      <!-- INVENTORY -->
       <section class="section-card">
         <h3>Inventory</h3>
         <p id="inventory-value">Total Value: $0</p>
         <div id="inventory-items">Loading...</div>
       </section>
 
+      <!-- TRANSFER MONEY -->
       <section class="section-card">
         <h3>Transfer Money</h3>
         <div class="transfer-container">
@@ -80,6 +87,23 @@
         <p id="transfer-message"></p>
       </section>
 
+      <!-- RETIREMENT SAVINGS -->
+      <section class="section-card">
+        <h3>Retirement Savings</h3>
+        <p>Total Savings: $<span id="retirement-savings">0</span></p>
+        <p>Interest (3% monthly): $<span id="retirement-interest">0</span></p>
+        <p>Days until interest: <span id="retirement-days">0</span></p>
+        <div class="retirement-actions">
+          <input type="number" id="retirement-deposit" placeholder="Deposit Amount">
+          <button id="retirement-deposit-btn" class="btn-primary">Deposit</button>
+          
+          <input type="number" id="retirement-withdraw" placeholder="Withdraw Amount">
+          <button id="retirement-withdraw-btn" class="btn-secondary">Withdraw</button>
+        </div>
+        <p id="retirement-message" style="font-weight: bold;"></p>
+      </section>
+
+      <!-- HISTORY -->
       <section class="section-card">
         <h3>History</h3>
         <table>
@@ -89,46 +113,55 @@
     </main>
   </div>
 
+  <!-- ADMIN PANEL -->
   <div id="admin-panel" class="screen hidden">
     <h2>Admin Panel</h2>
     <button id="back-to-dashboard" class="btn-secondary">Back</button>
 
+    <!-- Add Shop Item -->
     <h3>Add Shop Item</h3>
     <input id="new-item-name" placeholder="Item Name">
     <input id="new-item-price" type="number" placeholder="Price">
     <input id="new-item-image" placeholder="Image URL (optional)">
     <button id="add-item-btn" class="btn-primary">Add Item</button>
 
+    <!-- Give Money -->
     <h3>Give Money</h3>
     <input id="admin-give-username" placeholder="Username" autocomplete="off">
     <input id="admin-give-amount" type="number" placeholder="Amount">
-    <p>
-      <strong>User:</strong> 
-      <span id="admin-user-info" style="color: gray;">N/A</span>
-    </p>
+    <p><strong>User:</strong> <span id="admin-user-info" style="color: gray;">N/A</span></p>
     <button id="admin-give-btn" class="btn-danger">Give Money</button>
 
-
+    <!-- Give BPS Tokens -->
     <h3>Give BPS Tokens (Loyalty)</h3>
     <input id="admin-give-bps-username" placeholder="Username" autocomplete="off">
     <input id="admin-give-bps-amount" type="number" placeholder="BPS Amount">
-    <p>
-      <strong>User:</strong> 
-      <span id="admin-bps-user-info" style="color: gray;">N/A</span>
-    </p>
+    <p><strong>User:</strong> <span id="admin-bps-user-info" style="color: gray;">N/A</span></p>
     <button id="admin-give-bps-btn" class="btn-primary" style="background-color: #8e44ad;">Give BPS Tokens</button>
 
+    <!-- Manage Employment Status -->
+    <h3>Manage Employment Status</h3>
+    <input id="admin-employment-username" placeholder="Username" autocomplete="off">
+    <select id="admin-employment-status">
+      <option value="Employed">Employed</option>
+      <option value="Unemployed">Unemployed</option>
+      <option value="Retired">Retired</option>
+    </select>
+    <button id="admin-set-employment-btn" class="btn-primary">Set Status</button>
+    <p><strong>User:</strong> <span id="admin-employment-user-info" style="color: gray;">N/A</span></p>
+
+    <!-- Renewal Requests -->
     <h3>Renewal Requests</h3>
     <div id="renewal-requests"></div>
   </div>
 
+  <!-- SCRIPTS -->
   <script type="module" src="firebaseConfig.js"></script>
   <script type="module" src="auth.js"></script>
   <script type="module" src="shop.js"></script>
   <script type="module" src="dashboard.js"></script>
   <script type="module" src="transfer.js"></script>
   <script type="module" src="inventory.js"></script>
-  
   <script type="module" src="bpsShop.js"></script> 
 </body>
 </html>

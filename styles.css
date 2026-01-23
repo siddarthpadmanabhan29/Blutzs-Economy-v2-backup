@@ -558,3 +558,64 @@ button:hover {
   margin-bottom: 10px;
   color: #2ecc71;
 }
+
+/* ---------- Retirement Input Fields Styling ---------- */
+#retirement-deposit,
+#retirement-withdraw {
+  padding: 10px 15px;           /* Comfortable padding */
+  border-radius: 8px;           /* Rounded corners */
+  border: 1px solid #ccc;       /* Light gray border */
+  font-size: 1em;               /* Slightly bigger text */
+  width: 150px;                 /* Fixed width for consistency */
+  transition: all 0.2s ease;    /* Smooth focus animation */
+  outline: none;                /* Remove default outline */
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); /* Soft inner shadow */
+}
+
+/* Focus effect */
+#retirement-deposit:focus,
+#retirement-withdraw:focus {
+  border-color: #3498db;        /* Blue border on focus */
+  box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); /* Soft glow */
+}
+
+/* Disabled style */
+#retirement-deposit:disabled,
+#retirement-withdraw:disabled {
+  background-color: #f4f6f7;
+  cursor: not-allowed;
+  color: #999;
+  border-color: #ddd;
+}
+
+/* ---------- Employment Status Dropdown Styles ---------- */
+#admin-employment-status {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #333;
+  transition: all 0.2s ease;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Hover effect */
+#admin-employment-status:hover {
+  border-color: #3498db;
+}
+
+/* Focus effect */
+#admin-employment-status:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
+}
+
+/* Option styling (works in most browsers) */
+#admin-employment-status option {
+  padding: 8px;
+  font-size: 0.95rem;
+  color: #333;
+}

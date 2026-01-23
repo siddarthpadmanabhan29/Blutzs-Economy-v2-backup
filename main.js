@@ -12,6 +12,8 @@ import "./jobs.js";
 import "./inventory.js";
 import "./transfer.js";
 import "./admin.js";
+import "./retirement.js";
+
 
 // ---------- Global UI Helpers (optional) ----------
 

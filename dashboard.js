@@ -1,4 +1,4 @@
-// ---------- dashboard.js (FINAL VERSION) ----------
+// ---------- dashboard.js (UPDATED: Employment + Retirement Savings + Monthly Interest + Input Controls) ----------
 console.log("dashboard.js loaded");
 
 import { auth, db } from "./firebaseConfig.js";
@@ -27,10 +27,23 @@ const profileExpiration = document.getElementById("profile-expiration");
 const renewalStatus = document.getElementById("renewal-status");
 const renewBtn = document.getElementById("renew-btn");
 
+// Employment status
+const employmentStatusEl = document.getElementById("employment-status");
+
 // History table
 const historyTable = document.getElementById("history-table");
 
-let currentDashboardData = null; // Store data globally for heartbeat timer
+// Retirement savings elements
+const retirementSavingsEl = document.getElementById("retirement-savings");
+const retirementInterestEl = document.getElementById("retirement-interest");
+const retirementDaysEl = document.getElementById("retirement-days");
+const retirementDepositInput = document.getElementById("retirement-deposit");
+const retirementDepositBtn = document.getElementById("retirement-deposit-btn");
+const retirementWithdrawInput = document.getElementById("retirement-withdraw");
+const retirementWithdrawBtn = document.getElementById("retirement-withdraw-btn");
+const retirementMessageEl = document.getElementById("retirement-message");
+
+let currentDashboardData = null;
 
 // ---------- Auth State Listener ----------
 onAuthStateChanged(auth, async (user) => {
@@ -43,24 +56,25 @@ onAuthStateChanged(auth, async (user) => {
 
   dashboard.classList.remove("hidden");
 
-  // 1. LISTEN TO USER PROFILE (Balance, Name, Status)
+  // 1. LISTEN TO USER PROFILE
   const userRef = doc(db, "users", user.uid);
   onSnapshot(userRef, snap => {
     if (!snap.exists()) return;
     currentDashboardData = snap.data();
+
+    // Apply interest if not yet applied this month
+    applyMonthlyInterest(user.uid);
+
     updateDashboardUI(user);
-    // Note: We do NOT load history from here anymore!
   });
 
-  // 2. LISTEN TO HISTORY SUBCOLLECTION (Scalable List)
+  // 2. LISTEN TO HISTORY SUBCOLLECTION
   const historyRef = collection(db, "users", user.uid, "history_logs");
   const q = query(historyRef, orderBy("timestamp", "desc"), limit(30));
 
   onSnapshot(q, (snapshot) => {
     const historyData = [];
-    snapshot.forEach(doc => {
-        historyData.push(doc.data());
-    });
+    snapshot.forEach(doc => historyData.push(doc.data()));
     loadHistory(historyData);
   });
 });
@@ -97,18 +111,27 @@ function updateDashboardUI(user) {
     renewalStatus.style.color = "green";
   }
 
-  if (data.isAdmin) {
-    openAdminBtn.classList.remove("hidden");
-  } else {
-    openAdminBtn.classList.add("hidden");
+  // Employment Status
+  const employmentStatus = data.employmentStatus || "Unemployed";
+  let color = "red";
+  if (employmentStatus === "Employed") color = "green";
+  if (employmentStatus === "Retired") color = "blue";
+  if (employmentStatusEl) {
+    employmentStatusEl.textContent = employmentStatus;
+    employmentStatusEl.style.color = color;
+    employmentStatusEl.style.fontWeight = "bold";
   }
+
+  // Admin Button
+  if (data.isAdmin) openAdminBtn.classList.remove("hidden");
+  else openAdminBtn.classList.add("hidden");
 
   // BPS Logic
   const bps = data.bpsBalance || 0;
   const bpsEl = document.getElementById("user-bps");
   if(bpsEl) bpsEl.textContent = `${bps} BPS`;
 
-  // Active Discount Logic
+  // Active Discount
   const discount = data.activeDiscount || 0;
   const discountEl = document.getElementById("active-discount-indicator");
   if(discountEl) {
@@ -119,9 +142,178 @@ function updateDashboardUI(user) {
       discountEl.classList.add("hidden");
     }
   }
+
+  // ---------- Retirement Savings ----------
+  const savings = Number(data.retirementSavings || 0);
+  retirementSavingsEl.textContent = savings.toFixed(2);
+
+  const interest = savings * 0.03;
+  retirementInterestEl.textContent = interest.toFixed(2);
+
+  // Correct days until next 1st of month
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let nextInterestDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  if(nowMidnight >= nextInterestDate) {
+    nextInterestDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  }
+  const diffDays = Math.ceil((nextInterestDate - nowMidnight) / (1000*60*60*24));
+  retirementDaysEl.textContent = diffDays;
+
+  // Enable/Disable Deposit/Withdraw + Input Fields based on Employment Status
+  if(employmentStatus === "Employed") {
+    retirementDepositBtn.disabled = false;
+    retirementWithdrawBtn.disabled = true;
+    retirementDepositInput.disabled = false;
+    retirementWithdrawInput.disabled = true;
+  } else if(employmentStatus === "Unemployed") {
+    retirementDepositBtn.disabled = true;
+    retirementWithdrawBtn.disabled = true;
+    retirementDepositInput.disabled = true;
+    retirementWithdrawInput.disabled = true;
+  } else if(employmentStatus === "Retired") {
+    retirementDepositBtn.disabled = true;
+    retirementWithdrawBtn.disabled = false;
+    retirementDepositInput.disabled = true;
+    retirementWithdrawInput.disabled = false;
+  }
 }
 
-// ---------- Load History (Visual Upgrade) ----------
+// ---------- Retirement Savings Handlers ----------
+async function depositRetirement() {
+  if (!auth.currentUser) return;
+  const userRef = doc(db, "users", auth.currentUser.uid);
+  const amount = parseFloat(retirementDepositInput.value);
+  if (isNaN(amount) || amount <= 0) {
+    showRetirementMessage("Enter a valid deposit amount.", "error");
+    return;
+  }
+
+  const currentBalance = Number(currentDashboardData.balance || 0);
+  if (amount > currentBalance) {
+    showRetirementMessage("Insufficient main balance.", "error");
+    return;
+  }
+
+  if(currentDashboardData.employmentStatus !== "Employed") {
+    showRetirementMessage("Only Employed users can deposit.", "error");
+    return;
+  }
+
+  try {
+    await updateDoc(userRef, {
+      balance: currentBalance - amount,
+      retirementSavings: (Number(currentDashboardData.retirementSavings) || 0) + amount
+    });
+    showRetirementMessage(`Deposited $${amount.toFixed(2)} to retirement savings.`, "success");
+    retirementDepositInput.value = "";
+  } catch(err) {
+    console.error(err);
+    showRetirementMessage("Deposit failed: " + err.message, "error");
+  }
+}
+
+async function withdrawRetirement() {
+  if (!auth.currentUser) return;
+  const userRef = doc(db, "users", auth.currentUser.uid);
+  const amount = parseFloat(retirementWithdrawInput.value);
+  if (isNaN(amount) || amount <= 0) {
+    showRetirementMessage("Enter a valid withdraw amount.", "error");
+    return;
+  }
+
+  const savings = Number(currentDashboardData.retirementSavings || 0);
+  if(amount > savings) {
+    showRetirementMessage("Insufficient retirement savings.", "error");
+    return;
+  }
+
+  if(currentDashboardData.employmentStatus !== "Retired") {
+    showRetirementMessage("Only Retired users can withdraw.", "error");
+    return;
+  }
+
+  try {
+    const balance = Number(currentDashboardData.balance || 0);
+    await updateDoc(userRef, {
+      balance: balance + amount,
+      retirementSavings: savings - amount
+    });
+    showRetirementMessage(`Withdrew $${amount.toFixed(2)} to main balance.`, "success");
+    retirementWithdrawInput.value = "";
+  } catch(err) {
+    console.error(err);
+    showRetirementMessage("Withdraw failed: " + err.message, "error");
+  }
+}
+
+function showRetirementMessage(msg, type) {
+  if(!retirementMessageEl) return;
+  retirementMessageEl.textContent = msg;
+  retirementMessageEl.style.color = type === "error" ? "red" : "green";
+  setTimeout(() => retirementMessageEl.textContent = "", 4000);
+}
+
+// ---------- Apply Monthly Interest ----------
+async function applyMonthlyInterest(uid) {
+  if(!uid) return;
+  const userRef = doc(db, "users", uid);
+  const data = currentDashboardData;
+  if(!data) return;
+
+  const now = new Date();
+  const lastApplied = data.lastInterestApplied ? new Date(data.lastInterestApplied) : null;
+
+  // Apply if not yet applied this month
+  if(!lastApplied || lastApplied.getMonth() !== now.getMonth() || lastApplied.getFullYear() !== now.getFullYear()) {
+    const savings = Number(data.retirementSavings || 0);
+    if(savings > 0) {
+      const interest = savings * 0.03;
+      await updateDoc(userRef, {
+        retirementSavings: savings + interest,
+        lastInterestApplied: now.toISOString()
+      });
+      console.log(`Applied $${interest.toFixed(2)} interest to retirement savings.`);
+    }
+  }
+}
+
+// ---------- Event Listeners ----------
+retirementDepositBtn?.addEventListener("click", depositRetirement);
+retirementWithdrawBtn?.addEventListener("click", withdrawRetirement);
+
+openAdminBtn?.addEventListener("click", () => {
+  dashboard.classList.add("hidden");
+  adminPanel.classList.remove("hidden");
+});
+
+backToDashboardBtn?.addEventListener("click", () => {
+  adminPanel.classList.add("hidden");
+  dashboard.classList.remove("hidden");
+});
+
+logoutBtn?.addEventListener("click", async () => {
+  await signOut(auth);
+  dashboard.classList.add("hidden");
+  adminPanel.classList.add("hidden");
+});
+
+// ---------- Profile Renewal Request ----------
+renewBtn?.addEventListener("click", async () => {
+  if (!auth.currentUser) return;
+  const userRef = doc(db, "users", auth.currentUser.uid);
+  try {
+    await updateDoc(userRef, { 
+      renewalPending: true, 
+      renewalRequestDate: new Date().toISOString() 
+    });
+    alert("Renewal request sent. Waiting for admin approval.");
+  } catch (err) {
+    console.error("Renewal request failed:", err);
+    alert("Could not send renewal request: " + err.message);
+  }
+});
+
+// ---------- Load History ----------
 function loadHistory(historyArray) {
   if (!historyTable) return;
   historyTable.innerHTML = "";
@@ -131,30 +323,26 @@ function loadHistory(historyArray) {
     return;
   }
 
-  // 1. FILTER: Remove bad dates
   const validHistory = historyArray.filter(entry => 
     entry.timestamp && !isNaN(new Date(entry.timestamp).getTime())
   );
 
-  // 2. RENDER (Already sorted by Firestore query, but double check doesn't hurt)
   validHistory.forEach(entry => {
     const row = document.createElement("tr");
     
-    // --- ICON & COLOR LOGIC ---
     let icon = "📄";
     let bg = "#f8f9fa";
     let border = "#ddd";
 
     switch(entry.type) {
-        case "transfer-in":  icon = "💸"; bg = "#e8f8f5"; border = "#2ecc71"; break; // Green
-        case "transfer-out": icon = "📤"; bg = "#fdedec"; border = "#e74c3c"; break; // Red
-        case "purchase":     icon = "🛒"; bg = "#fef9e7"; border = "#f1c40f"; break; // Yellow
-        case "usage":        icon = "🧪"; bg = "#f4f6f7"; border = "#95a5a6"; break; // Gray
-        case "admin":        icon = "🛡️"; bg = "#eaf2f8"; border = "#3498db"; break; // Blue
-        case "contract":     icon = "📝"; bg = "#fdf2e9"; border = "#e67e22"; break; // Orange
+        case "transfer-in":  icon = "💸"; bg = "#e8f8f5"; border = "#2ecc71"; break;
+        case "transfer-out": icon = "📤"; bg = "#fdedec"; border = "#e74c3c"; break;
+        case "purchase":     icon = "🛒"; bg = "#fef9e7"; border = "#f1c40f"; break;
+        case "usage":        icon = "🧪"; bg = "#f4f6f7"; border = "#95a5a6"; break;
+        case "admin":        icon = "🛡️"; bg = "#eaf2f8"; border = "#3498db"; break;
+        case "contract":     icon = "📝"; bg = "#fdf2e9"; border = "#e67e22"; break;
     }
 
-    // --- RELATIVE TIME LOGIC ---
     const timeString = getRelativeTime(new Date(entry.timestamp));
 
     row.innerHTML = `
@@ -180,10 +368,9 @@ function loadHistory(historyArray) {
   });
 }
 
-// Helper: Converts date to "5 mins ago"
 function getRelativeTime(date) {
   const now = new Date();
-  const diff = Math.floor((now - date) / 1000); // Difference in seconds
+  const diff = Math.floor((now - date) / 1000);
 
   if (diff < 60) return "Just now";
   if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
@@ -191,44 +378,7 @@ function getRelativeTime(date) {
   return date.toLocaleDateString(); 
 }
 
-// ---------- Navigation ----------
-openAdminBtn?.addEventListener("click", () => {
-  dashboard.classList.add("hidden");
-  adminPanel.classList.remove("hidden");
-});
-
-backToDashboardBtn?.addEventListener("click", () => {
-  adminPanel.classList.add("hidden");
-  dashboard.classList.remove("hidden");
-});
-
-// ---------- Logout ----------
-logoutBtn?.addEventListener("click", async () => {
-  await signOut(auth);
-  dashboard.classList.add("hidden");
-  adminPanel.classList.add("hidden");
-});
-
-// ---------- Profile Renewal Request ----------
-renewBtn?.addEventListener("click", async () => {
-  if (!auth.currentUser) return;
-
-  const userRef = doc(db, "users", auth.currentUser.uid);
-
-  try {
-    await updateDoc(userRef, { 
-      renewalPending: true, 
-      renewalRequestDate: new Date().toISOString() 
-    });
-    alert("Renewal request sent. Waiting for admin approval.");
-  } catch (err) {
-    console.error("Renewal request failed:", err);
-    alert("Could not send renewal request: " + err.message);
-  }
-});
-
 // ---------- Heartbeat Timer ----------
-// Checks every 5 seconds if status changed (e.g. Active -> Expired)
 setInterval(() => {
   if (auth.currentUser && currentDashboardData) {
     updateDashboardUI(auth.currentUser);
