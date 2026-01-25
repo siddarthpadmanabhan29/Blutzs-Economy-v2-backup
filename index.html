@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Blutz Economy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,7 +13,7 @@
       <h1>Login / Register</h1>
       <input id="login-username" placeholder="Username" autocomplete="off">
       <input id="login-password" type="password" placeholder="Password" autocomplete="new-password">
-      <button id="login-btn" class="btn-primary">Login / Register</button>
+      <button id="login-btn" class="btn-primary" type="button">Login / Register</button>
     </div>
   </div>
 
@@ -27,8 +28,8 @@
         </span>
       </div>
       <div class="navbar-right">
-        <button id="open-admin" class="btn-secondary hidden">Admin Panel</button>
-        <button id="logout-btn" class="btn-danger">Logout</button>
+        <button id="open-admin" class="btn-secondary hidden" type="button">Admin Panel</button>
+        <button id="logout-btn" class="btn-danger" type="button">Logout</button>
       </div>
     </header>
 
@@ -40,12 +41,9 @@
         <p><strong>ID:</strong> <span id="profile-uid"></span></p>
         <p><strong>Renewed On:</strong> <span id="profile-renewal"></span></p>
         <p><strong>Expires On:</strong> <span id="profile-expiration"></span></p>
-        <p>
-          <strong>Status:</strong> 
-          <span id="renewal-status"></span> | 
-          <strong>Employment:</strong> <span id="employment-status"></span>
-        </p>
-        <button id="renew-btn" class="btn-primary">Request Renewal</button>
+        <p><strong>Status:</strong> <span id="renewal-status"></span> | 
+           <strong>Employment:</strong> <span id="employment-status"></span></p>
+        <button id="renew-btn" class="btn-primary" type="button">Request Renewal</button>
       </section>
 
       <!-- BPS TOKEN SHOP -->
@@ -82,7 +80,7 @@
         <div class="transfer-container">
             <input id="transfer-to" placeholder="Recipient Username" autocomplete="off">
             <input id="transfer-amount" type="number" placeholder="Amount">
-            <button id="transfer-btn" class="btn-primary">Send</button>
+            <button id="transfer-btn" class="btn-primary" type="button">Send</button>
         </div>
         <p id="transfer-message"></p>
       </section>
@@ -95,10 +93,9 @@
         <p>Days until interest: <span id="retirement-days">0</span></p>
         <div class="retirement-actions">
           <input type="number" id="retirement-deposit" placeholder="Deposit Amount">
-          <button id="retirement-deposit-btn" class="btn-primary">Deposit</button>
-          
+          <button id="retirement-deposit-btn" class="btn-primary" type="button">Deposit</button>
           <input type="number" id="retirement-withdraw" placeholder="Withdraw Amount">
-          <button id="retirement-withdraw-btn" class="btn-secondary">Withdraw</button>
+          <button id="retirement-withdraw-btn" class="btn-secondary" type="button">Withdraw</button>
         </div>
         <p id="retirement-message" style="font-weight: bold;"></p>
       </section>
@@ -116,28 +113,28 @@
   <!-- ADMIN PANEL -->
   <div id="admin-panel" class="screen hidden">
     <h2>Admin Panel</h2>
-    <button id="back-to-dashboard" class="btn-secondary">Back</button>
+    <button id="back-to-dashboard" class="btn-secondary" type="button">Back</button>
 
     <!-- Add Shop Item -->
     <h3>Add Shop Item</h3>
     <input id="new-item-name" placeholder="Item Name">
     <input id="new-item-price" type="number" placeholder="Price">
     <input id="new-item-image" placeholder="Image URL (optional)">
-    <button id="add-item-btn" class="btn-primary">Add Item</button>
+    <button id="add-item-btn" class="btn-primary" type="button">Add Item</button>
 
     <!-- Give Money -->
     <h3>Give Money</h3>
     <input id="admin-give-username" placeholder="Username" autocomplete="off">
     <input id="admin-give-amount" type="number" placeholder="Amount">
     <p><strong>User:</strong> <span id="admin-user-info" style="color: gray;">N/A</span></p>
-    <button id="admin-give-btn" class="btn-danger">Give Money</button>
+    <button id="admin-give-btn" class="btn-danger" type="button">Give Money</button>
 
     <!-- Give BPS Tokens -->
     <h3>Give BPS Tokens (Loyalty)</h3>
     <input id="admin-give-bps-username" placeholder="Username" autocomplete="off">
     <input id="admin-give-bps-amount" type="number" placeholder="BPS Amount">
     <p><strong>User:</strong> <span id="admin-bps-user-info" style="color: gray;">N/A</span></p>
-    <button id="admin-give-bps-btn" class="btn-primary" style="background-color: #8e44ad;">Give BPS Tokens</button>
+    <button id="admin-give-bps-btn" class="btn-primary" type="button" style="background-color: #8e44ad;">Give BPS Tokens</button>
 
     <!-- Manage Employment Status -->
     <h3>Manage Employment Status</h3>
@@ -147,7 +144,7 @@
       <option value="Unemployed">Unemployed</option>
       <option value="Retired">Retired</option>
     </select>
-    <button id="admin-set-employment-btn" class="btn-primary">Set Status</button>
+    <button id="admin-set-employment-btn" class="btn-primary" type="button">Set Status</button>
     <p><strong>User:</strong> <span id="admin-employment-user-info" style="color: gray;">N/A</span></p>
 
     <!-- Renewal Requests -->
