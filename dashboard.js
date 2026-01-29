@@ -5,6 +5,7 @@ import { auth, db } from "./firebaseConfig.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { doc, onSnapshot, updateDoc, collection, query, orderBy, limit, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
+import { currentUserData, renderSavings } from "./retirement.js";
 
 /* =========================================================
    INSTANT THEME APPLY (prevents light flash on refresh)
@@ -38,14 +39,14 @@ const employmentStatusEl = document.getElementById("employment-status");
 const historyTable = document.getElementById("history-table");
 
 // Retirement savings elements
-const retirementSavingsEl = document.getElementById("retirement-savings");
-const retirementInterestEl = document.getElementById("retirement-interest");
-const retirementDaysEl = document.getElementById("retirement-days");
-const retirementDepositInput = document.getElementById("retirement-deposit");
-const retirementDepositBtn = document.getElementById("retirement-deposit-btn");
-const retirementWithdrawInput = document.getElementById("retirement-withdraw");
-const retirementWithdrawBtn = document.getElementById("retirement-withdraw-btn");
-const retirementMessageEl = document.getElementById("retirement-message");
+// const retirementSavingsEl = document.getElementById("retirement-savings");
+// const retirementInterestEl = document.getElementById("retirement-interest");
+// const retirementDaysEl = document.getElementById("retirement-days");
+// const retirementDepositInput = document.getElementById("retirement-deposit");
+// const retirementDepositBtn = document.getElementById("retirement-deposit-btn");
+// const retirementWithdrawInput = document.getElementById("retirement-withdraw");
+// const retirementWithdrawBtn = document.getElementById("retirement-withdraw-btn");
+// const retirementMessageEl = document.getElementById("retirement-message");
 
 let currentDashboardData = null;
 
@@ -95,7 +96,7 @@ onAuthStateChanged(auth, async (user) => {
         themeAppliedOnce = true; // don't override again
     }
 
-    applyMonthlyInterest(user.uid);
+    //applyMonthlyInterest(user.uid);
     updateDashboardUI(user);
 });
 
@@ -170,142 +171,119 @@ function updateDashboardUI(user) {
       discountEl.classList.add("hidden");
     }
   }
+}
 
-  // ---------- Retirement ----------
-  const savings = Number(data.retirementSavings || 0);
-  retirementSavingsEl.textContent = savings.toFixed(2);
+  // // ---------- Retirement ----------
+  // const savings = Number(data.retirementSavings || 0);
+  // retirementSavingsEl.textContent = savings.toFixed(2);
 
-  const interest = savings * 0.03;
-  retirementInterestEl.textContent = interest.toFixed(2);
+  // const interest = savings * 0.03;
+  // retirementInterestEl.textContent = interest.toFixed(2);
 
-  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let nextInterestDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  if(nowMidnight >= nextInterestDate) {
-    nextInterestDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  }
-  const diffDays = Math.ceil((nextInterestDate - nowMidnight) / (1000*60*60*24));
-  retirementDaysEl.textContent = diffDays;
+  // const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // let nextInterestDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  // if(nowMidnight >= nextInterestDate) {
+  //   nextInterestDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  // }
+  // const diffDays = Math.ceil((nextInterestDate - nowMidnight) / (1000*60*60*24));
+  // retirementDaysEl.textContent = diffDays;
 
   // Enable/Disable buttons
-  if(employmentStatus === "Employed") {
-    retirementDepositBtn.disabled = false;
-    retirementWithdrawBtn.disabled = true;
-    retirementDepositInput.disabled = false;
-    retirementWithdrawInput.disabled = true;
-  } else if(employmentStatus === "Unemployed") {
-    retirementDepositBtn.disabled = true;
-    retirementWithdrawBtn.disabled = true;
-    retirementDepositInput.disabled = true;
-    retirementWithdrawInput.disabled = true;
-  } else if(employmentStatus === "Retired") {
-    retirementDepositBtn.disabled = true;
-    retirementWithdrawBtn.disabled = false;
-    retirementDepositInput.disabled = true;
-    retirementWithdrawInput.disabled = false;
-  }
-}
+//   if(employmentStatus === "Employed") {
+//     retirementDepositBtn.disabled = false;
+//     retirementWithdrawBtn.disabled = true;
+//     retirementDepositInput.disabled = false;
+//     retirementWithdrawInput.disabled = true;
+//   } else if(employmentStatus === "Unemployed") {
+//     retirementDepositBtn.disabled = true;
+//     retirementWithdrawBtn.disabled = true;
+//     retirementDepositInput.disabled = true;
+//     retirementWithdrawInput.disabled = true;
+//   } else if(employmentStatus === "Retired") {
+//     retirementDepositBtn.disabled = true;
+//     retirementWithdrawBtn.disabled = false;
+//     retirementDepositInput.disabled = true;
+//     retirementWithdrawInput.disabled = false;
+//   }
+// }
 
-/* =========================================================
-   RETIREMENT ACTIONS
-========================================================= */
-async function depositRetirement() {
-  if (!auth.currentUser) return;
-  const userRef = doc(db, "users", auth.currentUser.uid);
-  const amount = parseFloat(retirementDepositInput.value);
-  if (isNaN(amount) || amount <= 0) {
-    showRetirementMessage("Enter a valid deposit amount.", "error");
-    return;
-  }
+// /* =========================================================
+//    RETIREMENT ACTIONS
+// ========================================================= */
+// async function depositRetirement() {
+//   if (!auth.currentUser) return;
+//   const userRef = doc(db, "users", auth.currentUser.uid);
+//   const amount = parseFloat(retirementDepositInput.value);
+//   if (isNaN(amount) || amount <= 0) {
+//     showRetirementMessage("Enter a valid deposit amount.", "error");
+//     return;
+//   }
 
-  const currentBalance = Number(currentDashboardData.balance || 0);
-  if (amount > currentBalance) {
-    showRetirementMessage("Insufficient main balance.", "error");
-    return;
-  }
+//   const currentBalance = Number(currentDashboardData.balance || 0);
+//   if (amount > currentBalance) {
+//     showRetirementMessage("Insufficient main balance.", "error");
+//     return;
+//   }
 
-  if(currentDashboardData.employmentStatus !== "Employed") {
-    showRetirementMessage("Only Employed users can deposit.", "error");
-    return;
-  }
+//   if(currentDashboardData.employmentStatus !== "Employed") {
+//     showRetirementMessage("Only Employed users can deposit.", "error");
+//     return;
+//   }
 
-  try {
-    const newBalance = currentBalance - amount;
-    const newSavings = (Number(currentDashboardData.retirementSavings) || 0) + amount;
+//   try {
+//     const newBalance = currentBalance - amount;
+//     const newSavings = (Number(currentDashboardData.retirementSavings) || 0) + amount;
 
-    await updateDoc(userRef, { balance: newBalance, retirementSavings: newSavings });
-    showRetirementMessage(`Deposited $${amount.toFixed(2)} to retirement savings.`, "success");
-    retirementDepositInput.value = "";
-  } catch(err) {
-    console.error(err);
-    showRetirementMessage("Deposit failed: " + err.message, "error");
-  }
-}
+//     await updateDoc(userRef, { balance: newBalance, retirementSavings: newSavings });
+//     showRetirementMessage(`Deposited $${amount.toFixed(2)} to retirement savings.`, "success");
+//     retirementDepositInput.value = "";
+//   } catch(err) {
+//     console.error(err);
+//     showRetirementMessage("Deposit failed: " + err.message, "error");
+//   }
+// }
 
-async function withdrawRetirement() {
-  if (!auth.currentUser) return;
-  const userRef = doc(db, "users", auth.currentUser.uid);
-  const amount = parseFloat(retirementWithdrawInput.value);
-  if (isNaN(amount) || amount <= 0) {
-    showRetirementMessage("Enter a valid withdraw amount.", "error");
-    return;
-  }
+// async function withdrawRetirement() {
+//   if (!auth.currentUser) return;
+//   const userRef = doc(db, "users", auth.currentUser.uid);
+//   const amount = parseFloat(retirementWithdrawInput.value);
+//   if (isNaN(amount) || amount <= 0) {
+//     showRetirementMessage("Enter a valid withdraw amount.", "error");
+//     return;
+//   }
 
-  const savings = Number(currentDashboardData.retirementSavings || 0);
-  if(amount > savings) {
-    showRetirementMessage("Insufficient retirement savings.", "error");
-    return;
-  }
+//   const savings = Number(currentDashboardData.retirementSavings || 0);
+//   if(amount > savings) {
+//     showRetirementMessage("Insufficient retirement savings.", "error");
+//     return;
+//   }
 
-  if(currentDashboardData.employmentStatus !== "Retired") {
-    showRetirementMessage("Only Retired users can withdraw.", "error");
-    return;
-  }
+//   if(currentDashboardData.employmentStatus !== "Retired") {
+//     showRetirementMessage("Only Retired users can withdraw.", "error");
+//     return;
+//   }
 
-  try {
-    const balance = Number(currentDashboardData.balance || 0);
-    const newBalance = balance + amount;
-    const newSavings = savings - amount;
+//   try {
+//     const balance = Number(currentDashboardData.balance || 0);
+//     const newBalance = balance + amount;
+//     const newSavings = savings - amount;
 
-    await updateDoc(userRef, { balance: newBalance, retirementSavings: newSavings });
-    showRetirementMessage(`Withdrew $${amount.toFixed(2)} to main balance.`, "success");
-    retirementWithdrawInput.value = "";
-  } catch(err) {
-    console.error(err);
-    showRetirementMessage("Withdraw failed: " + err.message, "error");
-  }
-}
+//     await updateDoc(userRef, { balance: newBalance, retirementSavings: newSavings });
+//     showRetirementMessage(`Withdrew $${amount.toFixed(2)} to main balance.`, "success");
+//     retirementWithdrawInput.value = "";
+//   } catch(err) {
+//     console.error(err);
+//     showRetirementMessage("Withdraw failed: " + err.message, "error");
+//   }
+// }
 
-function showRetirementMessage(msg, type) {
-  if(!retirementMessageEl) return;
-  retirementMessageEl.textContent = msg;
-  retirementMessageEl.style.color = type === "error" ? "red" : "green";
-  setTimeout(() => retirementMessageEl.textContent = "", 4000);
-}
+// function showRetirementMessage(msg, type) {
+//   if(!retirementMessageEl) return;
+//   retirementMessageEl.textContent = msg;
+//   retirementMessageEl.style.color = type === "error" ? "red" : "green";
+//   setTimeout(() => retirementMessageEl.textContent = "", 4000);
+// }
 
-/* =========================================================
-   MONTHLY INTEREST
-========================================================= */
-async function applyMonthlyInterest(uid) {
-  if(!uid || !currentDashboardData) return;
-
-  const userRef = doc(db, "users", uid);
-  const data = currentDashboardData;
-
-  const now = new Date();
-  const lastApplied = data.lastInterestApplied ? new Date(data.lastInterestApplied) : null;
-
-  if(!lastApplied || lastApplied.getMonth() !== now.getMonth() || lastApplied.getFullYear() !== now.getFullYear()) {
-    const savings = Number(data.retirementSavings || 0);
-    if(savings > 0) {
-      const interest = savings * 0.03;
-      await updateDoc(userRef, {
-        retirementSavings: savings + interest,
-        lastInterestApplied: now.toISOString()
-      });
-      console.log(`Applied $${interest.toFixed(2)} interest.`);
-    }
-  }
-}
 
 /* =========================================================
    COSMETICS PURCHASE FUNCTION (LOGS HISTORY)
@@ -371,8 +349,8 @@ export async function purchaseCosmetic(itemId) {
 /* =========================================================
    EVENTS
 ========================================================= */
-retirementDepositBtn?.addEventListener("click", depositRetirement);
-retirementWithdrawBtn?.addEventListener("click", withdrawRetirement);
+// retirementDepositBtn?.addEventListener("click", depositRetirement);
+// retirementWithdrawBtn?.addEventListener("click", withdrawRetirement);
 
 // THEME TOGGLE: only works if Dark Mode cosmetic is owned
 themeToggleBtn?.addEventListener("click", async () => {
