@@ -3,23 +3,22 @@ import { db } from "./firebaseConfig.js";
 import { collection, addDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 /**
- * Logs an event to the user's history.
- * @param {string} userId - The UID of the user.
- * @param {string} message - The text to display.
- * @param {string} type - 'purchase', 'transfer-in', 'transfer-out', 'usage', 'admin', 'contract'
+ * Logs a history entry for a user
+ * @param {string} uid - User UID
+ * @param {string} message - Message to log
+ * @param {string} type - Type of history (purchase, transfer-in, etc)
+ * @param {string} timestamp - Optional ISO timestamp
  */
-export async function logHistory(userId, message, type) {
+export async function logHistory(uid, message, type = "usage", timestamp = null) {
+  if (!uid) return;
+  const historyRef = collection(db, "users", uid, "history_logs");
+
   try {
-    // Reference to the new subcollection: users -> [uid] -> history_logs
-    const historyRef = collection(db, "users", userId, "history_logs");
-    
     await addDoc(historyRef, {
-      message: message,
-      type: type,
-      timestamp: new Date().toISOString()
+      message,
+      type,
+      timestamp: timestamp || new Date().toISOString()
     });
-    
-    console.log(`History Logged (Subcollection): [${type}] ${message}`);
   } catch (err) {
     console.error("Failed to log history:", err);
   }

@@ -1,14 +1,17 @@
-// ---------- dashboard.js (UPDATED: Employment + Retirement Savings + Monthly Interest + Input Controls) ----------
+// ---------- dashboard.js (UPDATED: Cosmetics + Dark Mode + Full Dashboard + Cosmetics History Logging) ----------
 console.log("dashboard.js loaded");
 
 import { auth, db } from "./firebaseConfig.js";
-import { 
-  onAuthStateChanged, 
-  signOut 
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { 
-  doc, onSnapshot, updateDoc, collection, query, orderBy, limit 
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { doc, onSnapshot, updateDoc, collection, query, orderBy, limit, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { logHistory } from "./historyManager.js";
+
+/* =========================================================
+   INSTANT THEME APPLY (prevents light flash on refresh)
+========================================================= */
+const savedTheme = localStorage.getItem("theme");
+if (savedTheme === "dark") document.body.classList.add("dark-mode");
+if (savedTheme === "light") document.body.classList.add("light-mode");
 
 // ---------- UI Elements ----------
 const dashboard = document.getElementById("dashboard");
@@ -18,6 +21,7 @@ const userBalance = document.getElementById("user-balance");
 const logoutBtn = document.getElementById("logout-btn");
 const openAdminBtn = document.getElementById("open-admin");
 const backToDashboardBtn = document.getElementById("back-to-dashboard");
+const themeToggleBtn = document.getElementById("theme-toggle-btn");
 
 // Profile section
 const profileUsername = document.getElementById("profile-username");
@@ -45,7 +49,26 @@ const retirementMessageEl = document.getElementById("retirement-message");
 
 let currentDashboardData = null;
 
-// ---------- Auth State Listener ----------
+/* =========================================================
+   THEME FUNCTION
+========================================================= */
+function applyTheme(theme) {
+  if (theme === "light") {
+    document.body.classList.add("light-mode");
+    document.body.classList.remove("dark-mode");
+    if (themeToggleBtn) themeToggleBtn.textContent = "🌙 Dark Mode";
+  } else {
+    document.body.classList.add("dark-mode");
+    document.body.classList.remove("light-mode");
+    if (themeToggleBtn) themeToggleBtn.textContent = "☀️ Light Mode";
+  }
+
+  localStorage.setItem("theme", theme);
+}
+
+/* =========================================================
+   AUTH STATE
+========================================================= */
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     dashboard.classList.add("hidden");
@@ -56,19 +79,28 @@ onAuthStateChanged(auth, async (user) => {
 
   dashboard.classList.remove("hidden");
 
-  // 1. LISTEN TO USER PROFILE
   const userRef = doc(db, "users", user.uid);
+  let themeAppliedOnce = false; // new flag
+
   onSnapshot(userRef, snap => {
     if (!snap.exists()) return;
     currentDashboardData = snap.data();
 
-    // Apply interest if not yet applied this month
+    // Apply Dark Mode ONLY ONCE (when dashboard loads)
+    if (!themeAppliedOnce) {
+        const theme = currentDashboardData.cosmeticsOwned?.darkMode
+            ? (currentDashboardData.theme || localStorage.getItem("theme") || "dark")
+            : "light"; // default to light if cosmetic not owned
+        applyTheme(theme);
+        themeAppliedOnce = true; // don't override again
+    }
+
     applyMonthlyInterest(user.uid);
-
     updateDashboardUI(user);
-  });
+});
 
-  // 2. LISTEN TO HISTORY SUBCOLLECTION
+
+  // History
   const historyRef = collection(db, "users", user.uid, "history_logs");
   const q = query(historyRef, orderBy("timestamp", "desc"), limit(30));
 
@@ -79,7 +111,9 @@ onAuthStateChanged(auth, async (user) => {
   });
 });
 
-// ---------- UI Update Function ----------
+/* =========================================================
+   DASHBOARD UI UPDATE
+========================================================= */
 function updateDashboardUI(user) {
   if (!currentDashboardData) return;
   const data = currentDashboardData;
@@ -88,7 +122,6 @@ function updateDashboardUI(user) {
   userName.textContent = data.username || user.email.split("@")[0];
   userBalance.textContent = `$${balance.toLocaleString()}`;
 
-  // Profile section
   profileUsername.textContent = data.username || user.email.split("@")[0];
   profileUid.textContent = user.uid.slice(0, 8);
 
@@ -99,7 +132,6 @@ function updateDashboardUI(user) {
   profileRenewal.textContent = renewalDate ? renewalDate.toLocaleDateString() : "N/A";
   profileExpiration.textContent = expirationDate ? expirationDate.toLocaleDateString() : "N/A";
 
-  // Real-time Status Logic
   if (data.renewalPending) {
     renewalStatus.textContent = "Pending Approval";
     renewalStatus.style.color = "orange";
@@ -111,7 +143,6 @@ function updateDashboardUI(user) {
     renewalStatus.style.color = "green";
   }
 
-  // Employment Status
   const employmentStatus = data.employmentStatus || "Unemployed";
   let color = "red";
   if (employmentStatus === "Employed") color = "green";
@@ -122,16 +153,13 @@ function updateDashboardUI(user) {
     employmentStatusEl.style.fontWeight = "bold";
   }
 
-  // Admin Button
   if (data.isAdmin) openAdminBtn.classList.remove("hidden");
   else openAdminBtn.classList.add("hidden");
 
-  // BPS Logic
   const bps = data.bpsBalance || 0;
   const bpsEl = document.getElementById("user-bps");
   if(bpsEl) bpsEl.textContent = `${bps} BPS`;
 
-  // Active Discount
   const discount = data.activeDiscount || 0;
   const discountEl = document.getElementById("active-discount-indicator");
   if(discountEl) {
@@ -143,14 +171,13 @@ function updateDashboardUI(user) {
     }
   }
 
-  // ---------- Retirement Savings ----------
+  // ---------- Retirement ----------
   const savings = Number(data.retirementSavings || 0);
   retirementSavingsEl.textContent = savings.toFixed(2);
 
   const interest = savings * 0.03;
   retirementInterestEl.textContent = interest.toFixed(2);
 
-  // Correct days until next 1st of month
   const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let nextInterestDate = new Date(now.getFullYear(), now.getMonth(), 1);
   if(nowMidnight >= nextInterestDate) {
@@ -159,7 +186,7 @@ function updateDashboardUI(user) {
   const diffDays = Math.ceil((nextInterestDate - nowMidnight) / (1000*60*60*24));
   retirementDaysEl.textContent = diffDays;
 
-  // Enable/Disable Deposit/Withdraw + Input Fields based on Employment Status
+  // Enable/Disable buttons
   if(employmentStatus === "Employed") {
     retirementDepositBtn.disabled = false;
     retirementWithdrawBtn.disabled = true;
@@ -178,7 +205,9 @@ function updateDashboardUI(user) {
   }
 }
 
-// ---------- Retirement Savings Handlers ----------
+/* =========================================================
+   RETIREMENT ACTIONS
+========================================================= */
 async function depositRetirement() {
   if (!auth.currentUser) return;
   const userRef = doc(db, "users", auth.currentUser.uid);
@@ -200,10 +229,10 @@ async function depositRetirement() {
   }
 
   try {
-    await updateDoc(userRef, {
-      balance: currentBalance - amount,
-      retirementSavings: (Number(currentDashboardData.retirementSavings) || 0) + amount
-    });
+    const newBalance = currentBalance - amount;
+    const newSavings = (Number(currentDashboardData.retirementSavings) || 0) + amount;
+
+    await updateDoc(userRef, { balance: newBalance, retirementSavings: newSavings });
     showRetirementMessage(`Deposited $${amount.toFixed(2)} to retirement savings.`, "success");
     retirementDepositInput.value = "";
   } catch(err) {
@@ -234,10 +263,10 @@ async function withdrawRetirement() {
 
   try {
     const balance = Number(currentDashboardData.balance || 0);
-    await updateDoc(userRef, {
-      balance: balance + amount,
-      retirementSavings: savings - amount
-    });
+    const newBalance = balance + amount;
+    const newSavings = savings - amount;
+
+    await updateDoc(userRef, { balance: newBalance, retirementSavings: newSavings });
     showRetirementMessage(`Withdrew $${amount.toFixed(2)} to main balance.`, "success");
     retirementWithdrawInput.value = "";
   } catch(err) {
@@ -253,17 +282,18 @@ function showRetirementMessage(msg, type) {
   setTimeout(() => retirementMessageEl.textContent = "", 4000);
 }
 
-// ---------- Apply Monthly Interest ----------
+/* =========================================================
+   MONTHLY INTEREST
+========================================================= */
 async function applyMonthlyInterest(uid) {
-  if(!uid) return;
+  if(!uid || !currentDashboardData) return;
+
   const userRef = doc(db, "users", uid);
   const data = currentDashboardData;
-  if(!data) return;
 
   const now = new Date();
   const lastApplied = data.lastInterestApplied ? new Date(data.lastInterestApplied) : null;
 
-  // Apply if not yet applied this month
   if(!lastApplied || lastApplied.getMonth() !== now.getMonth() || lastApplied.getFullYear() !== now.getFullYear()) {
     const savings = Number(data.retirementSavings || 0);
     if(savings > 0) {
@@ -272,14 +302,95 @@ async function applyMonthlyInterest(uid) {
         retirementSavings: savings + interest,
         lastInterestApplied: now.toISOString()
       });
-      console.log(`Applied $${interest.toFixed(2)} interest to retirement savings.`);
+      console.log(`Applied $${interest.toFixed(2)} interest.`);
     }
   }
 }
 
-// ---------- Event Listeners ----------
+/* =========================================================
+   COSMETICS PURCHASE FUNCTION (LOGS HISTORY)
+========================================================= */
+export async function purchaseCosmetic(itemId) {
+  if (!auth.currentUser) return;
+
+  const userRef = doc(db, "users", auth.currentUser.uid);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) return;
+
+  const userData = userSnap.data();
+  const balance = Number(userData.balance || 0);
+  const cosmeticsOwned = userData.cosmeticsOwned || {};
+
+  // Already owned?
+  if (cosmeticsOwned[itemId]) {
+    alert("You already own this cosmetic!");
+    return;
+  }
+
+  const itemRef = doc(db, "cosmeticsShop", itemId);
+  const itemSnap = await getDoc(itemRef);
+  if (!itemSnap.exists()) return alert("Item not found.");
+
+  const itemData = itemSnap.data();
+  const price = Number(itemData.price || 0);
+
+  if (balance < price) {
+    alert("Insufficient balance.");
+    return;
+  }
+
+  try {
+    // Deduct balance and mark cosmetic as owned
+    const newBalance = balance - price;
+    const newCosmetics = { ...cosmeticsOwned, [itemId]: true };
+
+    await updateDoc(userRef, {
+      balance: newBalance,
+      cosmeticsOwned: newCosmetics
+    });
+
+    // --- LOG PURCHASE WITH TIMESTAMP ---
+    const timestamp = new Date().toISOString();
+
+    if (itemId === "darkMode") {
+      // Special history message for Dark Mode
+      await logHistory(auth.currentUser.uid, `🎨 Purchased Dark Mode cosmetic for $${price.toFixed(2)}!`, "purchase", timestamp);
+    } else {
+      await logHistory(auth.currentUser.uid, `Purchased cosmetic: ${itemData.name} for $${price.toFixed(2)}`, "purchase", timestamp);
+    }
+
+    alert(`Purchased ${itemData.name} for $${price.toFixed(2)}!`);
+  } catch (err) {
+    console.error(err);
+    alert("Purchase failed: " + err.message);
+  }
+}
+
+
+
+/* =========================================================
+   EVENTS
+========================================================= */
 retirementDepositBtn?.addEventListener("click", depositRetirement);
 retirementWithdrawBtn?.addEventListener("click", withdrawRetirement);
+
+// THEME TOGGLE: only works if Dark Mode cosmetic is owned
+themeToggleBtn?.addEventListener("click", async () => {
+  if(!auth.currentUser) return;
+
+  if(!currentDashboardData?.cosmeticsOwned?.darkMode) {
+    alert("🎨 Buy Dark Mode from the Cosmetics Shop to unlock this feature.");
+    return;
+  }
+
+  const isLight = document.body.classList.contains("light-mode");
+  const newTheme = isLight ? "dark" : "light";
+
+  applyTheme(newTheme);
+
+  const userRef = doc(db, "users", auth.currentUser.uid);
+  await updateDoc(userRef, { theme: newTheme });
+});
 
 openAdminBtn?.addEventListener("click", () => {
   dashboard.classList.add("hidden");
@@ -297,7 +408,9 @@ logoutBtn?.addEventListener("click", async () => {
   adminPanel.classList.add("hidden");
 });
 
-// ---------- Profile Renewal Request ----------
+/* =========================================================
+   RENEWAL REQUEST
+========================================================= */
 renewBtn?.addEventListener("click", async () => {
   if (!auth.currentUser) return;
   const userRef = doc(db, "users", auth.currentUser.uid);
@@ -313,13 +426,15 @@ renewBtn?.addEventListener("click", async () => {
   }
 });
 
-// ---------- Load History ----------
+/* =========================================================
+   HISTORY
+========================================================= */
 function loadHistory(historyArray) {
   if (!historyTable) return;
   historyTable.innerHTML = "";
 
   if (!historyArray || historyArray.length === 0) {
-    historyTable.innerHTML = `<tr><td style="padding:15px; text-align:center; color:gray;">No history found.</td></tr>`;
+    historyTable.innerHTML = `<tr><td class="no-history">No history found.</td></tr>`;
     return;
   }
 
@@ -331,39 +446,30 @@ function loadHistory(historyArray) {
     const row = document.createElement("tr");
     
     let icon = "📄";
-    let bg = "#f8f9fa";
-    let border = "#ddd";
 
     switch(entry.type) {
-        case "transfer-in":  icon = "💸"; bg = "#e8f8f5"; border = "#2ecc71"; break;
-        case "transfer-out": icon = "📤"; bg = "#fdedec"; border = "#e74c3c"; break;
-        case "purchase":     icon = "🛒"; bg = "#fef9e7"; border = "#f1c40f"; break;
-        case "usage":        icon = "🧪"; bg = "#f4f6f7"; border = "#95a5a6"; break;
-        case "admin":        icon = "🛡️"; bg = "#eaf2f8"; border = "#3498db"; break;
-        case "contract":     icon = "📝"; bg = "#fdf2e9"; border = "#e67e22"; break;
+      case "transfer-in":  icon = "💸"; break;
+      case "transfer-out": icon = "📤"; break;
+      case "purchase":     icon = "🛒"; break;
+      case "usage":        icon = "🧪"; break;
+      case "admin":        icon = "🛡️"; break;
+      case "contract":     icon = "📝"; break;
     }
 
     const timeString = getRelativeTime(new Date(entry.timestamp));
 
     row.innerHTML = `
-      <td style="padding: 12px; border-bottom: 1px solid #eee;">
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <div style="
-                font-size: 1.5em; 
-                background: ${bg}; 
-                border: 2px solid ${border}; 
-                width: 40px; height: 40px; 
-                border-radius: 50%; 
-                display: flex; align-items: center; justify-content: center;
-            ">${icon}</div>
-            
-            <div style="display: flex; flex-direction: column;">
-                <span style="font-weight: 600; color: #333;">${entry.message}</span>
-                <span style="font-size: 0.8em; color: gray;">${timeString}</span>
-            </div>
+      <td class="history-row">
+        <div class="history-entry">
+          <div class="history-icon ${entry.type}">${icon}</div>
+          <div class="history-text">
+            <div class="message">${entry.message}</div>
+            <div class="timestamp">${timeString}</div>
+          </div>
         </div>
       </td>
     `;
+
     historyTable.appendChild(row);
   });
 }
@@ -378,7 +484,7 @@ function getRelativeTime(date) {
   return date.toLocaleDateString(); 
 }
 
-// ---------- Heartbeat Timer ----------
+// ---------- Heartbeat ----------
 setInterval(() => {
   if (auth.currentUser && currentDashboardData) {
     updateDashboardUI(auth.currentUser);

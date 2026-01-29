@@ -463,3 +463,430 @@ button:hover {
     gap: 8px;
   }
 }
+
+/* =========================
+   LIGHT MODE OVERRIDES
+========================= */
+
+body.light-mode {
+  background: #f4f6fb;
+  color: #222;
+}
+
+body.light-mode .section-card {
+  background: white;
+  color: #222;
+}
+
+body.light-mode #dashboard-navbar {
+  background: #3498db; /* original navbar blue */
+  color: white;
+  border-bottom: 2px solid #2980b9;
+}
+
+body.light-mode input,
+body.light-mode select {
+  background: #fff;
+  color: #222;
+  border: 1px solid #ccc;
+}
+
+body.light-mode input:disabled,
+body.light-mode select:disabled {
+  background-color: #eee;
+  color: #999;
+}
+
+body.light-mode .btn-secondary {
+  background: gray;
+  color: white;
+}
+
+body.light-mode table {
+  color: #222;
+}
+
+/* =========================
+   DARK MODE OVERRIDES
+========================= */
+
+body.dark-mode {
+  background: #121212;
+  color: #e0e0e0;
+}
+
+/* Section cards */
+body.dark-mode .section-card {
+  background: #1e1e1e;
+  color: #e0e0e0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+}
+
+/* Navbar */
+body.dark-mode #dashboard-navbar {
+  background: #3498db;
+  color: #ffffff;
+  border-bottom: 2px solid #333;
+}
+
+body.dark-mode #dashboard-navbar span {
+  color: #fff;
+}
+
+/* Inputs and selects */
+body.dark-mode input,
+body.dark-mode select {
+  background: #2a2a2a;
+  color: #e0e0e0;
+  border: 1px solid #555;
+}
+
+body.dark-mode input:disabled,
+body.dark-mode select:disabled {
+  background: #1e1e1e;
+  color: #888;
+  border-color: #444;
+  cursor: not-allowed;
+}
+
+/* Buttons */
+body.dark-mode button {
+  border: none;
+  color: #fff;
+}
+
+body.dark-mode .btn-primary {
+  background-color: #0078ff;
+}
+
+body.dark-mode .btn-primary:hover {
+  background-color: #005fcc;
+}
+
+body.dark-mode .btn-secondary {
+  background-color: #444;
+}
+
+body.dark-mode .btn-secondary:hover {
+  background-color: #555;
+}
+
+body.dark-mode .btn-danger {
+  background-color: #d9534f;
+}
+
+body.dark-mode .btn-danger:hover {
+  background-color: #c12b2b;
+}
+
+body.dark-mode button:disabled {
+  background-color: #555;
+  color: #aaa;
+  cursor: not-allowed;
+}
+
+/* Tables */
+body.dark-mode table {
+  color: #e0e0e0;
+  border-color: #555;
+}
+
+/* Shop items */
+body.dark-mode #shop-items .shop-item,
+body.dark-mode #bps-shop-items .shop-item {
+  background: #2a2a2a;
+  border-color: #444;
+}
+
+body.dark-mode .shop-item strong,
+body.dark-mode .shop-item h4,
+body.dark-mode .shop-item p {
+  color: #fff;
+}
+
+body.dark-mode .shop-item-image {
+  background: #151515;
+}
+
+/* Inventory items */
+body.dark-mode #inventory-items .inventory-item {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #e0e0e0;
+}
+
+/* Retirement & Transfer sections */
+body.dark-mode #retirement-savings,
+body.dark-mode #retirement-interest,
+body.dark-mode #retirement-days,
+body.dark-mode #transfer-message {
+  color: #fff;
+}
+
+/* Admin Panel */
+body.dark-mode #admin-panel {
+  background: #1e1e1e;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+/* Renewal Requests */
+body.dark-mode #renewal-requests {
+  background-color: #1e1e1e;
+  border-color: #444;
+}
+
+body.dark-mode .renew-request {
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #444;
+  color: #e0e0e0;
+}
+
+body.dark-mode .renew-request button {
+  background-color: #444;
+  color: #aaa;
+}
+
+body.dark-mode .renew-request button:hover {
+  background-color: #555;
+  color: #fff;
+}
+
+/* Relative Time / History Table Icons */
+body.dark-mode #history-table td span,
+body.dark-mode #history-table td div span {
+  color: #e0e0e0;
+}
+
+/* Scrollbar styling for dark mode */
+body.dark-mode ::-webkit-scrollbar {
+  width: 10px;
+}
+body.dark-mode ::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+body.dark-mode ::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 5px;
+}
+
+/* ---------- History Table Base Styles ---------- */
+.history-row {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.history-entry {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.history-icon {
+  font-size: 1.5em;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Type-specific icon colors */
+.history-icon.transfer-in { background: #e8f8f5; border: 2px solid #2ecc71; }
+.history-icon.transfer-out { background: #fdedec; border: 2px solid #e74c3c; }
+.history-icon.purchase { background: #fef9e7; border: 2px solid #f1c40f; }
+.history-icon.usage { background: #f4f6f7; border: 2px solid #95a5a6; }
+.history-icon.admin { background: #eaf2f8; border: 2px solid #3498db; }
+.history-icon.contract { background: #fdf2e9; border: 2px solid #e67e22; }
+
+/* Message + Timestamp */
+.history-text .message {
+  font-weight: 600;
+  color: #333;
+}
+.history-text .timestamp {
+  font-size: 0.8em;
+  color: gray;
+}
+
+/* No history message */
+.no-history {
+  padding: 15px;
+  text-align: center;
+  color: gray;
+}
+
+/* ---------- Dark Mode Overrides for History Table ---------- */
+body.dark-mode .history-row {
+  border-bottom: 1px solid #444;
+}
+body.dark-mode .history-text .message {
+  color: #e0e0e0;
+}
+body.dark-mode .history-text .timestamp {
+  color: #aaa;
+}
+
+/* Dark mode headers inside sections */
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6 {
+  color: #fff; /* bright enough for dark background */
+}
+
+/* Section cards titles */
+body.dark-mode .section-card h2,
+body.dark-mode .section-card h3 {
+  color: #fff;
+}
+
+/* ---------- Dark Mode: Renewal Requests ---------- */
+body.dark-mode .renew-request {
+  background: #2a2a2a; /* dark background */
+  color: #aaa;          /* gray text instead of bright white */
+  border-bottom: 1px solid #444;
+}
+
+/* Dark Mode: Renewal Requests - Expires Date Input */
+body.dark-mode #admin-panel .renew-request input[type="date"] {
+  background: #2a2a2a;  /* dark gray background */
+  color: #e0e0e0;       /* readable text */
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+/* Make placeholder / default text lighter gray */
+body.dark-mode #admin-panel .renew-request input[type="date"]::placeholder {
+  color: #aaa;
+}
+
+/* =========================
+   COSMETICS SHOP
+========================= */
+
+#cosmetics-shop-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.cosmetic-item {
+  background: #1e1e1e; /* dark gray for default */
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cosmetic-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+}
+
+.cosmetic-item img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  margin-bottom: 8px;
+  border-radius: 8px;
+}
+
+.cosmetic-item h4 {
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.cosmetic-item p {
+  font-size: 0.85rem;
+  color: #bbb;
+  margin: 4px 0;
+}
+
+.cosmetic-price {
+  font-weight: bold;
+  color: lightgray;
+  margin-bottom: 6px;
+}
+
+.cosmetic-item button {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background-color: #0078ff;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.cosmetic-item button:hover {
+  background-color: #005fcc;
+}
+
+.cosmetic-item button:disabled {
+  background-color: #555;
+  color: #aaa;
+  cursor: not-allowed;
+}
+
+/* ---------- LIGHT MODE OVERRIDES ---------- */
+body.light-mode #cosmetics-shop-items .cosmetic-item {
+  background: #1e1e1e;      /* dark box in light mode */
+  color: #fff;              /* white text */
+  border-color: #333;
+}
+
+body.light-mode #cosmetics-shop-items .cosmetic-item.owned {
+  background-color: #2a2a2a; /* slightly darker for owned items */
+}
+
+body.light-mode #cosmetics-shop-items .cosmetic-item h4,
+body.light-mode #cosmetics-shop-items .cosmetic-item p {
+  color: #fff;
+}
+
+body.light-mode #cosmetics-shop-items .cosmetic-item button {
+  background-color: #0078ff;
+  color: #fff;
+}
+
+body.light-mode #cosmetics-shop-items .cosmetic-item button:hover {
+  background-color: #005fcc;
+}
+
+/* ---------- DARK MODE OVERRIDES ---------- */
+body.dark-mode #cosmetics-shop-items .cosmetic-item {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+body.dark-mode #cosmetics-shop-items .cosmetic-item.owned {
+  background-color: #222; /* darker for owned items */
+}
+
+body.dark-mode #cosmetics-shop-items .cosmetic-item h4,
+body.dark-mode #cosmetics-shop-items .cosmetic-item p {
+  color: #fff;
+}
+
+body.dark-mode #cosmetics-shop-items .cosmetic-item button {
+  background-color: #0078ff;
+  color: #fff;
+}
+
+body.dark-mode #cosmetics-shop-items .cosmetic-item button:hover {
+  background-color: #005fcc;
+}
+
+
+
