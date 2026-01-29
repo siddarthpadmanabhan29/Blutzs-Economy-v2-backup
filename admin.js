@@ -142,7 +142,7 @@ async function giveBps() {
   );
 }
 
-// Generic Give Function (UPDATED WITH HISTORY LOG)
+// Generic Give Function
 async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
   try {
     const usernameInput = inputEl.value.trim(); 
@@ -166,17 +166,11 @@ async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
     const currentVal = Number(userData[field]) || 0;
     const newVal = currentVal + amount;
 
-    // 1. Update The Value (Money or BPS)
-    await updateDoc(userRef, {
-      [field]: newVal
-    });
-
-    // 2. Log History (Subcollection)
+    await updateDoc(userRef, { [field]: newVal });
     await logHistory(userId, `Admin gave ${amount} ${typeLabel}`, "admin");
 
     alert(`✅ Gave ${amount} ${typeLabel} to ${userData.username}.`);
 
-    // Reset inputs
     inputEl.value = "";
     amountEl.value = "";
     infoEl.textContent = "N/A";
@@ -188,9 +182,8 @@ async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
   }
 }
 
-// ---------- Load Renewal Requests (Custom Expiration) ----------
+// ---------- Load Renewal Requests ----------
 export async function loadRenewalRequests() {
-  const renewalRequestsContainer = document.getElementById("renewal-requests");
   if(!renewalRequestsContainer) return;
   
   renewalRequestsContainer.innerHTML = "Loading requests...";
@@ -375,7 +368,6 @@ empSetBtn.addEventListener("click", async () => {
     empUserInfo.style.color = "green";
     alert(`✅ Employment status set to ${status} for ${username}`);
 
-    // Reset input
     empUsernameInput.value = "";
     empSetBtn.disabled = true;
     if (empListener) { empListener(); empListener = null; }
@@ -385,3 +377,88 @@ empSetBtn.addEventListener("click", async () => {
     alert("Failed to update employment status: " + err.message);
   }
 });
+
+// ======================================================
+// ========== ADMIN COSMETICS GRANT / REVOKE =============
+// ======================================================
+
+const adminCosmeticsUsername = document.getElementById("admin-cosmetics-username");
+const adminCosmeticsUserInfo = document.getElementById("admin-cosmetics-user-info");
+const adminCosmeticsList = document.getElementById("admin-cosmetics-list");
+
+let cosmeticsUserListener = null;
+
+adminCosmeticsUsername?.addEventListener("input", async () => {
+  const username = adminCosmeticsUsername.value.trim().toLowerCase();
+
+  if (cosmeticsUserListener) { cosmeticsUserListener(); cosmeticsUserListener = null; }
+
+  if (!username) {
+    adminCosmeticsUserInfo.textContent = "N/A";
+    adminCosmeticsList.innerHTML = "";
+    return;
+  }
+
+  const q = query(collection(db, "users"), where("username", "==", username));
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    adminCosmeticsUserInfo.textContent = "Invalid user";
+    adminCosmeticsUserInfo.style.color = "red";
+    adminCosmeticsList.innerHTML = "";
+    return;
+  }
+
+  const userDoc = snap.docs[0];
+  const userId = userDoc.id;
+  const userRef = doc(db, "users", userId);
+
+  cosmeticsUserListener = onSnapshot(userRef, async (docSnap) => {
+    if (!docSnap.exists()) return;
+    const userData = docSnap.data();
+    adminCosmeticsUserInfo.textContent = `${userData.username}`;
+    adminCosmeticsUserInfo.style.color = "green";
+    renderCosmeticsAdmin(userId, userData);
+  });
+});
+
+async function renderCosmeticsAdmin(userId, userData) {
+  if (!adminCosmeticsList) return;
+
+  const cosmeticsSnap = await getDocs(collection(db, "cosmeticsShop"));
+  adminCosmeticsList.innerHTML = "";
+
+  cosmeticsSnap.forEach((docSnap) => {
+    const item = docSnap.data();
+    const owned = userData.cosmeticsOwned?.[item.id] === true;
+
+    const div = document.createElement("div");
+    div.style.display = "flex";
+    div.style.justifyContent = "space-between";
+    div.style.marginBottom = "6px";
+
+    div.innerHTML = `
+      <span>${item.name}</span>
+      <button data-id="${item.id}" data-action="${owned ? "revoke" : "grant"}">
+        ${owned ? "Revoke" : "Grant"}
+      </button>
+    `;
+
+    div.querySelector("button").addEventListener("click", async () => {
+      const cosmeticsOwned = { ...(userData.cosmeticsOwned || {}) };
+
+      if (owned) delete cosmeticsOwned[item.id];
+      else cosmeticsOwned[item.id] = true;
+
+      await updateDoc(doc(db, "users", userId), { cosmeticsOwned });
+
+      await logHistory(
+        userId,
+        `Admin ${owned ? "revoked" : "granted"} cosmetic: ${item.name}`,
+        "admin"
+      );
+    });
+
+    adminCosmeticsList.appendChild(div);
+  });
+}
