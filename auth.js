@@ -45,7 +45,11 @@ export async function createOrUpdateUserDoc(uid, username) {
       renewalDate: now.toISOString(),
       expirationDate: expiration.toISOString(),
       renewalPending: false,
-      isAdmin
+      isAdmin,
+      // --- LOAN FIELDS ---
+      creditScore: 600,
+      activeLoan: 0,
+      isEconomyPaused: false
     });
   } else {
     const data = snap.data();
@@ -58,6 +62,12 @@ export async function createOrUpdateUserDoc(uid, username) {
     if (!data.expirationDate) updateData.expirationDate = expiration.toISOString();
     if (data.renewalPending === undefined) updateData.renewalPending = false;
     if (data.isAdmin === undefined) updateData.isAdmin = isAdmin;
+    
+    // --- LOAN FIELDS PATCH ---
+    if (data.creditScore === undefined) updateData.creditScore = 600;
+    if (data.activeLoan === undefined) updateData.activeLoan = 0;
+    if (data.isEconomyPaused === undefined) updateData.isEconomyPaused = false;
+
     if (Object.keys(updateData).length > 0) await updateDoc(userRef, updateData);
   }
 }

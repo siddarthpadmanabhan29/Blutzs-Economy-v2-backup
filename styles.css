@@ -670,7 +670,7 @@ body.dark-mode ::-webkit-scrollbar-thumb {
   border-radius: 5px;
 }
 
-/* ---------- History Table Base Styles ---------- */
+---------- History Table Base Styles ----------
 .history-row {
   padding: 12px;
   border-bottom: 1px solid #eee;
@@ -888,5 +888,356 @@ body.dark-mode #cosmetics-shop-items .cosmetic-item button:hover {
   background-color: #005fcc;
 }
 
+/* ---------- Loan Center Styling ---------- */
 
+#loan-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    align-items: center;
+}
 
+#loan-amount-select {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+    appearance: none; /* Removes default browser styling */
+    
+    /* Default (Bright Mode) Colors */
+    background-color: #ffffff;
+    color: #333333;
+    border: 2px solid #e67e22;
+    
+    /* Custom Orange Arrow SVG */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e67e22' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 1.2em;
+}
+
+/* Dark Mode logic for the Dropdown */
+.dark-mode #loan-amount-select {
+    background-color: #1a1a1a;
+    color: #f0f0f0;
+    border-color: #d35400;
+    /* Custom Arrow for Dark Mode (slightly darker orange for better contrast) */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d35400' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+#loan-amount-select:hover {
+    border-color: #f39c12;
+    box-shadow: 0 0 8px rgba(230, 126, 34, 0.3);
+}
+
+#loan-amount-select:focus {
+    background-color: rgba(230, 126, 34, 0.05);
+    box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.2);
+}
+
+/* Dropdown Menu Options */
+#loan-amount-select option {
+    background-color: #ffffff;
+    color: #333333;
+    padding: 10px;
+}
+
+.dark-mode #loan-amount-select option {
+    background-color: #2c2c2c;
+    color: #ffffff;
+}
+
+/* Active Loan Info Box */
+#active-loan-info {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(231, 76, 60, 0.1); /* Subtle red tint */
+    border-left: 4px solid #e74c3c;
+    border-radius: 4px;
+}
+
+#active-loan-info p {
+    margin: 8px 0;
+    font-size: 0.95rem;
+}
+
+#debt-amount {
+    color: #e74c3c;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+#interest-timer {
+    font-family: 'Courier New', Courier, monospace;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.dark-mode #interest-timer {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f1c40f;
+}
+
+/* Loan Message (Requirement Tooltip Box) */
+#loan-message {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    font-style: italic;
+    background: rgba(0, 0, 0, 0.03);
+    padding: 8px;
+    border-radius: 5px;
+    border-left: 3px solid #ccc;
+    transition: all 0.2s ease;
+}
+
+/* Dark mode adjustment for the message box */
+.dark-mode #loan-message {
+    background: rgba(255, 255, 255, 0.05);
+    color: #bbb;
+}
+
+/* =========================================================
+    TRANSACTION ITEM & ICON STYLES (THEMED)
+========================================================= */
+
+:root {
+    --hist-bg-hover: rgba(0, 0, 0, 0.02);
+    --hist-border: rgba(0, 0, 0, 0.15);
+    --hist-icon-bg: #ffffff; /* Explicit white for light mode */
+    --hist-text-main: #2c3e50;
+    --hist-text-dim: #7f8c8d;
+    --hist-tag-bg: rgba(0, 0, 0, 0.05);
+    --hist-accent-blue: #3498db;
+    --hist-accent-blue-hover: #2980b9;
+}
+
+.dark-mode {
+    --hist-bg-hover: rgba(255, 255, 255, 0.03);
+    --hist-border: rgba(255, 255, 255, 0.15);
+    --hist-icon-bg: #1a1a1a; /* Deep dark for dark mode */
+    --hist-text-main: #ecf0f1;
+    --hist-text-dim: #95a5a6;
+    --hist-tag-bg: rgba(255, 255, 255, 0.1);
+    --hist-accent-blue: #2980b9;
+    --hist-accent-blue-hover: #3498db;
+}
+
+.history-entry {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--hist-border);
+    transition: background 0.2s ease;
+}
+
+.history-entry:hover {
+    background: var(--hist-bg-hover);
+}
+
+/* --- Circular Icon Badge with Dynamic Borders --- */
+.history-icon-circle {
+    min-width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+    background: var(--hist-icon-bg);
+    border: 2px solid #ddd;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    transition: transform 0.2s ease;
+}
+
+.history-entry:hover .history-icon-circle {
+    transform: scale(1.05);
+}
+
+.history-entry[data-type="transfer-in"] .history-icon-circle { border-color: #2ecc71; }
+.history-entry[data-type="transfer-out"] .history-icon-circle { border-color: #e74c3c; }
+.history-entry[data-type="purchase"] .history-icon-circle { border-color: #3498db; }
+.history-entry[data-type="admin"] .history-icon-circle { border-color: #8e44ad; }
+.history-entry[data-type="usage"] .history-icon-circle { border-color: #f1c40f; }
+.history-entry[data-type="contract"] .history-icon-circle { border-color: #95a5a6; }
+
+.history-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.history-message {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--hist-text-main);
+}
+
+.history-time {
+    font-size: 0.75rem;
+    color: var(--hist-text-dim);
+}
+
+.history-type-tag {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--hist-tag-bg);
+    color: var(--hist-text-main);
+    opacity: 0.8;
+}
+
+/* =========================================================
+    COMPACT TRANSACTION FILTER BAR
+========================================================= */
+
+.history-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center; 
+    gap: 12px;
+    background: var(--hist-bg-hover);
+    padding: 12px; 
+    border-radius: 12px;
+    margin-bottom: 15px;
+    border: 1px solid var(--hist-border);
+    flex-wrap: wrap;
+}
+
+.date-group, .search-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.input-wrapper {
+    display: flex;
+    flex-direction: column; 
+    gap: 2px;
+}
+
+.input-wrapper label {
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--hist-text-dim);
+    margin-left: 2px;
+    letter-spacing: 0.5px;
+}
+
+/* --- Slim Inputs & Date Pickers (FORCED WHITE IN LIGHT MODE) --- */
+#history-date-filter, 
+#history-end-date-filter, 
+#history-search-filter {
+    padding: 6px 12px; 
+    height: 38px;      
+    border-radius: 8px;
+    border: 1px solid var(--hist-border);
+    background-color: var(--hist-icon-bg) !important; /* Force variable use */
+    color: var(--hist-text-main) !important;
+    font-size: 0.85rem;
+    outline: none;
+    transition: all 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+#history-date-filter:focus, 
+#history-end-date-filter:focus, 
+#history-search-filter:focus {
+    border-color: var(--hist-accent-blue);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+}
+
+/* --- Blue Primary Clear Button --- */
+#clear-history-filters {
+    height: 38px;
+    padding: 0 16px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    
+    background-color: var(--hist-accent-blue); 
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    align-self: flex-end; 
+}
+
+#clear-history-filters:hover {
+    background-color: var(--hist-accent-blue-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+#clear-history-filters:active {
+    transform: translateY(0);
+}
+
+/* =========================================================
+    MOBILE RESPONSIVENESS
+========================================================= */
+
+@media (max-width: 650px) {
+    .history-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+        padding: 15px;
+    }
+
+    .date-group {
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .input-wrapper {
+        flex: 1;
+    }
+
+    .search-group {
+        width: 100%;
+        gap: 5px;
+    }
+
+    #history-search-filter {
+        flex: 1;
+    }
+
+    #clear-history-filters {
+        width: 100%; 
+        margin-top: 5px;
+    }
+}
+
+/* Custom Scrollbar */
+#unified-history-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#unified-history-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#unified-history-list::-webkit-scrollbar-thumb {
+    background: var(--hist-border);
+    border-radius: 10px;
+}
+
+#unified-history-list::-webkit-scrollbar-thumb:hover {
+    background: var(--hist-text-dim);
+}

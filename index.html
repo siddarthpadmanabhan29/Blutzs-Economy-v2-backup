@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- LOGIN SCREEN -->
   <div id="login-screen" class="screen">
     <div id="login-form">
       <h1>Login / Register</h1>
@@ -17,7 +16,6 @@
     </div>
   </div>
 
-  <!-- DASHBOARD -->
   <div id="dashboard" class="screen hidden">
     <header id="dashboard-navbar">
       <div class="navbar-left">
@@ -34,10 +32,8 @@
     </header>
 
     <main id="dashboard-content">
-      <!-- PROFILE -->
       <section class="section-card">
         <h3>Profile 
-          <!-- Dark Mode toggle uses data-id="darkMode" and class "cosmetic-feature" -->
           <button id="theme-toggle-btn" class="btn-secondary cosmetic-feature" data-id="darkMode" type="button">🌙</button>
         </h3>
         <p><strong>Username:</strong> <span id="profile-username"></span></p>
@@ -45,11 +41,10 @@
         <p><strong>Renewed On:</strong> <span id="profile-renewal"></span></p>
         <p><strong>Expires On:</strong> <span id="profile-expiration"></span></p>
         <p><strong>Status:</strong> <span id="renewal-status"></span> | 
-           <strong>Employment:</strong> <span id="employment-status"></span></p>
+            <strong>Employment:</strong> <span id="employment-status"></span></p>
         <button id="renew-btn" class="btn-primary" type="button">Request Renewal</button>
       </section>
 
-      <!-- BPS TOKEN SHOP -->
       <section class="section-card" style="border: 2px solid #8e44ad;">
         <h3 style="color: #8e44ad;">🟣 BPS Token Shop</h3>
         <p>Spend your tokens on coupons!</p>
@@ -58,7 +53,6 @@
         </div>
       </section>
 
-      <!-- SHOP -->
       <section class="section-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h3>Shop</h3>
@@ -70,7 +64,6 @@
         <div id="shop-items"></div>
       </section>
 
-      <!-- COSMETICS SHOP -->
       <section class="section-card" style="border: 2px solid #3498db;">
         <h3 style="color: #3498db;">🎨 Cosmetics Shop</h3>
         <p>Customize your experience.</p>
@@ -79,14 +72,12 @@
         </div>
       </section>
 
-      <!-- INVENTORY -->
       <section class="section-card">
         <h3>Inventory</h3>
         <p id="inventory-value">Total Value: $0</p>
         <div id="inventory-items">Loading...</div>
       </section>
 
-      <!-- TRANSFER MONEY -->
       <section class="section-card">
         <h3>Transfer Money</h3>
         <div class="transfer-container">
@@ -97,7 +88,6 @@
         <p id="transfer-message"></p>
       </section>
 
-      <!-- RETIREMENT SAVINGS -->
       <section class="section-card">
         <h3>Retirement Savings</h3>
         <p>Total Savings: $<span id="retirement-savings">0</span></p>
@@ -112,49 +102,89 @@
         <p id="retirement-message" style="font-weight: bold;"></p>
       </section>
 
-      <!-- HISTORY -->
-      <section class="section-card">
-        <h3>History</h3>
-        <table>
-          <tbody id="history-table"></tbody>
-        </table>
+      <section class="section-card" style="border: 2px solid #e67e22;">
+        <h3 style="color: #e67e22;">🏦 Loan Center</h3>
+        <p>Credit Score: <strong id="display-credit-score">600</strong></p>
+        
+        <div id="loan-controls">
+            <select id="loan-amount-select">
+            <option value="50000" title="Requires Fair Status (0-499 Credit Score)">$50,000 (Fair+)</option>
+            <option value="100000" title="Requires Good Status (500-649 Credit Score)">$100,000 (Good+)</option>
+            <option value="500000" title="Requires Elite Status (650-749 Credit Score)">$500,000 (Elite+)</option>
+            <option value="1000000" title="Requires Elite Status (750-850 Credit Score)">$1,000,000 (Elite+)</option>
+          </select>
+            <button id="take-loan-btn" class="btn-primary">Take Loan</button>
+        </div>
+
+        <div id="active-loan-info" class="hidden">
+            <p>Current Debt: <span id="debt-amount">$0</span></p>
+            <p>Daily Interest (5%): <span id="daily-interest">$0</span></p>
+            <p id="interest-timer" style="font-size: 0.85em; color: #e67e22;">Next charge in: --:--:--</p>
+            <button id="repay-loan-btn" class="btn-danger">Repay Loan</button>
+        </div>
+        <p id="loan-message" style="margin-top: 10px; font-weight: bold;"></p>
+      </section>
+
+      <section class="section-card compact-history">
+        <div class="history-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div class="header-main" style="display: flex; align-items: center; gap: 8px;">
+            <h3 style="margin: 0;">Transaction Activity</h3>
+            <span id="history-count-badge" style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 10px; font-size: 0.75em; opacity: 0.8;">0 found</span>
+          </div>
+          <button id="clear-history-filters" class="btn-primary" style="height: 32px; padding: 0 16px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Clear</button>
+        </div>
+
+        <div class="history-controls" style="display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.03); padding: 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 15px;">
+          <div class="date-group" style="display: flex; gap: 10px;">
+            <div class="input-wrapper" style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 0.65rem; font-weight: 800; color: #888; letter-spacing: 0.5px;">FROM:</label>
+              <input type="date" id="history-date-filter" style="background: #181818; border: 1px solid #222; color: #eee; padding: 6px 10px; border-radius: 8px; font-size: 0.85rem; height: 38px;">
+            </div>
+            <div class="input-wrapper" style="display: flex; flex-direction: column; gap: 4px;">
+              <label style="font-size: 0.65rem; font-weight: 800; color: #888; letter-spacing: 0.5px;">TO:</label>
+              <input type="date" id="history-end-date-filter" style="background: #181818; border: 1px solid #222; color: #eee; padding: 6px 10px; border-radius: 8px; font-size: 0.85rem; height: 38px;">
+            </div>
+          </div>
+          <div class="search-group" style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 0.65rem; font-weight: 800; color: #888; letter-spacing: 0.5px; opacity: 0;">SEARCH:</label>
+            <input type="text" id="history-search-filter" placeholder="Search activity..." style="background: #181818; border: 1px solid #222; color: #eee; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; height: 38px; width: 100%;">
+          </div>
+        </div>
+
+        <div id="unified-history-list" style="max-height: 400px; overflow-y: auto; padding-right: 5px;">
+            <p style="color: gray; padding: 10px; text-align: center;">Loading activity...</p>
+        </div>
       </section>
     </main>
   </div>
 
-  <!-- ADMIN PANEL -->
   <div id="admin-panel" class="screen hidden">
     <h2>Admin Panel</h2>
     <button id="back-to-dashboard" class="btn-secondary" type="button">Back</button>
 
-    <!-- Add Shop Item -->
     <h3>Add Shop Item</h3>
     <input id="new-item-name" placeholder="Item Name">
     <input id="new-item-price" type="number" placeholder="Price">
     <input id="new-item-image" placeholder="Image URL (optional)">
     <button id="add-item-btn" class="btn-primary" type="button">Add Item</button>
 
-    <!-- Give Money -->
     <h3>Give Money</h3>
     <input id="admin-give-username" placeholder="Username" autocomplete="off">
     <input id="admin-give-amount" type="number" placeholder="Amount">
     <p><strong>User:</strong> <span id="admin-user-info" style="color: gray;">N/A</span></p>
     <button id="admin-give-btn" class="btn-danger" type="button">Give Money</button>
 
-    <!-- Give BPS Tokens -->
     <h3>Give BPS Tokens (Loyalty)</h3>
     <input id="admin-give-bps-username" placeholder="Username" autocomplete="off">
     <input id="admin-give-bps-amount" type="number" placeholder="BPS Amount">
     <p><strong>User:</strong> <span id="admin-bps-user-info" style="color: gray;">N/A</span></p>
     <button id="admin-give-bps-btn" class="btn-primary" type="button" style="background-color: #8e44ad;">Give BPS Tokens</button>
 
-    <!-- Manage User Cosmetics -->
     <h3>Manage User Cosmetics</h3>
     <input id="admin-cosmetics-username" placeholder="Username" />
     <div id="admin-cosmetics-user-info">N/A</div>
     <div id="admin-cosmetics-list" style="margin-top:10px;"></div>
 
-    <!-- Manage Employment Status -->
     <h3>Manage Employment Status</h3>
     <input id="admin-employment-username" placeholder="Username" autocomplete="off">
     <select id="admin-employment-status">
@@ -165,12 +195,10 @@
     <button id="admin-set-employment-btn" class="btn-primary" type="button">Set Status</button>
     <p><strong>User:</strong> <span id="admin-employment-user-info" style="color: gray;">N/A</span></p>
 
-    <!-- Renewal Requests -->
     <h3>Renewal Requests</h3>
     <div id="renewal-requests"></div>
   </div>
 
-  <!-- SCRIPTS -->
   <script type="module" src="firebaseConfig.js"></script>
   <script type="module" src="auth.js"></script>
   <script type="module" src="shop.js"></script>
@@ -179,5 +207,6 @@
   <script type="module" src="inventory.js"></script>
   <script type="module" src="bpsShop.js"></script>
   <script type="module" src="cosmetics.js"></script> 
+  <script type="module" src="loan.js"></script> 
 </body>
 </html>

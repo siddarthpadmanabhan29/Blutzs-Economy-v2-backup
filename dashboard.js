@@ -1,4 +1,4 @@
-// ---------- dashboard.js (UPDATED: Cosmetics + Dark Mode + Full Dashboard + Cosmetics History Logging) ----------
+// ---------- dashboard.js ----------
 console.log("dashboard.js loaded");
 
 import { auth, db } from "./firebaseConfig.js";
@@ -6,9 +6,10 @@ import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/
 import { doc, onSnapshot, updateDoc, collection, query, orderBy, limit, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 import { currentUserData, renderSavings } from "./retirement.js";
+import { applyInterest, takeOutLoan, repayLoan, getCreditStatus } from "./loan.js"; 
 
 /* =========================================================
-   INSTANT THEME APPLY (prevents light flash on refresh)
+    INSTANT THEME APPLY (prevents light flash on refresh)
 ========================================================= */
 const savedTheme = localStorage.getItem("theme");
 if (savedTheme === "dark") document.body.classList.add("dark-mode");
@@ -16,6 +17,7 @@ if (savedTheme === "light") document.body.classList.add("light-mode");
 
 // ---------- UI Elements ----------
 const dashboard = document.getElementById("dashboard");
+const dashboardContent = document.getElementById("dashboard-content"); 
 const adminPanel = document.getElementById("admin-panel");
 const userName = document.getElementById("user-name");
 const userBalance = document.getElementById("user-balance");
@@ -35,23 +37,30 @@ const renewBtn = document.getElementById("renew-btn");
 // Employment status
 const employmentStatusEl = document.getElementById("employment-status");
 
-// History table
-const historyTable = document.getElementById("history-table");
+// Loan UI Elements
+const displayCreditScore = document.getElementById("display-credit-score");
+const loanAmountSelect = document.getElementById("loan-amount-select");
+const takeLoanBtn = document.getElementById("take-loan-btn");
+const repayLoanBtn = document.getElementById("repay-loan-btn");
+const activeLoanSection = document.getElementById("active-loan-info");
+const debtAmountEl = document.getElementById("debt-amount");
+const dailyInterestEl = document.getElementById("daily-interest");
+const timerEl = document.getElementById("interest-timer");
 
-// Retirement savings elements
-// const retirementSavingsEl = document.getElementById("retirement-savings");
-// const retirementInterestEl = document.getElementById("retirement-interest");
-// const retirementDaysEl = document.getElementById("retirement-days");
-// const retirementDepositInput = document.getElementById("retirement-deposit");
-// const retirementDepositBtn = document.getElementById("retirement-deposit-btn");
-// const retirementWithdrawInput = document.getElementById("retirement-withdraw");
-// const retirementWithdrawBtn = document.getElementById("retirement-withdraw-btn");
-// const retirementMessageEl = document.getElementById("retirement-message");
+// --- UNIFIED HISTORY UI ELEMENTS ---
+const unifiedHistoryList = document.getElementById("unified-history-list");
+const dateFilterInput = document.getElementById("history-date-filter");
+const endDateFilterInput = document.getElementById("history-end-date-filter");
+const searchFilterInput = document.getElementById("history-search-filter");
+const clearFiltersBtn = document.getElementById("clear-history-filters");
+const historyCountBadge = document.getElementById("history-count-badge");
 
 let currentDashboardData = null;
+let interestTimerInterval = null; 
+let cachedHistory = []; // Local cache for filtering without re-fetching
 
 /* =========================================================
-   THEME FUNCTION
+    THEME FUNCTION
 ========================================================= */
 function applyTheme(theme) {
   if (theme === "light") {
@@ -63,12 +72,11 @@ function applyTheme(theme) {
     document.body.classList.remove("light-mode");
     if (themeToggleBtn) themeToggleBtn.textContent = "☀️ Light Mode";
   }
-
   localStorage.setItem("theme", theme);
 }
 
 /* =========================================================
-   AUTH STATE
+    AUTH STATE
 ========================================================= */
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -81,39 +89,134 @@ onAuthStateChanged(auth, async (user) => {
   dashboard.classList.remove("hidden");
 
   const userRef = doc(db, "users", user.uid);
-  let themeAppliedOnce = false; // new flag
+  let themeAppliedOnce = false; 
 
-  onSnapshot(userRef, snap => {
+  onSnapshot(userRef, async snap => { 
     if (!snap.exists()) return;
     currentDashboardData = snap.data();
 
-    // Apply Dark Mode ONLY ONCE (when dashboard loads)
+    await applyInterest(user.uid, currentDashboardData);
+
     if (!themeAppliedOnce) {
         const theme = currentDashboardData.cosmeticsOwned?.darkMode
             ? (currentDashboardData.theme || localStorage.getItem("theme") || "dark")
-            : "light"; // default to light if cosmetic not owned
+            : "light"; 
         applyTheme(theme);
-        themeAppliedOnce = true; // don't override again
+        themeAppliedOnce = true; 
     }
 
-    //applyMonthlyInterest(user.uid);
     updateDashboardUI(user);
-});
+  });
 
-
-  // History
+  // --- UPDATED HISTORY SNAPSHOT (Unified View) ---
   const historyRef = collection(db, "users", user.uid, "history_logs");
-  const q = query(historyRef, orderBy("timestamp", "desc"), limit(30));
+  const q = query(historyRef, orderBy("timestamp", "desc"));
 
   onSnapshot(q, (snapshot) => {
-    const historyData = [];
-    snapshot.forEach(doc => historyData.push(doc.data()));
-    loadHistory(historyData);
+    cachedHistory = [];
+    snapshot.forEach(doc => cachedHistory.push(doc.data()));
+    
+    // Set default range: Yesterday to Today if not already set
+    if (dateFilterInput && !dateFilterInput.value) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        dateFilterInput.value = yesterday.toISOString().split('T')[0];
+        
+        const today = new Date();
+        endDateFilterInput.value = today.toISOString().split('T')[0];
+    }
+
+    renderUnifiedHistory();
   });
 });
 
 /* =========================================================
-   DASHBOARD UI UPDATE
+    UNIFIED HISTORY RENDERING (UPDATED VISUALS)
+========================================================= */
+function renderUnifiedHistory() {
+    if (!unifiedHistoryList) return;
+    
+    const searchTerm = searchFilterInput.value.toLowerCase();
+    const startVal = dateFilterInput.value;
+    const endVal = endDateFilterInput.value;
+    
+    unifiedHistoryList.innerHTML = "";
+
+    // 1. Filter the cached array based on Date Range and Search Term
+    const filtered = cachedHistory.filter(entry => {
+      const entryDate = new Date(entry.timestamp);
+      const entryMsg = entry.message.toLowerCase();
+      
+      const matchesSearch = entryMsg.includes(searchTerm);
+      
+      // Clean time comparison (Normalization to local midnight)
+      const logTime = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate()).getTime();
+      
+      // Use "T00:00:00" to force local time interpretation from the picker
+      const startTime = startVal ? new Date(startVal + "T00:00:00").getTime() : 0;
+      const endTime = endVal ? new Date(endVal + "T23:59:59").getTime() : Infinity;
+
+      const matchesDate = logTime >= startTime && logTime <= endTime;
+      
+      return matchesSearch && matchesDate;
+    });
+
+    // 2. Update the found count badge
+    if (historyCountBadge) {
+        historyCountBadge.textContent = `${filtered.length} found`;
+    }
+
+    // 3. Render the items
+    if (filtered.length === 0) {
+        unifiedHistoryList.innerHTML = `<div style="color: gray; padding: 20px; text-align: center;">No matching activity found.</div>`;
+        return;
+    }
+
+        filtered.forEach(entry => {
+        let icon = getHistoryIcon(entry.type);
+        const timeStr = getRelativeTime(new Date(entry.timestamp));
+        
+        let amountColor = "inherit";
+        if (entry.message.includes("Repaid") || entry.message.includes("Sent")) amountColor = "#e74c3c"; 
+        if (entry.message.includes("Took") || entry.message.includes("Received")) amountColor = "#2ecc71"; 
+
+        // NOTICE THE data-type="${entry.type}" ADDED BELOW
+        unifiedHistoryList.innerHTML += `
+            <div class="history-entry" data-type="${entry.type}">
+                <div class="history-icon-circle">${icon}</div>
+                <div class="history-details">
+                    <div class="history-message" style="color: ${amountColor};">${entry.message}</div>
+                    <div class="history-time">${timeStr}</div>
+                </div>
+                <div class="history-type-tag">${entry.type}</div>
+            </div>
+        `;
+    });
+}
+
+function getHistoryIcon(type) {
+    switch(type) {
+      case "transfer-in":  return "💸";
+      case "transfer-out": return "📤";
+      case "purchase":     return "🛒";
+      case "usage":        return "🧪";
+      case "admin":        return "🛡️";
+      case "contract":     return "📝";
+      default:             return "📄";
+    }
+}
+
+function getRelativeTime(date) {
+  const now = new Date();
+  const diff = Math.floor((now - date) / 1000);
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+  return date.toLocaleDateString(); 
+}
+
+/* =========================================================
+    DASHBOARD UI UPDATE
 ========================================================= */
 function updateDashboardUI(user) {
   if (!currentDashboardData) return;
@@ -125,6 +228,59 @@ function updateDashboardUI(user) {
 
   profileUsername.textContent = data.username || user.email.split("@")[0];
   profileUid.textContent = user.uid.slice(0, 8);
+
+  const score = data.creditScore || 600;
+  const status = getCreditStatus(score);
+  
+  if (displayCreditScore) {
+      displayCreditScore.innerHTML = `
+          ${score} <span style="color: ${status.color}; font-weight: bold; margin-left: 5px;">
+              (${status.label})
+          </span>
+      `;
+  }
+  
+  const activeDebt = data.activeLoan || 0;
+  if (activeDebt > 0) {
+      activeLoanSection?.classList.remove("hidden");
+      if (debtAmountEl) debtAmountEl.textContent = `$${activeDebt.toLocaleString()}`;
+
+      if (dailyInterestEl) {
+        const dailyAmt = activeDebt * 0.05;
+        dailyInterestEl.textContent = `$${dailyAmt.toLocaleString()}`;
+      }
+
+      if (data.lastInterestApplied) {
+          if (interestTimerInterval) clearInterval(interestTimerInterval);
+          interestTimerInterval = setInterval(() => {
+              const now = new Date();
+              const lastApplied = new Date(data.lastInterestApplied);
+              const nextCharge = new Date(lastApplied.getTime() + (24 * 60 * 60 * 1000));
+              const timeLeft = nextCharge - now;
+
+              if (timeLeft <= 0) {
+                  if (timerEl) timerEl.textContent = "Next charge in: 00:00:00";
+                  clearInterval(interestTimerInterval);
+              } else {
+                  const hours = Math.floor((timeLeft / (1000 * 60 * 60)) % 24);
+                  const mins = Math.floor((timeLeft / (1000 * 60)) % 60);
+                  const secs = Math.floor((timeLeft / 1000) % 60);
+                  if (timerEl) {
+                      timerEl.textContent = `Next charge in: ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                  }
+              }
+          }, 1000);
+      }
+  } else {
+      activeLoanSection?.classList.add("hidden");
+      if (interestTimerInterval) clearInterval(interestTimerInterval);
+  }
+
+  if (data.isEconomyPaused) {
+      dashboardContent?.classList.add("paused-economy");
+  } else {
+      dashboardContent?.classList.remove("paused-economy");
+  }
 
   const now = new Date();
   const renewalDate = data.renewalDate ? new Date(data.renewalDate) : null;
@@ -173,201 +329,48 @@ function updateDashboardUI(user) {
   }
 }
 
-  // // ---------- Retirement ----------
-  // const savings = Number(data.retirementSavings || 0);
-  // retirementSavingsEl.textContent = savings.toFixed(2);
-
-  // const interest = savings * 0.03;
-  // retirementInterestEl.textContent = interest.toFixed(2);
-
-  // const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  // let nextInterestDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  // if(nowMidnight >= nextInterestDate) {
-  //   nextInterestDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  // }
-  // const diffDays = Math.ceil((nextInterestDate - nowMidnight) / (1000*60*60*24));
-  // retirementDaysEl.textContent = diffDays;
-
-  // Enable/Disable buttons
-//   if(employmentStatus === "Employed") {
-//     retirementDepositBtn.disabled = false;
-//     retirementWithdrawBtn.disabled = true;
-//     retirementDepositInput.disabled = false;
-//     retirementWithdrawInput.disabled = true;
-//   } else if(employmentStatus === "Unemployed") {
-//     retirementDepositBtn.disabled = true;
-//     retirementWithdrawBtn.disabled = true;
-//     retirementDepositInput.disabled = true;
-//     retirementWithdrawInput.disabled = true;
-//   } else if(employmentStatus === "Retired") {
-//     retirementDepositBtn.disabled = true;
-//     retirementWithdrawBtn.disabled = false;
-//     retirementDepositInput.disabled = true;
-//     retirementWithdrawInput.disabled = false;
-//   }
-// }
-
-// /* =========================================================
-//    RETIREMENT ACTIONS
-// ========================================================= */
-// async function depositRetirement() {
-//   if (!auth.currentUser) return;
-//   const userRef = doc(db, "users", auth.currentUser.uid);
-//   const amount = parseFloat(retirementDepositInput.value);
-//   if (isNaN(amount) || amount <= 0) {
-//     showRetirementMessage("Enter a valid deposit amount.", "error");
-//     return;
-//   }
-
-//   const currentBalance = Number(currentDashboardData.balance || 0);
-//   if (amount > currentBalance) {
-//     showRetirementMessage("Insufficient main balance.", "error");
-//     return;
-//   }
-
-//   if(currentDashboardData.employmentStatus !== "Employed") {
-//     showRetirementMessage("Only Employed users can deposit.", "error");
-//     return;
-//   }
-
-//   try {
-//     const newBalance = currentBalance - amount;
-//     const newSavings = (Number(currentDashboardData.retirementSavings) || 0) + amount;
-
-//     await updateDoc(userRef, { balance: newBalance, retirementSavings: newSavings });
-//     showRetirementMessage(`Deposited $${amount.toFixed(2)} to retirement savings.`, "success");
-//     retirementDepositInput.value = "";
-//   } catch(err) {
-//     console.error(err);
-//     showRetirementMessage("Deposit failed: " + err.message, "error");
-//   }
-// }
-
-// async function withdrawRetirement() {
-//   if (!auth.currentUser) return;
-//   const userRef = doc(db, "users", auth.currentUser.uid);
-//   const amount = parseFloat(retirementWithdrawInput.value);
-//   if (isNaN(amount) || amount <= 0) {
-//     showRetirementMessage("Enter a valid withdraw amount.", "error");
-//     return;
-//   }
-
-//   const savings = Number(currentDashboardData.retirementSavings || 0);
-//   if(amount > savings) {
-//     showRetirementMessage("Insufficient retirement savings.", "error");
-//     return;
-//   }
-
-//   if(currentDashboardData.employmentStatus !== "Retired") {
-//     showRetirementMessage("Only Retired users can withdraw.", "error");
-//     return;
-//   }
-
-//   try {
-//     const balance = Number(currentDashboardData.balance || 0);
-//     const newBalance = balance + amount;
-//     const newSavings = savings - amount;
-
-//     await updateDoc(userRef, { balance: newBalance, retirementSavings: newSavings });
-//     showRetirementMessage(`Withdrew $${amount.toFixed(2)} to main balance.`, "success");
-//     retirementWithdrawInput.value = "";
-//   } catch(err) {
-//     console.error(err);
-//     showRetirementMessage("Withdraw failed: " + err.message, "error");
-//   }
-// }
-
-// function showRetirementMessage(msg, type) {
-//   if(!retirementMessageEl) return;
-//   retirementMessageEl.textContent = msg;
-//   retirementMessageEl.style.color = type === "error" ? "red" : "green";
-//   setTimeout(() => retirementMessageEl.textContent = "", 4000);
-// }
-
-
 /* =========================================================
-   COSMETICS PURCHASE FUNCTION (LOGS HISTORY)
+    EVENT LISTENERS
 ========================================================= */
-export async function purchaseCosmetic(itemId) {
-  if (!auth.currentUser) return;
 
-  const userRef = doc(db, "users", auth.currentUser.uid);
-  const userSnap = await getDoc(userRef);
-  if (!userSnap.exists()) return;
+// --- History Filtering Listeners ---
+dateFilterInput?.addEventListener("change", renderUnifiedHistory);
+endDateFilterInput?.addEventListener("change", renderUnifiedHistory);
+searchFilterInput?.addEventListener("input", renderUnifiedHistory);
 
-  const userData = userSnap.data();
-  const balance = Number(userData.balance || 0);
-  const cosmeticsOwned = userData.cosmeticsOwned || {};
+clearFiltersBtn?.addEventListener("click", () => {
+    // Reset to "1 Day Ago" defaults
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    dateFilterInput.value = yesterday.toISOString().split('T')[0];
+    
+    const today = new Date();
+    endDateFilterInput.value = today.toISOString().split('T')[0];
 
-  // Already owned?
-  if (cosmeticsOwned[itemId]) {
-    alert("You already own this cosmetic!");
-    return;
-  }
+    searchFilterInput.value = "";
+    renderUnifiedHistory();
+});
 
-  const itemRef = doc(db, "cosmeticsShop", itemId);
-  const itemSnap = await getDoc(itemRef);
-  if (!itemSnap.exists()) return alert("Item not found.");
-
-  const itemData = itemSnap.data();
-  const price = Number(itemData.price || 0);
-
-  if (balance < price) {
-    alert("Insufficient balance.");
-    return;
-  }
-
-  try {
-    // Deduct balance and mark cosmetic as owned
-    const newBalance = balance - price;
-    const newCosmetics = { ...cosmeticsOwned, [itemId]: true };
-
-    await updateDoc(userRef, {
-      balance: newBalance,
-      cosmeticsOwned: newCosmetics
-    });
-
-    // --- LOG PURCHASE WITH TIMESTAMP ---
-    const timestamp = new Date().toISOString();
-
-    if (itemId === "darkMode") {
-      // Special history message for Dark Mode
-      await logHistory(auth.currentUser.uid, `🎨 Purchased Dark Mode cosmetic for $${price.toFixed(2)}!`, "purchase", timestamp);
-    } else {
-      await logHistory(auth.currentUser.uid, `Purchased cosmetic: ${itemData.name} for $${price.toFixed(2)}`, "purchase", timestamp);
-    }
-
-    alert(`Purchased ${itemData.name} for $${price.toFixed(2)}!`);
-  } catch (err) {
-    console.error(err);
-    alert("Purchase failed: " + err.message);
-  }
-}
-
-
-
-/* =========================================================
-   EVENTS
-========================================================= */
-// retirementDepositBtn?.addEventListener("click", depositRetirement);
-// retirementWithdrawBtn?.addEventListener("click", withdrawRetirement);
-
-// THEME TOGGLE: only works if Dark Mode cosmetic is owned
 themeToggleBtn?.addEventListener("click", async () => {
   if(!auth.currentUser) return;
-
   if(!currentDashboardData?.cosmeticsOwned?.darkMode) {
     alert("🎨 Buy Dark Mode from the Cosmetics Shop to unlock this feature.");
     return;
   }
-
   const isLight = document.body.classList.contains("light-mode");
   const newTheme = isLight ? "dark" : "light";
-
   applyTheme(newTheme);
-
   const userRef = doc(db, "users", auth.currentUser.uid);
   await updateDoc(userRef, { theme: newTheme });
+});
+
+takeLoanBtn?.addEventListener("click", () => {
+    const amount = parseInt(loanAmountSelect.value);
+    takeOutLoan(amount);
+});
+
+repayLoanBtn?.addEventListener("click", () => {
+    repayLoan();
 });
 
 openAdminBtn?.addEventListener("click", () => {
@@ -386,9 +389,6 @@ logoutBtn?.addEventListener("click", async () => {
   adminPanel.classList.add("hidden");
 });
 
-/* =========================================================
-   RENEWAL REQUEST
-========================================================= */
 renewBtn?.addEventListener("click", async () => {
   if (!auth.currentUser) return;
   const userRef = doc(db, "users", auth.currentUser.uid);
@@ -404,65 +404,24 @@ renewBtn?.addEventListener("click", async () => {
   }
 });
 
-/* =========================================================
-   HISTORY
-========================================================= */
-function loadHistory(historyArray) {
-  if (!historyTable) return;
-  historyTable.innerHTML = "";
-
-  if (!historyArray || historyArray.length === 0) {
-    historyTable.innerHTML = `<tr><td class="no-history">No history found.</td></tr>`;
-    return;
-  }
-
-  const validHistory = historyArray.filter(entry => 
-    entry.timestamp && !isNaN(new Date(entry.timestamp).getTime())
-  );
-
-  validHistory.forEach(entry => {
-    const row = document.createElement("tr");
-    
-    let icon = "📄";
-
-    switch(entry.type) {
-      case "transfer-in":  icon = "💸"; break;
-      case "transfer-out": icon = "📤"; break;
-      case "purchase":     icon = "🛒"; break;
-      case "usage":        icon = "🧪"; break;
-      case "admin":        icon = "🛡️"; break;
-      case "contract":     icon = "📝"; break;
+loanAmountSelect?.addEventListener("change", () => {
+    const amount = parseInt(loanAmountSelect.value);
+    const msgEl = document.getElementById("loan-message");
+    if (amount === 50000) {
+        msgEl.textContent = "ℹ️ Requirement: Risky Status (0-499)";
+        msgEl.style.color = "#e74c3c";
+    } else if (amount === 100000) {
+        msgEl.textContent = "ℹ️ Requirement: Fair Status (500-649)";
+        msgEl.style.color = "#3498db";
+    } else if (amount === 500000) {
+        msgEl.textContent = "ℹ️ Requirement: Good Status (650-749)";
+        msgEl.style.color = "#2ecc71";
+    } else if (amount === 1000000) {
+        msgEl.textContent = "✨ Requirement: Elite Status (750-850)";
+        msgEl.style.color = "#f1c40f";
     }
+});
 
-    const timeString = getRelativeTime(new Date(entry.timestamp));
-
-    row.innerHTML = `
-      <td class="history-row">
-        <div class="history-entry">
-          <div class="history-icon ${entry.type}">${icon}</div>
-          <div class="history-text">
-            <div class="message">${entry.message}</div>
-            <div class="timestamp">${timeString}</div>
-          </div>
-        </div>
-      </td>
-    `;
-
-    historyTable.appendChild(row);
-  });
-}
-
-function getRelativeTime(date) {
-  const now = new Date();
-  const diff = Math.floor((now - date) / 1000);
-
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-  return date.toLocaleDateString(); 
-}
-
-// ---------- Heartbeat ----------
 setInterval(() => {
   if (auth.currentUser && currentDashboardData) {
     updateDashboardUI(auth.currentUser);
