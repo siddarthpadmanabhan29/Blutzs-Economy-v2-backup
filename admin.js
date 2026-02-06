@@ -1,52 +1,54 @@
-// ---------- admin.js (FINAL UPDATED) ----------
+// ---------- admin.js (QUOTA OPTIMIZED) ----------
 console.log("admin.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot, deleteDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { showScreen } from "./auth.js"; 
-import { logHistory } from "./historyManager.js"; // <--- NEW IMPORT
+import { logHistory } from "./historyManager.js";
 
 // ---------- Elements ----------
 const adminPanel = document.getElementById("admin-panel");
 const backToDashboardBtn = document.getElementById("back-to-dashboard");
 
-// Add Shop Item
 const addItemBtn = document.getElementById("add-item-btn");
 const newItemName = document.getElementById("new-item-name");
 const newItemPrice = document.getElementById("new-item-price");
 const newItemImage = document.getElementById("new-item-image"); 
 
-// Give Money Elements
 const adminGiveUsername = document.getElementById("admin-give-username");
 const adminGiveAmount = document.getElementById("admin-give-amount");
 const adminGiveBtn = document.getElementById("admin-give-btn");
 const adminUserInfo = document.getElementById("admin-user-info");
 
-// Give BPS Elements 
 const adminGiveBpsUsername = document.getElementById("admin-give-bps-username");
 const adminGiveBpsAmount = document.getElementById("admin-give-bps-amount");
 const adminGiveBpsBtn = document.getElementById("admin-give-bps-btn");
 const adminBpsUserInfo = document.getElementById("admin-bps-user-info");
 
-let balanceListener = null; 
-let bpsListener = null;     
-
-// Renewal Requests
 const renewalRequestsContainer = document.getElementById("renewal-requests");
+const adminRosterContainer = document.getElementById("admin-active-contracts-list");
+
+// --- QUOTA PROTECTION STATE ---
+let balanceListener = null; 
+let bpsListener = null;
+let empListener = null;
+let cosmeticsUserListener = null;
+let contractLookupListener = null;
+let adminCosmeticsCache = null; 
+let activeAdminListener = null;
+
+// DEBOUNCE TIMER: Prevents reading the DB on every single keystroke
+let lookupTimeout = null;
 
 // ---------- Admin Access Check ----------
 export async function checkAdminAccess() {
   const user = auth.currentUser;
   if (!user) return false;
-
   const userRef = doc(db, "users", user.uid);
   const userSnap = await getDoc(userRef);
-  if (!userSnap.exists()) return false;
-
-  const userData = userSnap.data();
-  return userData.isAdmin === true;
+  return userSnap.exists() && userSnap.data().isAdmin === true;
 }
 
 // ---------- Add Shop Item ----------
@@ -54,188 +56,152 @@ async function addShopItem() {
   const name = newItemName.value.trim();
   const cost = parseFloat(newItemPrice.value);
   const image = newItemImage.value.trim(); 
-
   if (!name || isNaN(cost) || cost <= 0) return alert("Enter valid item name and cost.");
-
   await addDoc(collection(db, "shop"), { name, cost, image });
   alert(`Added item: ${name} ($${cost})`);
-  newItemName.value = "";
-  newItemPrice.value = "";
-  newItemImage.value = "";
+  newItemName.value = ""; newItemPrice.value = ""; newItemImage.value = "";
 }
 
-// ---------- 1. Give Money Logic ----------
-adminGiveUsername?.addEventListener("input", async () => {
-  handleUserLookup(adminGiveUsername, adminUserInfo, adminGiveBtn, "money");
-});
+// ---------- Optimized User Lookup Helper ----------
+function debounceLookup(callback) {
+    if (lookupTimeout) clearTimeout(lookupTimeout);
+    lookupTimeout = setTimeout(callback, 300); 
+}
 
-// ---------- 2. Give BPS Logic ----------
-adminGiveBpsUsername?.addEventListener("input", async () => {
-  handleUserLookup(adminGiveBpsUsername, adminBpsUserInfo, adminGiveBpsBtn, "bps");
-});
-
-// Generic User Lookup Helper
 async function handleUserLookup(inputEl, infoEl, btnEl, type) {
   const usernameInput = inputEl.value.trim().toLowerCase();
 
+  if (lookupTimeout) clearTimeout(lookupTimeout);
   if (type === "money" && balanceListener) { balanceListener(); balanceListener = null; }
   if (type === "bps" && bpsListener) { bpsListener(); bpsListener = null; }
+  if (type === "emp" && empListener) { empListener(); empListener = null; }
+  if (type === "cosmetic" && cosmeticsUserListener) { cosmeticsUserListener(); cosmeticsUserListener = null; }
+  if (type === "contract" && contractLookupListener) { contractLookupListener(); contractLookupListener = null; }
 
   if (!usernameInput) {
     infoEl.textContent = "N/A";
     infoEl.style.color = "gray";
-    btnEl.disabled = true;
+    if(btnEl) btnEl.disabled = true;
     return;
   }
 
-  const usersRef = collection(db, "users");
-  const q = query(usersRef, where("username", "==", usernameInput)); 
-  const snap = await getDocs(q);
-
-  if (snap.empty) {
-    infoEl.textContent = "Invalid user";
-    infoEl.style.color = "red";
-    btnEl.disabled = true;
-  } else {
-    const userDoc = snap.docs[0];
-    const userRef = doc(db, "users", userDoc.id);
-
-    btnEl.disabled = false;
-
-    const unsubscribe = onSnapshot(userRef, (docSnap) => {
-      if (!docSnap.exists()) return;
-      const data = docSnap.data();
-      
-      if (type === "money") {
-        infoEl.textContent = `${data.username} — $${(data.balance || 0).toLocaleString()}`;
-        infoEl.style.color = "green";
-      } else {
-        infoEl.textContent = `${data.username} — ${(data.bpsBalance || 0)} BPS`;
-        infoEl.style.color = "#8e44ad"; 
-      }
-    });
-
-    if (type === "money") balanceListener = unsubscribe;
-    else bpsListener = unsubscribe;
-  }
-}
-
-// ---------- Execute Give Money ----------
-async function giveMoney() {
-  await executeGive(
-    adminGiveUsername, 
-    adminGiveAmount, 
-    adminUserInfo, 
-    "balance", 
-    "money"
-  );
-}
-
-// ---------- Execute Give BPS ----------
-async function giveBps() {
-  await executeGive(
-    adminGiveBpsUsername, 
-    adminGiveBpsAmount, 
-    adminBpsUserInfo, 
-    "bpsBalance", 
-    "BPS"
-  );
-}
-
-// Generic Give Function
-async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
-  try {
-    const usernameInput = inputEl.value.trim(); 
-    const amount = parseFloat(amountEl.value);
-
-    if (!usernameInput || isNaN(amount) || amount <= 0) {
-      return alert("Enter a valid username and amount.");
-    }
-
+  debounceLookup(async () => {
     const usersRef = collection(db, "users");
-    const q = query(usersRef, where("username", "==", usernameInput));
+    const q = query(usersRef, where("username", "==", usernameInput)); 
     const snap = await getDocs(q);
 
+    if (snap.empty) {
+      infoEl.textContent = "Invalid user";
+      infoEl.style.color = "red";
+      if(btnEl) btnEl.disabled = true;
+    } else {
+      const userDoc = snap.docs[0];
+      const userRef = doc(db, "users", userDoc.id);
+      if(btnEl) btnEl.disabled = false;
+
+      const unsubscribe = onSnapshot(userRef, (docSnap) => {
+        if (!docSnap.exists()) return;
+        const data = docSnap.data();
+        const displayName = data.username || usernameInput;
+
+        if (type === "money") {
+          infoEl.textContent = `${displayName} — $${(data.balance || 0).toLocaleString()}`;
+          infoEl.style.color = "green";
+        } else if (type === "bps") {
+          infoEl.textContent = `${displayName} — ${(data.bpsBalance || 0)} BPS`;
+          infoEl.style.color = "#8e44ad"; 
+        } else if (type === "emp") {
+          let statusText = `${displayName} → ${data.employmentStatus || "Unemployed"}`;
+          if (data.tradePending) statusText += " (PENDING: trade)";
+          if (data.releasePending) statusText += " (PENDING: release)";
+          infoEl.textContent = statusText;
+          infoEl.style.color = (data.tradePending || data.releasePending) ? "orange" : "green";
+        } else if (type === "cosmetic") {
+          infoEl.textContent = `${displayName}`;
+          infoEl.style.color = "green";
+          renderCosmeticsAdmin(userDoc.id, data);
+        } else if (type === "contract") {
+            infoEl.textContent = `Drafting for: ${displayName}`;
+            infoEl.style.color = "green";
+        }
+      });
+
+      if (type === "money") balanceListener = unsubscribe;
+      else if (type === "bps") bpsListener = unsubscribe;
+      else if (type === "emp") empListener = unsubscribe;
+      else if (type === "cosmetic") cosmeticsUserListener = unsubscribe;
+      else if (type === "contract") contractLookupListener = unsubscribe;
+    }
+  });
+}
+
+adminGiveUsername?.addEventListener("input", () => handleUserLookup(adminGiveUsername, adminUserInfo, adminGiveBtn, "money"));
+adminGiveBpsUsername?.addEventListener("input", () => handleUserLookup(adminGiveBpsUsername, adminBpsUserInfo, adminGiveBpsBtn, "bps"));
+
+// ---------- Execute Give Functions ----------
+async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
+  try {
+    const usernameInput = inputEl.value.trim().toLowerCase(); 
+    const amount = parseFloat(amountEl.value);
+    if (!usernameInput || isNaN(amount) || amount <= 0) return alert("Invalid inputs.");
+
+    const q = query(collection(db, "users"), where("username", "==", usernameInput));
+    const snap = await getDocs(q);
     if (snap.empty) return alert("User not found.");
 
     const userDoc = snap.docs[0];
     const userRef = doc(db, "users", userDoc.id);
     const userData = userDoc.data();
-    const userId = userDoc.id;
 
-    const currentVal = Number(userData[field]) || 0;
-    const newVal = currentVal + amount;
+    await updateDoc(userRef, { [field]: (userData[field] || 0) + amount });
+    await logHistory(userDoc.id, `Admin gave ${amount} ${typeLabel}`, "admin");
 
-    await updateDoc(userRef, { [field]: newVal });
-    await logHistory(userId, `Admin gave ${amount} ${typeLabel}`, "admin");
-
-    alert(`✅ Gave ${amount} ${typeLabel} to ${userData.username}.`);
-
-    inputEl.value = "";
-    amountEl.value = "";
-    infoEl.textContent = "N/A";
+    alert(`✅ Success!`);
+    inputEl.value = ""; amountEl.value = ""; infoEl.textContent = "N/A";
     infoEl.style.color = "gray";
-
-  } catch (err) {
-    console.error(`Give ${typeLabel} failed:`, err);
-    alert(`Failed to give ${typeLabel}.`);
-  }
+  } catch (err) { console.error(err); }
 }
 
-// ---------- Load Renewal Requests ----------
+async function giveMoney() { await executeGive(adminGiveUsername, adminGiveAmount, adminUserInfo, "balance", "money"); }
+async function giveBps() { await executeGive(adminGiveBpsUsername, adminGiveBpsAmount, adminBpsUserInfo, "bpsBalance", "BPS"); }
+
+// ---------- Renewal Requests ----------
 export async function loadRenewalRequests() {
-  if(!renewalRequestsContainer) return;
-  
-  renewalRequestsContainer.innerHTML = "Loading requests...";
-
-  const usersRef = collection(db, "users");
-  const q = query(usersRef, where("renewalPending", "==", true));
-  const snap = await getDocs(q);
-
-  if (snap.empty) {
-    renewalRequestsContainer.innerHTML = "<p style='color: gray; font-style: italic;'>No pending renewal requests.</p>";
-    return;
+  if (!renewalRequestsContainer) return;
+  renewalRequestsContainer.innerHTML = "<p style='color: gray; font-style: italic;'>Checking for requests...</p>";
+  try {
+    const q = query(collection(db, "users"), where("renewalPending", "==", true));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      renewalRequestsContainer.innerHTML = "<p style='color: gray; font-style: italic;'>No pending renewal requests.</p>";
+      return;
+    }
+    renewalRequestsContainer.innerHTML = "";
+    snap.forEach((docSnap) => {
+      const userData = docSnap.data();
+      const reqDate = userData.renewalRequestDate ? new Date(userData.renewalRequestDate).toLocaleDateString() : "Unknown";
+      const div = document.createElement("div");
+      div.className = "renew-request";
+      div.style.padding = "15px 0";
+      div.style.borderBottom = "1px solid #eee";
+      div.innerHTML = `
+        <div style="margin-bottom: 5px;">
+        <strong style="font-size: 1.2em;">${userData.username}</strong><br>
+        <span style="font-size: 0.9em; color: #888;">Requested: ${reqDate}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+          <label style="color: #888; font-size: 0.9em;">Expires:</label>
+          <input type="date" id="date-${docSnap.id}" style="background: #222; color: #fff; border: 1px solid #444; padding: 8px 12px; border-radius: 5px; flex-grow: 1;">
+          <button data-id="${docSnap.id}" class="approve-renew" style="background: #58d68d; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer;">Approve</button>
+          <button data-id="${docSnap.id}" class="deny-renew" style="background: #e74c3c; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer;">Deny</button>
+        </div>`;
+      renewalRequestsContainer.appendChild(div);
+    });
+    attachRenewalListeners();
+  } catch (err) {
+    console.error("Renewal load failed:", err);
+    renewalRequestsContainer.innerHTML = "<p style='color: red;'>Error loading requests.</p>";
   }
-
-  renewalRequestsContainer.innerHTML = "";
-  
-  snap.forEach((docSnap) => {
-    const userData = docSnap.data();
-    const reqDate = userData.renewalRequestDate ? new Date(userData.renewalRequestDate).toLocaleDateString() : "Unknown";
-
-    const div = document.createElement("div");
-    div.classList.add("renew-request");
-    div.style.border = "1px solid #ccc";
-    div.style.padding = "10px";
-    div.style.marginBottom = "10px";
-    div.style.borderRadius = "8px";
-    div.style.display = "flex";
-    div.style.flexDirection = "column"; 
-    div.style.gap = "10px";
-    div.style.backgroundColor = "#fff";
-
-    div.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-        <div>
-          <strong>${userData.username}</strong><br>
-          <span style="font-size: 0.85em; color: gray;">Requested: ${reqDate}</span>
-        </div>
-      </div>
-      
-      <div style="display: flex; gap: 10px; align-items: center; width: 100%; border-top: 1px solid #eee; padding-top: 10px;">
-        <label style="font-size: 0.9em;">Expires:</label>
-        <input type="date" id="date-${docSnap.id}" style="padding: 5px; border-radius: 5px; border: 1px solid #ccc;">
-        
-        <div style="margin-left: auto; display: flex; gap: 5px;">
-          <button data-id="${docSnap.id}" class="btn-primary approve-renew" style="background: #2ecc71; padding: 5px 12px; font-size: 0.9em;">Approve</button>
-          <button data-id="${docSnap.id}" class="btn-danger deny-renew" style="background: #e74c3c; padding: 5px 12px; font-size: 0.9em;">Deny</button>
-        </div>
-      </div>
-    `;
-    renewalRequestsContainer.appendChild(div);
-  });
-
-  attachRenewalListeners();
 }
 
 function attachRenewalListeners() {
@@ -243,222 +209,263 @@ function attachRenewalListeners() {
     btn.addEventListener("click", async () => {
       const userId = btn.dataset.id;
       const dateInput = document.getElementById(`date-${userId}`);
-      if (!dateInput.value) return alert("⚠️ Please select an expiration date first!");
-
-      const userRef = doc(db, "users", userId);
+      if (!dateInput.value) return alert("⚠️ Select an expiration date!");
       const expirationDate = new Date(dateInput.value);
       expirationDate.setHours(23, 59, 59); 
-
-      const now = new Date();
-      if (expirationDate < now) return alert("Expiration date must be in the future.");
-
       try {
-        await updateDoc(userRef, {
-          renewalDate: now.toISOString(),
-          expirationDate: expirationDate.toISOString(),
-          renewalPending: false 
-        });
-        await logHistory(userId, `ID Renewal Approved (Expires ${expirationDate.toLocaleDateString()})`, "admin");
-        alert(`✅ Renewal Approved! Expires on ${expirationDate.toLocaleDateString()}`);
-        loadRenewalRequests(); 
-      } catch (err) {
-        console.error(err);
-        alert("Error approving: " + err.message);
-      }
+        await updateDoc(doc(db, "users", userId), { renewalDate: new Date().toISOString(), expirationDate: expirationDate.toISOString(), renewalPending: false });
+        await logHistory(userId, `ID Renewal Approved`, "admin");
+        alert(`✅ Approved!`);
+        loadRenewalRequests();
+      } catch (err) { alert("Error: " + err.message); }
     });
   });
-
   document.querySelectorAll(".deny-renew").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.dataset.id;
-      const userRef = doc(db, "users", userId);
-      if(!confirm("Are you sure you want to deny this request?")) return;
-
+      if (!confirm("Deny this request?")) return;
       try {
-        await updateDoc(userRef, { renewalPending: false });
-        await logHistory(userId, `ID Renewal Request Denied`, "admin");
-        alert("❌ Renewal Denied.");
-        loadRenewalRequests(); 
-      } catch (err) {
-        console.error(err);
-        alert("Error denying: " + err.message);
-      }
+        await updateDoc(doc(db, "users", userId), { renewalPending: false });
+        await logHistory(userId, `ID Renewal Denied`, "admin");
+        alert(`❌ Request Denied.`);
+        loadRenewalRequests();
+      } catch (err) { alert("Error: " + err.message); }
     });
   });
 }
 
-// ---------- Navigation & Listeners ----------
-if (backToDashboardBtn) backToDashboardBtn.addEventListener("click", () => showScreen("dashboard"));
+// --- COSMETICS ADMIN ---
+const adminCosmeticsUsername = document.getElementById("admin-cosmetics-username");
+const adminCosmeticsUserInfo = document.getElementById("admin-cosmetics-user-info");
+const adminCosmeticsList = document.getElementById("admin-cosmetics-list");
+
+adminCosmeticsUsername?.addEventListener("input", () => handleUserLookup(adminCosmeticsUsername, adminCosmeticsUserInfo, null, "cosmetic"));
+
+async function renderCosmeticsAdmin(userId, userData) {
+  if (!adminCosmeticsList) return;
+  if (!adminCosmeticsCache) { adminCosmeticsCache = await getDocs(collection(db, "cosmeticsShop")); }
+  adminCosmeticsList.innerHTML = "";
+  adminCosmeticsCache.forEach((docSnap) => {
+    const item = docSnap.data();
+    const owned = userData.cosmeticsOwned?.[docSnap.id] === true;
+    const div = document.createElement("div");
+    div.style.display = "flex"; div.style.justifyContent = "space-between"; div.style.marginBottom = "5px";
+    div.innerHTML = `<span>${item.name}</span><button style="cursor:pointer;">${owned ? "Revoke" : "Grant"}</button>`;
+    div.querySelector("button").onclick = async () => {
+      const cosmeticsOwned = { ...(userData.cosmeticsOwned || {}) };
+      if (owned) delete cosmeticsOwned[docSnap.id]; else cosmeticsOwned[docSnap.id] = true;
+      await updateDoc(doc(db, "users", userId), { cosmeticsOwned });
+      await logHistory(userId, `Admin updated cosmetic: ${item.name}`, "admin");
+    };
+    adminCosmeticsList.appendChild(div);
+  });
+}
+
+// --- EMPLOYMENT & NEW CONTRACTS ---
+const empUsernameInput = document.getElementById("admin-employment-username");
+const empUserInfo = document.getElementById("admin-employment-user-info");
+const empSetBtn = document.getElementById("admin-set-employment-btn");
+const empStatusSelect = document.getElementById("admin-employment-status-select");
+
+empUsernameInput?.addEventListener("input", () => handleUserLookup(empUsernameInput, empUserInfo, empSetBtn, "emp"));
+
+async function updateEmploymentStatus() {
+    const username = empUsernameInput.value.trim().toLowerCase();
+    const newStatus = empStatusSelect.value;
+    if (!username) return alert("Enter a username.");
+    try {
+        const q = query(collection(db, "users"), where("username", "==", username));
+        const snap = await getDocs(q);
+        if (snap.empty) return alert("User not found.");
+        const userDoc = snap.docs[0];
+        await updateDoc(doc(db, "users", userDoc.id), { employmentStatus: newStatus });
+        await logHistory(userDoc.id, `Admin set status to ${newStatus}`, "admin");
+        alert(`✅ Status updated!`);
+    } catch (err) { alert("Failed to update status."); }
+}
+if (empSetBtn) empSetBtn.addEventListener("click", updateEmploymentStatus);
+
+// --- START CONTRACT LOGIC ---
+const adminContractUsername = document.getElementById("admin-contract-username");
+const adminContractUserInfo = document.getElementById("admin-contract-user-info");
+const adminContractBtn = document.getElementById("admin-offer-contract-btn");
+
+const contractTeam = document.getElementById("contract-team");
+const contractSeasons = document.getElementById("contract-seasons");
+const contractSigningBonus = document.getElementById("contract-signing-bonus");
+const contractGuaranteed = document.getElementById("contract-guaranteed");
+const contractNonGuaranteed = document.getElementById("contract-non-guaranteed");
+const contractIncentives = document.getElementById("contract-incentives");
+const contractBaseCycle = document.getElementById("contract-base-cycle");
+
+[contractGuaranteed, contractNonGuaranteed].forEach(el => {
+    el?.addEventListener("input", () => {
+        const g = parseFloat(contractGuaranteed.value) || 0;
+        const ng = parseFloat(contractNonGuaranteed.value) || 0;
+        if (contractBaseCycle) contractBaseCycle.value = `$${(g + ng).toLocaleString()} per season`;
+    });
+});
+
+async function sendContractOffer() {
+    const username = adminContractUsername.value.trim().toLowerCase();
+    const team = contractTeam.value.trim();
+    const seasons = parseInt(contractSeasons.value);
+    const bonus = parseFloat(contractSigningBonus.value) || 0;
+    const g = parseFloat(contractGuaranteed.value) || 0;
+    const ng = parseFloat(contractNonGuaranteed.value) || 0;
+
+    if (!username || !team || isNaN(seasons) || seasons <= 0) return alert("⚠️ Check inputs (Username, Team, Seasons).");
+    if (g <= 0 && ng <= 0 && bonus <= 0) return alert("⚠️ Offer cannot be $0.");
+
+    const totalVal = bonus + ((g + ng) * seasons);
+    if (!confirm(`Send offer to ${username} for ${team}? Total: $${totalVal.toLocaleString()}`)) return;
+
+    try {
+        const q = query(collection(db, "users"), where("username", "==", username));
+        const snap = await getDocs(q);
+        if (snap.empty) return alert("❌ Player not found.");
+        const playerDoc = snap.docs[0];
+
+        await addDoc(collection(db, "contracts"), {
+            playerUID: playerDoc.id,
+            team: team,
+            status: "offered",
+            signingBonus: bonus,
+            terms: {
+                seasons: seasons,
+                initialSeasons: seasons, 
+                guaranteedPay: g,
+                nonGuaranteedPay: ng,
+                incentives: contractIncentives.value.trim() || "Standard Conduct"
+            },
+            timestamp: new Date().toISOString()
+        });
+        await logHistory(playerDoc.id, `New offer from ${team}`, "contract");
+        alert(`🏀 Offer sent!`);
+        [contractTeam, contractSeasons, contractSigningBonus, contractGuaranteed, contractNonGuaranteed, contractIncentives, contractBaseCycle].forEach(el => { if(el) el.value = ""; });
+    } catch (err) { alert("Failed to send offer."); }
+}
+
+adminContractUsername?.addEventListener("input", () => handleUserLookup(adminContractUsername, adminContractUserInfo, adminContractBtn, "contract"));
+if (adminContractBtn) adminContractBtn.addEventListener("click", sendContractOffer);
+
+/* =========================================================
+    ADMIN ROSTER: SPLIT PAYMENT CONTROLS
+========================================================= */
+export function listenForAdminRoster() {
+    if (!adminRosterContainer) return;
+    if (activeAdminListener) activeAdminListener();
+    
+    const q = query(collection(db, "contracts"), where("status", "==", "active"));
+
+    activeAdminListener = onSnapshot(q, (snap) => {
+        adminRosterContainer.innerHTML = "";
+        if (snap.empty) {
+            adminRosterContainer.innerHTML = `<p style="color: gray; text-align: center;">No active players.</p>`;
+            return;
+        }
+
+        snap.forEach((contractDoc) => {
+            const data = contractDoc.data();
+            const docId = contractDoc.id;
+            const terms = data.terms || {};
+
+            // Payroll Logic: Divide yearly rates by 6 installments
+            const targetG = (terms.guaranteedPay || 0) / 6;
+            const targetB = (terms.nonGuaranteedPay || 0) / 6;
+            
+            const div = document.createElement("div");
+            div.className = "contract-card admin-roster-card";
+            div.style.cssText = "padding: 20px; border-radius: 12px; margin-bottom: 20px; background: var(--card-bg, #1a1a1a); border: 1px solid var(--border-color, #333); color: var(--text-color, #fff);";
+
+            div.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <strong style="color: #3498db; font-size: 1.3rem;">${data.playerName || 'Player'}</strong>
+                    <span style="background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 4px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 800;">${terms.seasons?.toFixed(2)} SEASONS LEFT</span>
+                </div>
+                <div style="font-size: 0.75rem; color: #888; margin-bottom: 5px;">Team: ${data.team} | Total Season: $${((terms.guaranteedPay || 0) + (terms.nonGuaranteedPay || 0)).toLocaleString()}</div>
+                
+                <div style="font-size: 0.65rem; color: #888; margin-bottom: 15px; background: rgba(255,255,255,0.02); padding: 5px; border-radius: 4px; border: 1px solid #222; display: flex; justify-content: space-around;">
+                    <span>Installment Targets:</span>
+                    <span><b>$${targetG.toLocaleString()}</b> (G)</span>
+                    <span><b>$${targetB.toLocaleString()}</b> (B)</span>
+                </div>
+
+                <div id="admin-alert-area-${data.playerUID}"></div>
+                
+                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #333;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                        <div>
+                            <label style="font-size: 0.6rem; color: #2ecc71; display: block; margin-bottom: 4px; font-weight: 900;">PAY GUARANTEED ($)</label>
+                            <input type="number" id="pay-g-${docId}" placeholder="0" style="width: 100%; background: #111; border: 1px solid #444; color: white; padding: 8px; border-radius: 6px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.6rem; color: #f1c40f; display: block; margin-bottom: 4px; font-weight: 900;">PAY BONUS ($)</label>
+                            <input type="number" id="pay-b-${docId}" placeholder="0" style="width: 100%; background: #111; border: 1px solid #444; color: white; padding: 8px; border-radius: 6px;">
+                        </div>
+                    </div>
+                    <button onclick="adminActionContract('${docId}', 'payInstallment')" style="width: 100%; background: #2ecc71; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;">PROCESS SPLIT PAYMENT</button>
+                </div>
+                
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="adminActionContract('${docId}', 'cut')" style="flex:1; background:#e74c3c; color:white; border:none; padding:10px; border-radius:6px; font-weight:bold; font-size:0.7rem; cursor:pointer;">CUT</button>
+                    <button onclick="tradePlayer('${docId}')" style="flex:1; background:#f39c12; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">TRADE</button>
+                    <button onclick="offerExtension('${docId}')" style="flex:1; background:#444; color:white; border:none; padding:10px; border-radius:6px; font-weight:bold; font-size:0.7rem; cursor:pointer;">EXTEND</button>
+                </div>
+            `;
+            adminRosterContainer.appendChild(div);
+
+            // --- LIVE REQUEST ALERT LISTENER ---
+            const userRef = doc(db, "users", data.playerUID);
+            onSnapshot(userRef, (uSnap) => {
+                const uData = uSnap.exists() ? uSnap.data() : {};
+                const alertContainer = document.getElementById(`admin-alert-area-${data.playerUID}`);
+                if (!alertContainer) return;
+
+                if (uData.tradePending || uData.releasePending) {
+                    const isTrade = uData.tradePending;
+                    alertContainer.innerHTML = `
+                        <div style="border: 2px solid #e74c3c; background: rgba(231, 76, 60, 0.05); padding: 12px; border-radius: 8px; margin: 15px 0;">
+                            <div style="color: #e74c3c; font-weight: 900; font-size: 0.75rem; margin-bottom: 10px; text-transform: uppercase;">
+                                🚨 PLAYER REQUEST: ${isTrade ? 'TRADE' : 'RELEASE'}
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                ${isTrade ? `
+                                    <button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'looking')" 
+                                            style="flex:1; background: #f39c12; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">
+                                        LOOKING
+                                    </button>` : ''}
+                                <button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'approve')" 
+                                        style="flex:1; background: #2ecc71; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">
+                                    APPROVE
+                                </button>
+                                <button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'reject')" 
+                                        style="flex:1; background: #e74c3c; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">
+                                    REJECT
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    alertContainer.innerHTML = ""; 
+                }
+            });
+        });
+    });
+}
+
+// ---------- Global Initializers & Navigation ----------
 if (addItemBtn) addItemBtn.addEventListener("click", addShopItem);
 if (adminGiveBtn) adminGiveBtn.addEventListener("click", giveMoney);
 if (adminGiveBpsBtn) adminGiveBpsBtn.addEventListener("click", giveBps);
 
 const openAdminBtn = document.getElementById("open-admin");
-if (openAdminBtn) openAdminBtn.addEventListener("click", () => loadRenewalRequests());
-if (!adminPanel.classList.contains("hidden")) loadRenewalRequests();
-
-// ---------- Manage Employment Status ----------
-const empUsernameInput = document.getElementById("admin-employment-username");
-const empStatusSelect = document.getElementById("admin-employment-status");
-const empSetBtn = document.getElementById("admin-set-employment-btn");
-const empUserInfo = document.getElementById("admin-employment-user-info");
-
-let empListener = null;
-
-// Username input listener
-empUsernameInput.addEventListener("input", async () => {
-  const username = empUsernameInput.value.trim().toLowerCase();
-
-  if (empListener) { empListener(); empListener = null; }
-
-  if (!username) {
-    empUserInfo.textContent = "N/A";
-    empUserInfo.style.color = "gray";
-    empSetBtn.disabled = true;
-    return;
-  }
-
-  const usersRef = collection(db, "users");
-  const q = query(usersRef, where("username", "==", username));
-  const snap = await getDocs(q);
-
-  if (snap.empty) {
-    empUserInfo.textContent = "Invalid user";
-    empUserInfo.style.color = "red";
-    empSetBtn.disabled = true;
-  } else {
-    const userDoc = snap.docs[0];
-    const userRef = doc(db, "users", userDoc.id);
-
-    empSetBtn.disabled = false;
-
-    empListener = onSnapshot(userRef, (docSnap) => {
-      if (!docSnap.exists()) return;
-      const data = docSnap.data();
-      empUserInfo.textContent = `${data.username} → ${data.employmentStatus || "Unemployed"}`;
-      empUserInfo.style.color = "green";
-    });
-  }
+if (openAdminBtn) openAdminBtn.addEventListener("click", () => { 
+    loadRenewalRequests(); 
+    listenForAdminRoster(); 
 });
 
-// Set employment status
-empSetBtn.addEventListener("click", async () => {
-  const username = empUsernameInput.value.trim().toLowerCase();
-  const status = empStatusSelect.value;
-  if (!username) return alert("Enter a username");
-  if (!status) return alert("Select a status");
-
-  const usersRef = collection(db, "users");
-  const q = query(usersRef, where("username", "==", username));
-  const snap = await getDocs(q);
-
-  if (snap.empty) {
-    empUserInfo.textContent = "Invalid user";
-    empUserInfo.style.color = "red";
-    empSetBtn.disabled = true;
-    return;
-  }
-
-  const userDoc = snap.docs[0];
-  const userRef = doc(db, "users", userDoc.id);
-
-  try {
-    await updateDoc(userRef, { employmentStatus: status });
-    empUserInfo.textContent = `${username} → ${status}`;
-    empUserInfo.style.color = "green";
-    alert(`✅ Employment status set to ${status} for ${username}`);
-
-    empUsernameInput.value = "";
-    empSetBtn.disabled = true;
-    if (empListener) { empListener(); empListener = null; }
-
-  } catch (err) {
-    console.error("Error updating employment status:", err);
-    alert("Failed to update employment status: " + err.message);
-  }
-});
-
-// ======================================================
-// ========== ADMIN COSMETICS GRANT / REVOKE =============
-// ======================================================
-
-const adminCosmeticsUsername = document.getElementById("admin-cosmetics-username");
-const adminCosmeticsUserInfo = document.getElementById("admin-cosmetics-user-info");
-const adminCosmeticsList = document.getElementById("admin-cosmetics-list");
-
-let cosmeticsUserListener = null;
-
-adminCosmeticsUsername?.addEventListener("input", async () => {
-  const username = adminCosmeticsUsername.value.trim().toLowerCase();
-
-  if (cosmeticsUserListener) { cosmeticsUserListener(); cosmeticsUserListener = null; }
-
-  if (!username) {
-    adminCosmeticsUserInfo.textContent = "N/A";
-    adminCosmeticsList.innerHTML = "";
-    return;
-  }
-
-  const q = query(collection(db, "users"), where("username", "==", username));
-  const snap = await getDocs(q);
-
-  if (snap.empty) {
-    adminCosmeticsUserInfo.textContent = "Invalid user";
-    adminCosmeticsUserInfo.style.color = "red";
-    adminCosmeticsList.innerHTML = "";
-    return;
-  }
-
-  const userDoc = snap.docs[0];
-  const userId = userDoc.id;
-  const userRef = doc(db, "users", userId);
-
-  cosmeticsUserListener = onSnapshot(userRef, async (docSnap) => {
-    if (!docSnap.exists()) return;
-    const userData = docSnap.data();
-    adminCosmeticsUserInfo.textContent = `${userData.username}`;
-    adminCosmeticsUserInfo.style.color = "green";
-    renderCosmeticsAdmin(userId, userData);
-  });
-});
-
-async function renderCosmeticsAdmin(userId, userData) {
-  if (!adminCosmeticsList) return;
-
-  const cosmeticsSnap = await getDocs(collection(db, "cosmeticsShop"));
-  adminCosmeticsList.innerHTML = "";
-
-  cosmeticsSnap.forEach((docSnap) => {
-    const item = docSnap.data();
-    const owned = userData.cosmeticsOwned?.[item.id] === true;
-
-    const div = document.createElement("div");
-    div.style.display = "flex";
-    div.style.justifyContent = "space-between";
-    div.style.marginBottom = "6px";
-
-    div.innerHTML = `
-      <span>${item.name}</span>
-      <button data-id="${item.id}" data-action="${owned ? "revoke" : "grant"}">
-        ${owned ? "Revoke" : "Grant"}
-      </button>
-    `;
-
-    div.querySelector("button").addEventListener("click", async () => {
-      const cosmeticsOwned = { ...(userData.cosmeticsOwned || {}) };
-
-      if (owned) delete cosmeticsOwned[item.id];
-      else cosmeticsOwned[item.id] = true;
-
-      await updateDoc(doc(db, "users", userId), { cosmeticsOwned });
-
-      await logHistory(
-        userId,
-        `Admin ${owned ? "revoked" : "granted"} cosmetic: ${item.name}`,
-        "admin"
-      );
-    });
-
-    adminCosmeticsList.appendChild(div);
-  });
+if (adminPanel && !adminPanel.classList.contains("hidden")) { 
+    loadRenewalRequests(); 
+    listenForAdminRoster();
 }

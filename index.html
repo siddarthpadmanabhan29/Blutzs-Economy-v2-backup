@@ -5,6 +5,63 @@
   <title>Blutz Economy</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Required CSS for the new Contract UI math boxes */
+    :root {
+      --contract-bg: #ffffff;
+      --contract-text: #2c3e50;
+      --contract-border: #dcdde1;
+    }
+
+    body.dark-mode {
+      --contract-bg: #121212; 
+      --contract-text: #f5f6fa;
+      --contract-border: #333;
+    }
+
+    .contract-inner-box {
+      background: rgba(0, 0, 0, 0.05);
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 5px;
+      border: 1px solid rgba(0,0,0,0.03);
+    }
+
+    body.dark-mode .contract-inner-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .contract-label {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 800;
+      opacity: 0.7;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .admin-input-adaptive {
+      background: var(--contract-bg);
+      color: var(--contract-text);
+      border: 1px solid var(--contract-border);
+    }
+
+    /* Contract Notification Bar Animation */
+    @keyframes pulse-red {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(0.99); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* Connection Status Dot Animation */
+    @keyframes pulse-green {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 4px rgba(46, 204, 113, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+    }
+    .status-online { animation: pulse-green 2s infinite; }
+  </style>
 </head>
 <body>
   <div id="login-screen" class="screen">
@@ -32,10 +89,19 @@
     </header>
 
     <main id="dashboard-content">
+      <div id="dashboard-notification-bar"></div>
+
       <section class="section-card">
-        <h3>Profile 
-          <button id="theme-toggle-btn" class="btn-secondary cosmetic-feature" data-id="darkMode" type="button">🌙</button>
-        </h3>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <h3>Profile 
+            <button id="theme-toggle-btn" class="btn-secondary cosmetic-feature" data-id="darkMode" type="button">🌙</button>
+          </h3>
+          <div id="connection-indicator" style="display: inline-flex; align-items: center; background: rgba(0,0,0,0.05); padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);">
+            <span id="status-dot" style="height: 8px; width: 8px; background-color: #bbb; border-radius: 50%; display: inline-block; margin-right: 8px;"></span>
+            <span id="status-text" style="font-size: 0.65rem; font-weight: 800; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Connecting</span>
+          </div>
+        </div>
+        
         <p><strong>Username:</strong> <span id="profile-username"></span></p>
         <p><strong>ID:</strong> <span id="profile-uid"></span></p>
         <p><strong>Renewed On:</strong> <span id="profile-renewal"></span></p>
@@ -43,6 +109,13 @@
         <p><strong>Status:</strong> <span id="renewal-status"></span> | 
             <strong>Employment:</strong> <span id="employment-status"></span></p>
         <button id="renew-btn" class="btn-primary" type="button">Request Renewal</button>
+      </section>
+
+      <section id="user-contract-section" class="section-card">
+        <h3>My Sports Contract</h3>
+        <div id="user-contract-display">
+          <p style="color: gray; font-style: italic;">Connecting to League Office...</p>
+        </div>
       </section>
 
       <section class="section-card" style="border: 2px solid #8e44ad;">
@@ -187,13 +260,84 @@
 
     <h3>Manage Employment Status</h3>
     <input id="admin-employment-username" placeholder="Username" autocomplete="off">
-    <select id="admin-employment-status">
+    <select id="admin-employment-status-select">
       <option value="Employed">Employed</option>
       <option value="Unemployed">Unemployed</option>
       <option value="Retired">Retired</option>
     </select>
     <button id="admin-set-employment-btn" class="btn-primary" type="button">Set Status</button>
     <p><strong>User:</strong> <span id="admin-employment-user-info" style="color: gray;">N/A</span></p>
+
+    <div id="admin-request-actions" style="margin-top: 15px; border-top: 1px solid var(--contract-border); padding-top: 15px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div class="contract-inner-box" style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; gap: 8px;">
+          </div>
+        </div>
+        <div class="contract-inner-box" style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; gap: 8px;">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-section" style="border-top: 1px solid var(--contract-border); margin-top: 20px; padding-top: 20px;">
+      <h3>🏀 Sports Contract Office</h3>
+      <p style="font-size: 0.85em; color: gray; margin-bottom: 10px;">Draft professional contracts and manage the league roster.</p>
+      
+      <input id="admin-contract-username" placeholder="Username" autocomplete="off">
+      <p id="admin-contract-user-info" style="color: gray; font-weight: bold;">N/A</p>
+      
+      <div class="input-wrapper" style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px;">
+        <label class="contract-label">TEAM NAME</label>
+        <input id="contract-team" type="text" placeholder="e.g., Cincinnati Stars" class="admin-input-adaptive" style="border-radius: 8px; padding: 8px;">
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
+        <div class="input-wrapper" style="display: flex; flex-direction: column; gap: 4px;">
+          <label class="contract-label">CONTRACT TERM (SEASONS)</label>
+          <input id="contract-seasons" type="number" placeholder="e.g., 2" class="admin-input-adaptive" style="border-radius: 8px; padding: 8px;">
+        </div>
+        <div class="input-wrapper" style="display: flex; flex-direction: column; gap: 4px;">
+          <label class="contract-label">SIGNING BONUS $</label>
+          <input id="contract-signing-bonus" type="number" placeholder="Instantly paid" class="admin-input-adaptive" style="border-radius: 8px; padding: 8px;">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
+        <div class="input-wrapper" style="display: flex; flex-direction: column; gap: 4px;">
+          <label class="contract-label">GUARANTEED (PER SEASON) $</label>
+          <input id="contract-guaranteed" type="number" placeholder="Safety Net" class="admin-input-adaptive" style="border-radius: 8px; padding: 8px;">
+        </div>
+        <div class="input-wrapper" style="display: flex; flex-direction: column; gap: 4px;">
+            <label class="contract-label">NON-GUARANTEED (PER SEASON) $</label>
+            <input id="contract-non-guaranteed" type="number" placeholder="Performance Bonus" class="admin-input-adaptive" style="border-radius: 8px; padding: 8px;">
+        </div>
+      </div>
+
+      <div class="input-wrapper" style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px;">
+        <label class="contract-label">SEASON TOTAL POT (PER SEASON)</label>
+        <div class="contract-inner-box">
+          <input id="contract-base-cycle" type="text" placeholder="Auto-summed" readonly style="width: 100%; border: none; background: transparent; color: inherit; font-weight: bold; outline: none;">
+        </div>
+      </div>
+
+      <div class="input-wrapper" style="margin-bottom: 15px; display: flex; flex-direction: column; gap: 4px;">
+        <label class="contract-label">INCENTIVES & CONDUCT CLAUSES</label>
+        <div class="contract-inner-box">
+          <textarea id="contract-incentives" placeholder="e.g., Maintain 3.5 GPA, Keep room clean" style="width: 100%; border: none; background: transparent; color: inherit; font-family: inherit; min-height: 80px; outline: none;"></textarea>
+        </div>
+      </div>
+
+      <button id="admin-offer-contract-btn" class="btn-primary" style="width: 100%;" disabled>Send Official Offer</button>
+
+      <h4 style="margin-top: 25px; border-bottom: 1px solid #eee; padding-bottom: 8px;">Active League Roster</h4>
+      <p style="font-size: 0.75rem; color: #666; margin-bottom: 10px;">
+        Manage players and payout installments (6 per season).
+      </p>
+      <div id="admin-active-contracts-list">
+      </div>
+    </div>
 
     <h3>Renewal Requests</h3>
     <div id="renewal-requests"></div>
@@ -208,5 +352,6 @@
   <script type="module" src="bpsShop.js"></script>
   <script type="module" src="cosmetics.js"></script> 
   <script type="module" src="loan.js"></script> 
+  <script type="module" src="contracts.js"></script>
 </body>
 </html>

@@ -5,11 +5,32 @@ import { auth, db } from "./firebaseConfig.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { doc, onSnapshot, updateDoc, collection, query, orderBy, limit, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
-import { currentUserData, renderSavings } from "./retirement.js";
+import { renderSavings } from "./retirement.js"; 
 import { applyInterest, takeOutLoan, repayLoan, getCreditStatus } from "./loan.js"; 
 
+// --- NEW CONTRACT IMPORTS ---
+import { listenForContractOffers, listenForAdminRoster, renderUserContract } from "./contracts.js";
+
+// --- SHOP & COSMETICS IMPORTS FOR QUOTA SAVING ---
+import { renderShop } from "./shop.js";
+import { renderBpsShop } from "./bpsShop.js";
+import { loadCosmetics } from "./cosmetics.js"; 
+
 /* =========================================================
-    INSTANT THEME APPLY (prevents light flash on refresh)
+    QUOTA PROTECTION: LISTENER MANAGER
+========================================================= */
+let unsubUser = null;
+let unsubHistory = null;
+let listenersInitialized = false; // Flag to prevent redundant contract/roster listener spikes
+
+/* =========================================================
+    CONNECTION STATUS UI ELEMENTS
+========================================================= */
+const statusDot = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+
+/* =========================================================
+    INSTANT THEME APPLY
 ========================================================= */
 const savedTheme = localStorage.getItem("theme");
 if (savedTheme === "dark") document.body.classList.add("dark-mode");
@@ -26,7 +47,6 @@ const openAdminBtn = document.getElementById("open-admin");
 const backToDashboardBtn = document.getElementById("back-to-dashboard");
 const themeToggleBtn = document.getElementById("theme-toggle-btn");
 
-// Profile section
 const profileUsername = document.getElementById("profile-username");
 const profileUid = document.getElementById("profile-uid");
 const profileRenewal = document.getElementById("profile-renewal");
@@ -34,10 +54,8 @@ const profileExpiration = document.getElementById("profile-expiration");
 const renewalStatus = document.getElementById("renewal-status");
 const renewBtn = document.getElementById("renew-btn");
 
-// Employment status
 const employmentStatusEl = document.getElementById("employment-status");
 
-// Loan UI Elements
 const displayCreditScore = document.getElementById("display-credit-score");
 const loanAmountSelect = document.getElementById("loan-amount-select");
 const takeLoanBtn = document.getElementById("take-loan-btn");
@@ -47,7 +65,6 @@ const debtAmountEl = document.getElementById("debt-amount");
 const dailyInterestEl = document.getElementById("daily-interest");
 const timerEl = document.getElementById("interest-timer");
 
-// --- UNIFIED HISTORY UI ELEMENTS ---
 const unifiedHistoryList = document.getElementById("unified-history-list");
 const dateFilterInput = document.getElementById("history-date-filter");
 const endDateFilterInput = document.getElementById("history-end-date-filter");
@@ -57,11 +74,20 @@ const historyCountBadge = document.getElementById("history-count-badge");
 
 let currentDashboardData = null;
 let interestTimerInterval = null; 
-let cachedHistory = []; // Local cache for filtering without re-fetching
+let cachedHistory = []; 
 
 /* =========================================================
-    THEME FUNCTION
+    HELPER: GET EST DATE (YYYY-MM-DD)
 ========================================================= */
+function getESTDate(offsetDays = 0) {
+    const now = new Date();
+    // Adjust to EST (UTC-5)
+    const estOffset = now.getTime() + (now.getTimezoneOffset() * 60000) - (5 * 3600000);
+    const estDate = new Date(estOffset);
+    estDate.setDate(estDate.getDate() + offsetDays);
+    return estDate.toISOString().split('T')[0];
+}
+
 function applyTheme(theme) {
   if (theme === "light") {
     document.body.classList.add("light-mode");
@@ -75,23 +101,57 @@ function applyTheme(theme) {
   localStorage.setItem("theme", theme);
 }
 
-/* =========================================================
-    AUTH STATE
-========================================================= */
+/**
+ * REFACTORED AUTH STATE LOGIC
+ * Optimized to prevent listener spikes and redundant registration
+ */
 onAuthStateChanged(auth, async (user) => {
+  // Clear existing data listeners on state change
+  if (unsubUser) { unsubUser(); unsubUser = null; }
+  if (unsubHistory) { unsubHistory(); unsubHistory = null; }
+
   if (!user) {
     dashboard.classList.add("hidden");
     adminPanel.classList.add("hidden");
     currentDashboardData = null;
+    listenersInitialized = false; // Reset initialization flag on logout
+    
+    if (statusDot) {
+        statusDot.style.backgroundColor = "#bbb";
+        statusDot.classList.remove("status-online");
+        statusDot.style.boxShadow = "none";
+    }
+    if (statusText) {
+        statusText.textContent = "Connecting";
+        statusText.style.color = "#888";
+    }
     return;
   }
 
   dashboard.classList.remove("hidden");
 
+  // INITIALIZE PERSISTENT LISTENERS ONLY ONCE PER SESSION
+  // This prevents the contract/roster logic from re-running every time the auth state flickers
+  if (!listenersInitialized) {
+      listenForContractOffers(user.uid);
+      listenForAdminRoster(); 
+      listenersInitialized = true;
+  }
+
   const userRef = doc(db, "users", user.uid);
   let themeAppliedOnce = false; 
 
-  onSnapshot(userRef, async snap => { 
+  unsubUser = onSnapshot(userRef, async snap => { 
+    if (statusDot) {
+        statusDot.style.backgroundColor = "#2ecc71"; 
+        statusDot.classList.add("status-online");   
+        statusDot.style.boxShadow = "0 0 8px rgba(46, 204, 113, 0.6)";
+    }
+    if (statusText) {
+        statusText.textContent = "Live Connection";
+        statusText.style.color = "#2ecc71";
+    }
+
     if (!snap.exists()) return;
     currentDashboardData = snap.data();
 
@@ -106,97 +166,130 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     updateDashboardUI(user);
+
+    // Render components based on the new data snapshot
+    if (typeof renderShop === "function") renderShop(currentDashboardData);
+    if (typeof renderBpsShop === "function") renderBpsShop(currentDashboardData);
+    if (typeof loadCosmetics === "function") loadCosmetics(currentDashboardData);
+    if (typeof renderSavings === "function") renderSavings(currentDashboardData); 
+    
+    // Note: renderUserContract is a UI update, while listenForContractOffers (above) is the data link.
+    if (typeof renderUserContract === "function") renderUserContract(user.uid, currentDashboardData);
+
+  }, (error) => {
+    if (statusDot) {
+        statusDot.style.backgroundColor = "#e74c3c"; 
+        statusDot.classList.remove("status-online");
+        statusDot.style.boxShadow = "none";
+    }
+    if (statusText) {
+        statusText.textContent = "Offline / Quota Limited";
+        statusText.style.color = "#e74c3c";
+    }
+    console.error("Firestore error:", error);
   });
 
-  // --- UPDATED HISTORY SNAPSHOT (Unified View) ---
   const historyRef = collection(db, "users", user.uid, "history_logs");
-  const q = query(historyRef, orderBy("timestamp", "desc"));
+  const q = query(historyRef, orderBy("timestamp", "desc"), limit(200)); 
 
-  onSnapshot(q, (snapshot) => {
+  unsubHistory = onSnapshot(q, (snapshot) => {
     cachedHistory = [];
     snapshot.forEach(doc => cachedHistory.push(doc.data()));
     
-    // Set default range: Yesterday to Today if not already set
+    // DEFAULT DATE LOGIC: FROM = Yesterday, TO = Today (EST)
     if (dateFilterInput && !dateFilterInput.value) {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        dateFilterInput.value = yesterday.toISOString().split('T')[0];
-        
-        const today = new Date();
-        endDateFilterInput.value = today.toISOString().split('T')[0];
+        dateFilterInput.value = getESTDate(-1);
+        endDateFilterInput.value = getESTDate(0);
     }
-
     renderUnifiedHistory();
   });
 });
 
 /* =========================================================
-    UNIFIED HISTORY RENDERING (UPDATED VISUALS)
+    UNIFIED HISTORY RENDERING (UPDATED FOR CLEAN UI)
 ========================================================= */
 function renderUnifiedHistory() {
     if (!unifiedHistoryList) return;
     
     const searchTerm = searchFilterInput.value.toLowerCase();
-    const startVal = dateFilterInput.value;
-    const endVal = endDateFilterInput.value;
+    const startVal = dateFilterInput.value; 
+    const endVal = endDateFilterInput.value; 
     
     unifiedHistoryList.innerHTML = "";
 
-    // 1. Filter the cached array based on Date Range and Search Term
+    const filterStartTime = startVal ? new Date(startVal + "T00:00:00").getTime() : 0;
+    const filterEndTime = endVal ? new Date(endVal + "T23:59:59").getTime() : Infinity;
+
     const filtered = cachedHistory.filter(entry => {
       const entryDate = new Date(entry.timestamp);
       const entryMsg = entry.message.toLowerCase();
-      
       const matchesSearch = entryMsg.includes(searchTerm);
       
-      // Clean time comparison (Normalization to local midnight)
-      const logTime = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate()).getTime();
-      
-      // Use "T00:00:00" to force local time interpretation from the picker
-      const startTime = startVal ? new Date(startVal + "T00:00:00").getTime() : 0;
-      const endTime = endVal ? new Date(endVal + "T23:59:59").getTime() : Infinity;
-
-      const matchesDate = logTime >= startTime && logTime <= endTime;
-      
-      return matchesSearch && matchesDate;
+      const logTime = entryDate.getTime();
+      return matchesSearch && logTime >= filterStartTime && logTime <= filterEndTime;
     });
 
-    // 2. Update the found count badge
     if (historyCountBadge) {
         historyCountBadge.textContent = `${filtered.length} found`;
     }
 
-    // 3. Render the items
     if (filtered.length === 0) {
-        unifiedHistoryList.innerHTML = `<div style="color: gray; padding: 20px; text-align: center;">No matching activity found.</div>`;
+        unifiedHistoryList.innerHTML = `<div style="color: gray; padding: 20px; text-align: center; border: 1px dashed var(--border-color, #333); border-radius: 8px;">No matching activity found.</div>`;
         return;
     }
 
-        filtered.forEach(entry => {
+    filtered.forEach(entry => {
         let icon = getHistoryIcon(entry.type);
         const timeStr = getRelativeTime(new Date(entry.timestamp));
         
-        let amountColor = "inherit";
-        if (entry.message.includes("Repaid") || entry.message.includes("Sent")) amountColor = "#e74c3c"; 
-        if (entry.message.includes("Took") || entry.message.includes("Received")) amountColor = "#2ecc71"; 
+        // Colors & Branding Logic
+        let statusColor = "var(--text-color)"; 
+        let borderColor = "#888"; 
 
-        // NOTICE THE data-type="${entry.type}" ADDED BELOW
+        if (entry.message.includes("Rejected") || entry.message.includes("Denied") || entry.message.includes("Terminated") || 
+            entry.message.includes("Sent") || entry.message.includes("Voided") || entry.message.includes("CUT")) {
+            borderColor = "#e74c3c"; // Red
+            if (entry.message.includes("Denied") || entry.message.includes("Sent") || entry.message.includes("CUT")) {
+                statusColor = "#e74c3c";
+            }
+        } 
+        else if (entry.message.includes("Paid") || entry.message.includes("Approved") || 
+                 entry.message.includes("Traded") || entry.message.includes("Signed") || 
+                 entry.message.includes("Received") || entry.message.includes("Took")) {
+            borderColor = "#2ecc71"; // Green
+        }
+        else if (entry.type === "admin") {
+            borderColor = "#9b59b6"; // Purple Admin border as shown in requested image
+        }
+        else if (entry.message.includes("Status") || entry.message.includes("Withdrawn") || entry.message.includes("Extension")) {
+            borderColor = "#3498db"; // Blue
+        }
+
+        // Template matches the clean image version with adaptive colors for light/dark mode
         unifiedHistoryList.innerHTML += `
-            <div class="history-entry" data-type="${entry.type}">
-                <div class="history-icon-circle">${icon}</div>
-                <div class="history-details">
-                    <div class="history-message" style="color: ${amountColor};">${entry.message}</div>
-                    <div class="history-time">${timeStr}</div>
+            <div class="history-entry" style="display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color, #eee); gap: 15px; width: 100%;">
+                
+                <div style="flex-shrink: 0; width: 42px; height: 42px; background: var(--card-bg, #fff); border: 2.5px solid ${borderColor}; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    ${icon}
                 </div>
-                <div class="history-type-tag">${entry.type}</div>
-            </div>
-        `;
+                
+                <div style="flex-grow: 1; min-width: 0;">
+                    <div class="history-message" style="color: ${statusColor}; font-weight: 500; font-size: 0.95rem; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis;">
+                        ${entry.message}
+                    </div>
+                    <div class="history-time" style="font-size: 0.8rem; color: var(--text-muted, #999);">${timeStr}</div>
+                </div>
+
+                <div class="history-type-tag" style="flex-shrink: 0; font-size: 0.65rem; color: var(--text-muted, #666); background: var(--input-bg, #f5f5f5); padding: 4px 10px; border-radius: 6px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; border: 1px solid var(--border-color, #e0e0e0); min-width: 75px; text-align: center;">
+                    ${entry.type}
+                </div>
+            </div>`;
     });
 }
 
 function getHistoryIcon(type) {
     switch(type) {
-      case "transfer-in":  return "💸";
+      case "transfer-in":   return "💸";
       case "transfer-out": return "📤";
       case "purchase":     return "🛒";
       case "usage":        return "🧪";
@@ -215,59 +308,37 @@ function getRelativeTime(date) {
   return date.toLocaleDateString(); 
 }
 
-/* =========================================================
-    DASHBOARD UI UPDATE
-========================================================= */
 function updateDashboardUI(user) {
   if (!currentDashboardData) return;
   const data = currentDashboardData;
-
   const balance = Number(data.balance) || 0;
   userName.textContent = data.username || user.email.split("@")[0];
   userBalance.textContent = `$${balance.toLocaleString()}`;
-
   profileUsername.textContent = data.username || user.email.split("@")[0];
   profileUid.textContent = user.uid.slice(0, 8);
-
   const score = data.creditScore || 600;
   const status = getCreditStatus(score);
-  
   if (displayCreditScore) {
-      displayCreditScore.innerHTML = `
-          ${score} <span style="color: ${status.color}; font-weight: bold; margin-left: 5px;">
-              (${status.label})
-          </span>
-      `;
+      displayCreditScore.innerHTML = `${score} <span style="color: ${status.color}; font-weight: bold; margin-left: 5px;">(${status.label})</span>`;
   }
-  
   const activeDebt = data.activeLoan || 0;
   if (activeDebt > 0) {
       activeLoanSection?.classList.remove("hidden");
       if (debtAmountEl) debtAmountEl.textContent = `$${activeDebt.toLocaleString()}`;
-
-      if (dailyInterestEl) {
-        const dailyAmt = activeDebt * 0.05;
-        dailyInterestEl.textContent = `$${dailyAmt.toLocaleString()}`;
-      }
-
+      if (dailyInterestEl) dailyInterestEl.textContent = `$${(activeDebt * 0.05).toLocaleString()}`;
       if (data.lastInterestApplied) {
           if (interestTimerInterval) clearInterval(interestTimerInterval);
           interestTimerInterval = setInterval(() => {
               const now = new Date();
-              const lastApplied = new Date(data.lastInterestApplied);
-              const nextCharge = new Date(lastApplied.getTime() + (24 * 60 * 60 * 1000));
-              const timeLeft = nextCharge - now;
-
+              const timeLeft = new Date(data.lastInterestApplied).getTime() + (24*60*60*1000) - now.getTime();
               if (timeLeft <= 0) {
                   if (timerEl) timerEl.textContent = "Next charge in: 00:00:00";
                   clearInterval(interestTimerInterval);
               } else {
-                  const hours = Math.floor((timeLeft / (1000 * 60 * 60)) % 24);
-                  const mins = Math.floor((timeLeft / (1000 * 60)) % 60);
+                  const hours = Math.floor((timeLeft / 3600000) % 24);
+                  const mins = Math.floor((timeLeft / 60000) % 60);
                   const secs = Math.floor((timeLeft / 1000) % 60);
-                  if (timerEl) {
-                      timerEl.textContent = `Next charge in: ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                  }
+                  if (timerEl) timerEl.textContent = `Next charge in: ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
               }
           }, 1000);
       }
@@ -275,24 +346,17 @@ function updateDashboardUI(user) {
       activeLoanSection?.classList.add("hidden");
       if (interestTimerInterval) clearInterval(interestTimerInterval);
   }
+  if (data.isEconomyPaused) dashboardContent?.classList.add("paused-economy");
+  else dashboardContent?.classList.remove("paused-economy");
 
-  if (data.isEconomyPaused) {
-      dashboardContent?.classList.add("paused-economy");
-  } else {
-      dashboardContent?.classList.remove("paused-economy");
-  }
-
-  const now = new Date();
-  const renewalDate = data.renewalDate ? new Date(data.renewalDate) : null;
   const expirationDate = data.expirationDate ? new Date(data.expirationDate) : null;
-
-  profileRenewal.textContent = renewalDate ? renewalDate.toLocaleDateString() : "N/A";
+  profileRenewal.textContent = data.renewalDate ? new Date(data.renewalDate).toLocaleDateString() : "N/A";
   profileExpiration.textContent = expirationDate ? expirationDate.toLocaleDateString() : "N/A";
 
   if (data.renewalPending) {
     renewalStatus.textContent = "Pending Approval";
     renewalStatus.style.color = "orange";
-  } else if (expirationDate && expirationDate < now) {
+  } else if (expirationDate && expirationDate < new Date()) {
     renewalStatus.textContent = "Expired";
     renewalStatus.style.color = "red";
   } else {
@@ -313,9 +377,7 @@ function updateDashboardUI(user) {
   if (data.isAdmin) openAdminBtn.classList.remove("hidden");
   else openAdminBtn.classList.add("hidden");
 
-  const bps = data.bpsBalance || 0;
-  const bpsEl = document.getElementById("user-bps");
-  if(bpsEl) bpsEl.textContent = `${bps} BPS`;
+  if(document.getElementById("user-bps")) document.getElementById("user-bps").textContent = `${data.bpsBalance || 0} BPS`;
 
   const discount = data.activeDiscount || 0;
   const discountEl = document.getElementById("active-discount-indicator");
@@ -332,21 +394,14 @@ function updateDashboardUI(user) {
 /* =========================================================
     EVENT LISTENERS
 ========================================================= */
-
-// --- History Filtering Listeners ---
 dateFilterInput?.addEventListener("change", renderUnifiedHistory);
 endDateFilterInput?.addEventListener("change", renderUnifiedHistory);
 searchFilterInput?.addEventListener("input", renderUnifiedHistory);
 
 clearFiltersBtn?.addEventListener("click", () => {
-    // Reset to "1 Day Ago" defaults
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    dateFilterInput.value = yesterday.toISOString().split('T')[0];
-    
-    const today = new Date();
-    endDateFilterInput.value = today.toISOString().split('T')[0];
-
+    // RESET TO DEFAULT: Yesterday and Today (EST)
+    dateFilterInput.value = getESTDate(-1);
+    endDateFilterInput.value = getESTDate(0);
     searchFilterInput.value = "";
     renderUnifiedHistory();
 });
@@ -360,70 +415,62 @@ themeToggleBtn?.addEventListener("click", async () => {
   const isLight = document.body.classList.contains("light-mode");
   const newTheme = isLight ? "dark" : "light";
   applyTheme(newTheme);
-  const userRef = doc(db, "users", auth.currentUser.uid);
-  await updateDoc(userRef, { theme: newTheme });
+  await updateDoc(doc(db, "users", auth.currentUser.uid), { theme: newTheme });
 });
 
-takeLoanBtn?.addEventListener("click", () => {
-    const amount = parseInt(loanAmountSelect.value);
-    takeOutLoan(amount);
-});
-
-repayLoanBtn?.addEventListener("click", () => {
-    repayLoan();
-});
-
-openAdminBtn?.addEventListener("click", () => {
-  dashboard.classList.add("hidden");
-  adminPanel.classList.remove("hidden");
-});
-
-backToDashboardBtn?.addEventListener("click", () => {
-  adminPanel.classList.add("hidden");
-  dashboard.classList.remove("hidden");
-});
-
-logoutBtn?.addEventListener("click", async () => {
-  await signOut(auth);
-  dashboard.classList.add("hidden");
-  adminPanel.classList.add("hidden");
-});
+takeLoanBtn?.addEventListener("click", () => takeOutLoan(parseInt(loanAmountSelect.value)));
+repayLoanBtn?.addEventListener("click", () => repayLoan());
+openAdminBtn?.addEventListener("click", () => { dashboard.classList.add("hidden"); adminPanel.classList.remove("hidden"); });
+backToDashboardBtn?.addEventListener("click", () => { adminPanel.classList.add("hidden"); dashboard.classList.remove("hidden"); });
+logoutBtn?.addEventListener("click", async () => { if (unsubUser) unsubUser(); if (unsubHistory) unsubHistory(); await signOut(auth); });
 
 renewBtn?.addEventListener("click", async () => {
   if (!auth.currentUser) return;
-  const userRef = doc(db, "users", auth.currentUser.uid);
   try {
-    await updateDoc(userRef, { 
-      renewalPending: true, 
-      renewalRequestDate: new Date().toISOString() 
-    });
+    await updateDoc(doc(db, "users", auth.currentUser.uid), { renewalPending: true, renewalRequestDate: new Date().toISOString() });
     alert("Renewal request sent. Waiting for admin approval.");
-  } catch (err) {
-    console.error("Renewal request failed:", err);
-    alert("Could not send renewal request: " + err.message);
-  }
+  } catch (err) { alert("Could not send renewal request: " + err.message); }
 });
 
 loanAmountSelect?.addEventListener("change", () => {
     const amount = parseInt(loanAmountSelect.value);
     const msgEl = document.getElementById("loan-message");
-    if (amount === 50000) {
-        msgEl.textContent = "ℹ️ Requirement: Risky Status (0-499)";
-        msgEl.style.color = "#e74c3c";
-    } else if (amount === 100000) {
-        msgEl.textContent = "ℹ️ Requirement: Fair Status (500-649)";
-        msgEl.style.color = "#3498db";
-    } else if (amount === 500000) {
-        msgEl.textContent = "ℹ️ Requirement: Good Status (650-749)";
-        msgEl.style.color = "#2ecc71";
-    } else if (amount === 1000000) {
-        msgEl.textContent = "✨ Requirement: Elite Status (750-850)";
-        msgEl.style.color = "#f1c40f";
-    }
+    if (amount === 50000) { msgEl.textContent = "ℹ️ Requirement: Risky Status (0-499)"; msgEl.style.color = "#e74c3c"; }
+    else if (amount === 100000) { msgEl.textContent = "ℹ️ Requirement: Fair Status (500-649)"; msgEl.style.color = "#3498db"; }
+    else if (amount === 500000) { msgEl.textContent = "ℹ️ Requirement: Good Status (650-749)"; msgEl.style.color = "#2ecc71"; }
+    else if (amount === 1000000) { msgEl.textContent = "✨ Requirement: Elite Status (750-850)"; msgEl.style.color = "#f1c40f"; }
 });
 
-setInterval(() => {
-  if (auth.currentUser && currentDashboardData) {
-    updateDashboardUI(auth.currentUser);
-  }
-}, 5000);
+// --- UPDATED PLAYER REQUEST EVENT LISTENERS ---
+document.addEventListener('click', async (e) => {
+    if (!auth.currentUser) return;
+
+    // 1. Handle Trade Request
+    if (e.target.id === 'request-trade-btn') {
+        if (!confirm("Are you sure you want to request a trade? The League Office will be notified.")) return;
+        try {
+            const userRef = doc(db, "users", auth.currentUser.uid);
+            await updateDoc(userRef, { tradePending: true, releasePending: false });
+            await logHistory(auth.currentUser.uid, "📤 Sent Trade Request to Team Office", "contract");
+            alert("✅ Trade request sent to Admin.");
+        } catch (err) {
+            console.error(err);
+            alert("Failed to send request.");
+        }
+    }
+
+    // 2. Handle Release Request
+    if (e.target.id === 'request-release-btn') {
+        const msg = "Requesting a release will terminate your contract if approved. Continue?";
+        if (!confirm(msg)) return;
+        try {
+            const userRef = doc(db, "users", auth.currentUser.uid);
+            await updateDoc(userRef, { releasePending: true, tradePending: false });
+            await logHistory(auth.currentUser.uid, "📤 Sent Release Request to Team Office", "contract");
+            alert("✅ Release request sent to Admin.");
+        } catch (err) {
+            console.error(err);
+            alert("Failed to send request.");
+        }
+    }
+});

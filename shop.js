@@ -1,57 +1,72 @@
-// ---------- shop.js (FINAL VERSION) ----------
+// ---------- shop.js (QUOTA OPTIMIZED) ----------
 console.log("shop.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  doc, getDoc, updateDoc, collection, onSnapshot, addDoc 
+  doc, getDoc, updateDoc, collection, getDocs, addDoc 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { logHistory } from "./historyManager.js"; // <--- New Import
+import { logHistory } from "./historyManager.js";
 
 const shopItemsContainer = document.getElementById("shop-items");
 
-let currentUserData = null;
+// We store shop items locally after a one-time fetch to save reads
 let currentShopItems = [];
+let localUserData = null; 
 
+/**
+ * Optimized Load: Uses getDocs for items (read once) 
+ * and pulls user data from the existing dashboard state
+ */
 async function loadShopItems() {
   const user = auth.currentUser;
   if (!user) return;
 
-  const userRef = doc(db, "users", user.uid);
   const shopRef = collection(db, "shop");
 
-  // LISTENER 1: User Data (Balance & Active Discount)
-  onSnapshot(userRef, (docSnap) => {
-    if (docSnap.exists()) {
-      currentUserData = docSnap.data();
-      renderShop(); 
-    }
-  });
-
-  // LISTENER 2: Shop Items (Inventory Stock)
-  onSnapshot(shopRef, (querySnap) => {
+  try {
+    // ONE-TIME FETCH: Instead of a live listener, we fetch the shop catalog once.
+    // This stops the "constant reading" that kills your quota.
+    const querySnap = await getDocs(shopRef);
     currentShopItems = [];
     querySnap.forEach((doc) => {
       currentShopItems.push({ id: doc.id, ...doc.data() });
     });
+
+    // Fetch user data once for the initial render
+    const userSnap = await getDoc(doc(db, "users", user.uid));
+    if (userSnap.exists()) {
+      localUserData = userSnap.data();
+    }
+
     renderShop(); 
-  });
+  } catch (err) {
+    console.error("Failed to load shop:", err);
+  }
 }
 
-function renderShop() {
+/**
+ * Renders the shop UI based on local variables.
+ * No database reads happen inside this function.
+ */
+function renderShop(externalUserData = null) {
   if (!shopItemsContainer) return;
+
+  // If dashboard.js passes us fresh user data, use it. Otherwise use our local cache.
+  if (externalUserData) localUserData = externalUserData;
+  
   shopItemsContainer.innerHTML = "";
 
   if (currentShopItems.length === 0) {
-    shopItemsContainer.innerHTML = "<p>No items available.</p>";
+    shopItemsContainer.innerHTML = "<p>No items available. Click Refresh to check again.</p>";
     return;
   }
 
-  const userBalance = Number(currentUserData?.balance || 0);
-  const activeDiscount = Number(currentUserData?.activeDiscount || 0);
+  const userBalance = Number(localUserData?.balance || 0);
+  const activeDiscount = Number(localUserData?.activeDiscount || 0);
 
   // --- CHECK EXPIRATION ---
   const now = new Date();
-  const expirationDate = currentUserData?.expirationDate ? new Date(currentUserData.expirationDate) : null;
+  const expirationDate = localUserData?.expirationDate ? new Date(localUserData.expirationDate) : null;
   const isExpired = expirationDate && expirationDate < now;
 
   currentShopItems.forEach((item) => {
@@ -59,7 +74,6 @@ function renderShop() {
     let finalCost = originalCost;
     let priceDisplay = `$${originalCost.toLocaleString()}`;
 
-    // Calculate Discount
     if (activeDiscount > 0) {
       finalCost = Math.floor(originalCost * (1 - activeDiscount));
       priceDisplay = `
@@ -72,7 +86,6 @@ function renderShop() {
     const affordable = userBalance >= finalCost;
     const isDisabled = !affordable || isExpired;
 
-    // Determine Button Text
     let btnText = affordable ? "Buy" : "Need Cash 💸";
     if (isExpired) btnText = "ID Expired 🚫";
 
@@ -118,6 +131,7 @@ async function buyItem(itemId, btnElement) {
   const inventoryRef = collection(db, "users", user.uid, "inventory");
 
   try {
+    // We use getDoc here because a purchase MUST have the most accurate current data
     const [userSnap, itemSnap] = await Promise.all([getDoc(userRef), getDoc(itemRef)]);
     
     if (!userSnap.exists() || !itemSnap.exists()) {
@@ -128,7 +142,6 @@ async function buyItem(itemId, btnElement) {
     const userData = userSnap.data();
     const itemData = itemSnap.data();
     
-    // --- SECURITY CHECK: Stop if expired ---
     const now = new Date();
     const expirationDate = userData.expirationDate ? new Date(userData.expirationDate) : null;
     if (expirationDate && expirationDate < now) {
@@ -153,17 +166,14 @@ async function buyItem(itemId, btnElement) {
     const newBalance = currentBalance - finalCost;
     const newBPS = currentBPS + 5; 
 
-    // 1. UPDATE USER (Balance only)
     await updateDoc(userRef, {
       balance: newBalance,
       bpsBalance: newBPS,
       activeDiscount: 0
     });
 
-    // 2. LOG HISTORY (Using new manager)
     await logHistory(user.uid, `Bought ${itemData.name} for $${finalCost}`, "purchase");
 
-    // 3. ADD TO INVENTORY
     await addDoc(inventoryRef, {
       name: itemData.name,
       value: Math.floor(finalCost / 2),
@@ -172,6 +182,10 @@ async function buyItem(itemId, btnElement) {
     });
     
     alert(`Purchased ${itemData.name} for $${finalCost}!`);
+    
+    // Refresh local cache after purchase
+    localUserData = { ...userData, balance: newBalance, bpsBalance: newBPS, activeDiscount: 0 };
+    renderShop();
 
   } catch (err) {
     console.error(err);
@@ -187,14 +201,16 @@ function resetBtn(btn) {
     }
 }
 
-// Initialize
-auth.onAuthStateChanged((user) => { if (user) loadShopItems(); });
+// Initialize on Auth
+auth.onAuthStateChanged((user) => { 
+    if (user) loadShopItems(); 
+});
 
-// Heartbeat Timer: Refresh UI every 5 seconds to check ID expiration
+// The heartbeat is now purely visual/local. It does NOT read from the database.
 setInterval(() => {
-  if (currentUserData) {
+  if (localUserData) {
     renderShop(); 
   }
-}, 5000); 
+}, 10000); // Increased to 10s to save CPU; since data is local, this is safe.
 
-export { loadShopItems };
+export { loadShopItems, renderShop };

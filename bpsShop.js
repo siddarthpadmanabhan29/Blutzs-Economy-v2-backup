@@ -1,10 +1,13 @@
-// ---------- bpsShop.js (REACTIVE & ID CHECK) ----------
+// ---------- bpsShop.js (QUOTA OPTIMIZED) ----------
 console.log("bpsShop.js loaded");
 import { db, auth } from "./firebaseConfig.js";
-import { doc, getDoc, updateDoc, collection, onSnapshot, arrayUnion, addDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { 
+  doc, getDoc, updateDoc, collection, getDocs, arrayUnion, addDoc 
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const bpsContainer = document.getElementById("bps-shop-items");
 
+// We store data locally to avoid constant database pings
 let currentUserData = null;
 let currentBpsItems = [];
 
@@ -12,27 +15,35 @@ async function loadBpsShop() {
   const user = auth.currentUser;
   if (!user) return;
 
-  const userRef = doc(db, "users", user.uid);
   const shopRef = collection(db, "bpsShop");
+  const userRef = doc(db, "users", user.uid);
 
-  // Listener 1: Watch User Data (Tokens & Expiration)
-  onSnapshot(userRef, (docSnap) => {
-    if (docSnap.exists()) {
-      currentUserData = docSnap.data();
-      renderBpsShop();
-    }
-  });
-
-  // Listener 2: Watch BPS Shop Items
-  onSnapshot(shopRef, (snap) => {
+  try {
+    // ONE-TIME FETCH: Read the catalog once to save reads
+    const querySnap = await getDocs(shopRef);
     currentBpsItems = [];
-    snap.forEach(doc => currentBpsItems.push({ id: doc.id, ...doc.data() }));
+    querySnap.forEach(doc => currentBpsItems.push({ id: doc.id, ...doc.data() }));
+
+    // Fetch user data once for the initial render
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      currentUserData = userSnap.data();
+    }
+
     renderBpsShop();
-  });
+  } catch (err) {
+    console.error("Failed to load BPS shop:", err);
+  }
 }
 
-function renderBpsShop() {
+/**
+ * Renders UI. Can accept external user data from dashboard.js
+ * to stay updated without any extra reads.
+ */
+function renderBpsShop(externalUserData = null) {
   if (!bpsContainer) return;
+  
+  if (externalUserData) currentUserData = externalUserData;
   bpsContainer.innerHTML = "";
 
   if (currentBpsItems.length === 0) {
@@ -42,7 +53,7 @@ function renderBpsShop() {
 
   const userBPS = Number(currentUserData?.bpsBalance || 0);
   
-  // --- Check Expiration ---
+  // --- Check Expiration (Local Calculation) ---
   const now = new Date();
   const expirationDate = currentUserData?.expirationDate ? new Date(currentUserData.expirationDate) : null;
   const isExpired = expirationDate && expirationDate < now;
@@ -56,7 +67,7 @@ function renderBpsShop() {
 
     const div = document.createElement("div");
     div.classList.add("shop-item", "bps-item");
-    if(isDisabled) div.style.opacity = "0.7"; // Visual dimming
+    if(isDisabled) div.style.opacity = "0.7"; 
 
     div.innerHTML = `
       <h4>${item.name}</h4>
@@ -68,6 +79,10 @@ function renderBpsShop() {
     bpsContainer.appendChild(div);
   });
 
+  attachBpsListeners();
+}
+
+function attachBpsListeners() {
   document.querySelectorAll(".buy-bps-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
        btn.disabled = true;
@@ -79,16 +94,18 @@ function renderBpsShop() {
 
 async function buyBpsItem(itemId, btnElement) {
   const user = auth.currentUser;
+  if (!user) return;
+
   const userRef = doc(db, "users", user.uid);
   const itemRef = doc(db, "bpsShop", itemId);
   const inventoryRef = collection(db, "users", user.uid, "inventory");
 
   try {
+    // Accurate data fetch for the transaction
     const [userSnap, itemSnap] = await Promise.all([getDoc(userRef), getDoc(itemRef)]);
     const userData = userSnap.data();
     const itemData = itemSnap.data();
 
-    // --- SECURITY CHECK: Stop if expired ---
     const now = new Date();
     const expirationDate = userData.expirationDate ? new Date(userData.expirationDate) : null;
     if (expirationDate && expirationDate < now) {
@@ -101,13 +118,13 @@ async function buyBpsItem(itemId, btnElement) {
         return resetBtn(btnElement);
     }
 
-    // Deduct BPS, Add to History
+    const newBpsBalance = userData.bpsBalance - itemData.cost;
+
     await updateDoc(userRef, {
-      bpsBalance: userData.bpsBalance - itemData.cost,
+      bpsBalance: newBpsBalance,
       history: arrayUnion({ message: `Bought ${itemData.name}`, type: "purchase", timestamp: new Date().toISOString() })
     });
 
-    // Add Coupon to Inventory
     await addDoc(inventoryRef, {
       name: itemData.name,
       type: "coupon", 
@@ -117,6 +134,10 @@ async function buyBpsItem(itemId, btnElement) {
     });
 
     alert(`Bought ${itemData.name}! Check your inventory.`);
+    
+    // Update local state and refresh UI
+    currentUserData.bpsBalance = newBpsBalance;
+    renderBpsShop();
 
   } catch (err) {
       console.error(err);
@@ -132,11 +153,14 @@ function resetBtn(btn) {
     }
 }
 
+// Initialize
 auth.onAuthStateChanged(user => { if(user) loadBpsShop(); });
 
-// ---------- NEW: Heartbeat Timer ----------
+// Heartbeat Timer: 10s is plenty since it's only for the visual ID check
 setInterval(() => {
   if (currentUserData) {
     renderBpsShop();
   }
-}, 5000);
+}, 10000);
+
+export { loadBpsShop, renderBpsShop };

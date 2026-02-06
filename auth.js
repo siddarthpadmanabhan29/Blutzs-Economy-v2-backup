@@ -81,12 +81,14 @@ loginBtn.addEventListener("click", async () => {
   const email = username + "@demo.com";
 
   try {
+    // Attempt login (Costs 0 Firestore reads)
     await signInWithEmailAndPassword(auth, email, password);
   } catch (error) {
     if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
       // create account if not found
       try {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
+        // ONLY call the doc creation/check here when registering
         await createOrUpdateUserDoc(cred.user.uid, username);
       } catch (err) {
         alert("Register failed: " + err.message);
@@ -118,6 +120,7 @@ onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   showScreen("dashboard");
 
-  const username = user.email.split("@")[0];
-  await createOrUpdateUserDoc(user.uid, username);
+  // Logic removed from here: We no longer call createOrUpdateUserDoc on every refresh.
+  // Registration handles the initial creation. 
+  // dashboard.js handles live updates via onSnapshot.
 });

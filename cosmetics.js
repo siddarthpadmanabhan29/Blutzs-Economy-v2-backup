@@ -1,10 +1,10 @@
-// ---------- cosmetics.js ----------
+// ---------- cosmetics.js (QUOTA OPTIMIZED) ----------
 console.log("cosmetics.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import {
   doc, getDoc, updateDoc,
-  collection, getDocs, onSnapshot, addDoc
+  collection, getDocs, addDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // ---------- Elements ----------
@@ -13,13 +13,18 @@ const dashboardNavbar = document.getElementById("dashboard-navbar");
 
 // ---------- CACHE COSMETICS ----------
 let cosmeticsCache = null;
+let localUserData = null; // Store local user state to avoid redundant reads
 
+/**
+ * Optimized Load: Uses getDocs for items (read once)
+ */
 async function getCosmeticsMap() {
   if (cosmeticsCache) return cosmeticsCache;
 
+  // ONE-TIME FETCH: Instead of a live listener, we fetch the catalog once.
   const snap = await getDocs(collection(db, "cosmeticsShop"));
   cosmeticsCache = {};
-  snap.forEach(d => cosmeticsCache[d.id] = d.data());
+  snap.forEach(d => cosmeticsCache[d.id] = { ...d.data(), id: d.id });
   return cosmeticsCache;
 }
 
@@ -38,7 +43,7 @@ applySavedTheme();
 
 // ---------- APPLY NAVBAR COLOR (OWNERSHIP SAFE + AUTO RESET) ----------
 async function applyNavbarFromFirestore(userData, cosmeticsMap) {
-  if (!dashboardNavbar) return;
+  if (!dashboardNavbar || !userData) return;
 
   let navbarColor = "#3498db"; // default
   let validEquipped = false;
@@ -69,30 +74,40 @@ async function applyNavbarFromFirestore(userData, cosmeticsMap) {
 }
 
 // ---------- LOAD COSMETICS ----------
-async function loadCosmetics(userData) {
+/**
+ * Renders the UI based on passed userData or local state.
+ * No database reads happen inside the loop.
+ */
+async function loadCosmetics(userData = null) {
   if (!auth.currentUser || !cosmeticsShopEl) return;
 
-  if (!userData) {
+  // Use passed data from dashboard.js master listener if available
+  if (userData) {
+    localUserData = userData;
+  }
+
+  // If we still have no data, fetch once (cold start fallback)
+  if (!localUserData) {
     const userRef = doc(db, "users", auth.currentUser.uid);
     const userSnap = await getDoc(userRef);
     if (!userSnap.exists()) {
       cosmeticsShopEl.innerHTML = "<p class='text-error'>User data not found.</p>";
       return;
     }
-    userData = userSnap.data();
+    localUserData = userSnap.data();
   }
 
-  if (!userData.cosmeticsOwned) userData.cosmeticsOwned = {};
+  if (!localUserData.cosmeticsOwned) localUserData.cosmeticsOwned = {};
 
   const cosmeticsMap = await getCosmeticsMap();
 
   // Apply navbar safely
-  await applyNavbarFromFirestore(userData, cosmeticsMap);
+  await applyNavbarFromFirestore(localUserData, cosmeticsMap);
 
   // ---------- ACCESS CHECK ----------
   const now = new Date();
-  const expirationDate = userData.expirationDate ? new Date(userData.expirationDate) : null;
-  const canAccess = !userData.renewalPending && expirationDate && expirationDate > now;
+  const expirationDate = localUserData.expirationDate ? new Date(localUserData.expirationDate) : null;
+  const canAccess = !localUserData.renewalPending && expirationDate && expirationDate > now;
 
   if (!canAccess) {
     cosmeticsShopEl.innerHTML =
@@ -103,28 +118,28 @@ async function loadCosmetics(userData) {
   cosmeticsShopEl.innerHTML = "";
 
   Object.entries(cosmeticsMap).forEach(([docId, item]) => {
-    const owned = userData.cosmeticsOwned[item.id] === true;
+    const owned = localUserData.cosmeticsOwned[docId] === true;
     const equipped =
       item.type === "navbarColor" &&
-      userData.navbarColor &&
-      item.color === userData.navbarColor;
+      localUserData.navbarColor &&
+      item.color === localUserData.navbarColor;
 
     const div = document.createElement("div");
     div.className = `cosmetic-item ${owned ? "owned" : ""} ${equipped ? "equipped" : ""}`;
-    div.dataset.id = item.id;
+    div.dataset.id = docId;
 
     let actionHTML = "";
 
     if (!owned) {
       actionHTML = `
-        <button class="btn-primary buy-cosmetic" data-id="${item.id}">Buy</button>
+        <button class="btn-primary buy-cosmetic" data-id="${docId}">Buy</button>
       `;
-    } else if (item.feature) {
+    } else if (item.feature || item.type === "navbarColor") {
       if (equipped) {
         actionHTML = `<div class="equipped-badge">Applied</div>`;
       } else {
         actionHTML = `
-          <button class="btn-secondary cosmetic-feature" data-id="${item.id}">Apply</button>
+          <button class="btn-secondary cosmetic-feature" data-id="${docId}">Apply</button>
         `;
       }
     }
@@ -148,16 +163,21 @@ async function loadCosmetics(userData) {
 // ---------- BUY & APPLY ----------
 cosmeticsShopEl.addEventListener("click", async (e) => {
   const btn = e.target;
+  const user = auth.currentUser;
+  if (!user) return;
 
   // ----- BUY -----
   if (btn.classList.contains("buy-cosmetic")) {
     const itemId = btn.dataset.id;
-    const itemDoc = await getDoc(doc(db, "cosmeticsShop", itemId));
-    if (!itemDoc.exists()) return alert("Item not found!");
+    // Accuracy check: get current state only on click
+    const [userSnap, itemSnap] = await Promise.all([
+        getDoc(doc(db, "users", user.uid)),
+        getDoc(doc(db, "cosmeticsShop", itemId))
+    ]);
 
-    const item = itemDoc.data();
-    const userRef = doc(db, "users", auth.currentUser.uid);
-    const userSnap = await getDoc(userRef);
+    if (!itemSnap.exists()) return alert("Item not found!");
+
+    const item = itemSnap.data();
     const userData = userSnap.data();
     const balance = Number(userData.balance || 0);
 
@@ -166,12 +186,17 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
     try {
       const newCosmetics = { ...(userData.cosmeticsOwned || {}), [itemId]: true };
 
-      await updateDoc(userRef, {
+      await updateDoc(doc(db, "users", user.uid), {
         balance: balance - item.price,
         cosmeticsOwned: newCosmetics
       });
 
-      const historyRef = collection(db, "users", auth.currentUser.uid, "history_logs");
+      // Update local state for immediate re-render
+      localUserData.balance = balance - item.price;
+      localUserData.cosmeticsOwned = newCosmetics;
+      loadCosmetics();
+
+      const historyRef = collection(db, "users", user.uid, "history_logs");
       await addDoc(historyRef, {
         message: `Purchased ${item.name} for $${item.price.toFixed(0)}`,
         type: "purchase",
@@ -189,16 +214,15 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
   // ----- APPLY (EQUIP) -----
   if (btn.classList.contains("cosmetic-feature")) {
     const featureId = btn.dataset.id;
-    const userRef = doc(db, "users", auth.currentUser.uid);
-    const userSnap = await getDoc(userRef);
-    const userData = userSnap.data();
+    const userRef = doc(db, "users", user.uid);
+    
+    // Use the cache for the item data to save a read
+    const itemData = cosmeticsCache[featureId];
+    if (!itemData) return;
 
-    if (!userData.cosmeticsOwned?.[featureId]) {
+    if (!localUserData.cosmeticsOwned?.[featureId]) {
       return alert("🔒 Unlock this by purchasing in the Cosmetics Shop!");
     }
-
-    const featureSnap = await getDoc(doc(db, "cosmeticsShop", featureId));
-    const itemData = featureSnap.data();
 
     // Dark mode toggle
     if (featureId === "darkMode") {
@@ -213,22 +237,18 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
       dashboardNavbar.style.backgroundColor = itemData.color;
       localStorage.setItem("navbarColor", itemData.color);
       await updateDoc(userRef, { navbarColor: itemData.color });
+      
+      localUserData.navbarColor = itemData.color;
+      loadCosmetics();
     }
   }
 });
 
-// ---------- REAL-TIME SYNC ----------
+// ---------- CLEAN INITIALIZATION ----------
 auth.onAuthStateChanged(user => {
   if (user) {
-    const userRef = doc(db, "users", user.uid);
-
-    onSnapshot(userRef, async (snap) => {
-      const userData = snap.data();
-      const cosmeticsMap = await getCosmeticsMap();
-      await applyNavbarFromFirestore(userData, cosmeticsMap);
-      loadCosmetics(userData);
-    });
-
+    // Note: We removed the duplicate onSnapshot(userRef) here.
+    // dashboard.js now handles the "Live" updates via loadCosmetics(currentDashboardData).
     loadCosmetics();
   }
 });

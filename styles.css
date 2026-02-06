@@ -394,7 +394,7 @@ button:hover {
   width: 100%;
 }
 
-#admin-employment-status {
+#admin-employment-status-select {
   padding: 8px 12px;
   border-radius: 8px;
   border: 1px solid #ccc;
@@ -407,8 +407,8 @@ button:hover {
   cursor: pointer;
 }
 
-#admin-employment-status:hover { border-color: #3498db; }
-#admin-employment-status:focus { border-color: #3498db; box-shadow: 0 0 5px rgba(52, 152, 219, 0.5); }
+#admin-employment-status-select:hover { border-color: #3498db; }
+#admin-employment-status-select:focus { border-color: #3498db; box-shadow: 0 0 5px rgba(52, 152, 219, 0.5); }
 
 /* ---------- Renewal Requests ---------- */
 #renewal-requests {
@@ -1240,4 +1240,92 @@ body.dark-mode #cosmetics-shop-items .cosmetic-item button:hover {
 
 #unified-history-list::-webkit-scrollbar-thumb:hover {
     background: var(--hist-text-dim);
+}
+
+/* Apply theme variables to contract inputs and textareas */
+#contract-base-cycle, 
+#contract-incentives,
+.admin-input-adaptive {
+    background-color: var(--contract-sub-bg) !important;
+    color: var(--contract-text) !important;
+    border: 1px solid var(--contract-border);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Ensure the 'readonly' auto-sum field looks distinct but themed */
+#contract-base-cycle {
+    opacity: 0.8;
+    cursor: not-allowed;
+    /* Optional: Keep the purple glow even in dark mode */
+    border-left: 4px solid #8e44ad; 
+}
+
+/* Fix for the Incentives box */
+#contract-incentives {
+    background-color: var(--contract-bg); /* Use the main bg for larger areas */
+}
+
+/* Ensure all contract inputs respect the grid column width */
+.admin-section input, 
+.admin-section textarea,
+#contract-base-cycle,
+#contract-non-guaranteed {
+    width: 100%;        /* Force it to fill the grid cell */
+    box-sizing: border-box; /* Ensures padding doesn't add to the width */
+    margin: 0;          /* Prevents outside spacing from causing shifts */
+}
+
+/* Fix for the Admin Payout Row */
+.admin-roster-item div[style*="display: flex"] {
+    align-items: center !important; /* Keep input and button centered vertically */
+}
+
+.admin-roster-item input[id^="pay-amount-"] {
+    min-width: 140px !important; /* Ensure you can actually see the number */
+    flex: 2 !important;         /* Give the input more priority */
+}
+
+.admin-roster-item button[onclick*="payInstallment"] {
+    flex: 1 !important;         /* Make the button smaller */
+    max-width: 100px;           /* Cap the button width */
+    height: 38px;               /* Match the input height */
+    padding: 0 !important;      /* Tighten up internal spacing */
+}
+
+.contract-inner-box {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+
+.contract-label {
+    display: block;
+    font-size: 0.65em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+    font-weight: bold;
+}
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
+/* LIGHT MODE - Applied when body has .light-mode class */
+body.light-mode {
+    --card-bg: #ffffff;
+    --text-color: #333333;
+    --text-muted: #666666;
+    --border-color: #dddddd;
+    --input-bg: #f9f9f9;
+}
+
+/* DARK MODE - Applied when body has .dark-mode class */
+body.dark-mode {
+    --card-bg: #1a1a1a;
+    --text-color: #ffffff;
+    --text-muted: #888888;
+    --border-color: #333333;
+    --input-bg: rgba(255, 255, 255, 0.03);
 }

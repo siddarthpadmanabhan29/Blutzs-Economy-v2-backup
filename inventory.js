@@ -1,4 +1,4 @@
-// ---------- inventory.js (FINAL VERSION with History Manager) ----------
+// ---------- inventory.js (QUOTA OPTIMIZED) ----------
 console.log("inventory.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -6,19 +6,29 @@ import {
   doc, getDoc, updateDoc, onSnapshot, collection, deleteDoc 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { updateBalanceDisplay } from "./main.js";
-import { logHistory } from "./historyManager.js"; // <--- NEW IMPORT
+import { logHistory } from "./historyManager.js";
 
 const inventoryContainer = document.getElementById("inventory-items");
 const inventoryValueEl = document.getElementById("inventory-value");
 
+// QUOTA PROTECTION: Store the unsubscribe function globally to kill duplicate listeners
+let unsubscribeInventory = null;
+
 function loadInventory() {
   auth.onAuthStateChanged(async (user) => {
+    // 1. If a listener is already running, kill it to save reads
+    if (unsubscribeInventory) {
+      unsubscribeInventory();
+      unsubscribeInventory = null;
+    }
+
     if (!user) return;
 
     const userRef = doc(db, "users", user.uid);
     const invRef = collection(userRef, "inventory");
 
-    onSnapshot(invRef, (snapshot) => {
+    // 2. Store the new unsubscribe function
+    unsubscribeInventory = onSnapshot(invRef, (snapshot) => {
       inventoryContainer.innerHTML = "";
       let totalValue = 0;
 
@@ -35,7 +45,6 @@ function loadInventory() {
         const itemCard = document.createElement("div");
         itemCard.classList.add("inventory-item");
         
-        // Style coupons differently
         if (item.type === 'coupon') {
             itemCard.classList.add('coupon-item'); 
             itemCard.style.border = "2px dashed #8e44ad"; 
@@ -69,12 +78,11 @@ function attachInventoryListeners() {
   });
 }
 
-// ---------- UPDATED: Use Item (With History Manager) ----------
+// ---------- Use Item ----------
 async function useItem(itemId, btnElement) {
   const user = auth.currentUser;
   if (!user) return;
 
-  // 1. DISABLE BUTTON
   if(btnElement) {
     btnElement.disabled = true;
     btnElement.textContent = "Processing...";
@@ -91,30 +99,18 @@ async function useItem(itemId, btnElement) {
     }
     const itemData = itemSnap.data();
 
-    // --- COUPON LOGIC ---
     if (itemData.type === "coupon") {
-      // 1. Apply Discount
       await updateDoc(userRef, {
         activeDiscount: itemData.discountValue
       });
-
-      // 2. Log History
       await logHistory(user.uid, `Activated Coupon: ${itemData.name}`, "usage");
-
-      // 3. Delete Item
       await deleteDoc(itemRef);
-      
       alert(`✅ Coupon Activated! You now have ${(itemData.discountValue * 100)}% off.`);
       return; 
     }
 
-    // --- REGULAR ITEM LOGIC ---
-    // 1. Log History
     await logHistory(user.uid, `Used ${itemData.name}`, "usage");
-
-    // 2. Delete Item
     await deleteDoc(itemRef);
-
     alert(`You used ${itemData.name}!`);
 
   } catch(e) {
@@ -127,7 +123,7 @@ async function useItem(itemId, btnElement) {
   }
 }
 
-// ---------- UPDATED: Sell Item (With History Manager) ----------
+// ---------- Sell Item ----------
 async function sellItem(itemId, btnElement) {
   const user = auth.currentUser;
   if (!user) return;
@@ -148,17 +144,11 @@ async function sellItem(itemId, btnElement) {
   const newBalance = (userData.balance || 0) + (item.value || 0);
 
   try {
-    // 1. Update Balance
     await updateDoc(userRef, { 
         balance: newBalance
     });
-
-    // 2. Log History
     await logHistory(user.uid, `Sold ${item.name} for $${item.value}`, "transfer-in");
-
-    // 3. Delete Item
     await deleteDoc(itemRef);
-
     updateBalanceDisplay(newBalance, "user-balance", "gain");
 
   } catch(e) {
@@ -170,8 +160,7 @@ async function sellItem(itemId, btnElement) {
   }
 }
 
-auth.onAuthStateChanged((user) => {
-  if (user) loadInventory();
-});
+// Initial Call
+loadInventory();
 
 export { loadInventory };
