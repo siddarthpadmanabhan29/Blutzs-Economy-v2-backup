@@ -326,6 +326,16 @@ function updateDashboardUI(user) {
       activeLoanSection?.classList.remove("hidden");
       if (debtAmountEl) debtAmountEl.textContent = `$${activeDebt.toLocaleString()}`;
       if (dailyInterestEl) dailyInterestEl.textContent = `$${(activeDebt * 0.05).toLocaleString()}`;
+      
+      // --- LOAN DUE DATE DISPLAY ---
+      const dueDateEl = document.getElementById("loan-due-date");
+      if (dueDateEl && data.loanDeadline) {
+          const dueDate = new Date(data.loanDeadline);
+          dueDateEl.textContent = `Due: ${dueDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}`;
+          dueDateEl.style.color = "#e74c3c";
+          dueDateEl.style.fontWeight = "bold";
+      }
+
       if (data.lastInterestApplied) {
           if (interestTimerInterval) clearInterval(interestTimerInterval);
           interestTimerInterval = setInterval(() => {

@@ -56,6 +56,7 @@ export async function applyInterest(uid, userData) {
  * takeOutLoan
  * Tiered borrowing logic. 
  * Includes a precise 24-hour cooldown check with H/M/S feedback.
+ * Updated: 30-day fixed window deadline.
  */
 export async function takeOutLoan(amount) {
     const user = auth.currentUser;
@@ -81,7 +82,6 @@ export async function takeOutLoan(amount) {
         if (timePassed < cooldownMs) {
             const msLeft = cooldownMs - timePassed;
             
-            // Calculate H/M/S
             const hours = Math.floor(msLeft / (1000 * 60 * 60));
             const minutes = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((msLeft % (1000 * 60)) / 1000);
@@ -98,7 +98,9 @@ export async function takeOutLoan(amount) {
         return alert(`Denied. Your ${status.label} status only allows loans up to $${status.max.toLocaleString()}.`);
     }
 
-    const deadline = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    // UPDATED LOGIC: Exactly 30 days from now
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + 30);
 
     try {
         await updateDoc(userRef, {
@@ -111,7 +113,10 @@ export async function takeOutLoan(amount) {
         });
 
         await logHistory(user.uid, `🏦 Took $${amount.toLocaleString()} loan (${status.label} Tier)`, "admin", now.toISOString());
-        alert(`Loan approved! Score dipped (-15) for taking on debt.`);
+        
+        // Display formatted due date to user immediately
+        const formattedDate = deadline.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+        alert(`Loan approved! Your payment is due on ${formattedDate}. Score dipped (-15) for taking on debt.`);
     } catch (error) {
         console.error("Loan Error:", error);
     }
