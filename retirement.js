@@ -1,4 +1,4 @@
-// ---------- retirement.js (FIXED & OPTIMIZED) ----------
+// ---------- retirement.js (UPDATED WITH LIMITS & CHART) ----------
 console.log("retirement.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -15,36 +15,35 @@ const withdrawInput = document.getElementById("retirement-withdraw");
 const withdrawBtn = document.getElementById("retirement-withdraw-btn");
 const messageEl = document.getElementById("retirement-message");
 
+// --- CONSTANTS ---
+const DAILY_LIMIT = 500000;
+
 // --- LOCAL STATE ---
-let cachedUserData = null; // Stores the latest snapshot from dashboard.js
+let cachedUserData = null; 
 let retirementBusy = false; 
+let retirementChart = null; // Chart.js instance
 
 // ---------- Render Retirement UI ----------
-/**
- * This is called live by dashboard.js on every database change.
- * It also keeps our 'cachedUserData' fresh for the buttons below.
- */
 function renderSavings(userData) {
   if (!userData || !savingsEl) return;
   
-  // Save the data so the Deposit/Withdraw buttons can use it later
   cachedUserData = userData;
 
   const savings = Number(userData.retirementSavings || 0);
   const status = userData.employmentStatus || "Unemployed";
 
-  // Calculate Days Until 1st of Next Month
   const now = new Date();
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const diffTime = nextMonth - now;
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-  // --- BIG NUMBER FORMATTING ---
   savingsEl.textContent = savings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   interestEl.textContent = (savings * 0.03).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   daysEl.textContent = diffDays;
 
-  // Handle Button States based on Processing or Employment
+  // Update Visual Chart
+  renderGrowthChart(savings);
+
   if (retirementBusy) {
     toggleInputs(true);
     return;
@@ -61,10 +60,9 @@ function renderSavings(userData) {
     depositInput.disabled = true;
     withdrawInput.disabled = false;
   } else {
-    toggleInputs(true); // Unemployed/Other cannot interact
+    toggleInputs(true); 
   }
   
-  // Check for monthly interest payout automatically
   applyInterestIfFirstDay(userData);
 }
 
@@ -75,9 +73,56 @@ function toggleInputs(disabled) {
     if (withdrawInput) withdrawInput.disabled = disabled;
 }
 
+// ---------- Helper: Check Daily Limit Reset ----------
+function getTodayLimitUsed(userData) {
+    if (!userData.lastRetirementDate) return 0;
+    const lastDate = new Date(userData.lastRetirementDate).toDateString();
+    const today = new Date().toDateString();
+    return (lastDate === today) ? (userData.retirementDailyTotal || 0) : 0;
+}
+
+// ---------- Visual Growth Graph (Chart.js) ----------
+function renderGrowthChart(currentSavings) {
+    const canvas = document.getElementById('retirementChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const months = ["Now", "Mo 1", "Mo 2", "Mo 3", "Mo 4", "Mo 5", "Mo 6"];
+    const dataPoints = [currentSavings];
+    
+    // Simulate 3% monthly compounding growth for 6 months
+    for (let i = 1; i < 7; i++) {
+        dataPoints.push(dataPoints[i-1] * 1.03);
+    }
+
+    if (retirementChart) retirementChart.destroy();
+
+    // @ts-ignore
+    retirementChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: months,
+            datasets: [{
+                label: 'Projected 6-Month Growth (3% Int)',
+                data: dataPoints,
+                borderColor: '#2ecc71',
+                backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { ticks: { callback: (val) => '$' + Number(val).toLocaleString() } }
+            }
+        }
+    });
+}
+
 // ---------- Deposit Logic ----------
 depositBtn?.addEventListener("click", async () => {
-  // Use the cached data we saved in renderSavings
   if (retirementBusy || !auth.currentUser || !cachedUserData) {
     return showMsg("⚠️ System initializing, try again in a second...", "error");
   }
@@ -85,7 +130,12 @@ depositBtn?.addEventListener("click", async () => {
   const amount = parseFloat(depositInput.value);
   if (isNaN(amount) || amount <= 0) return showMsg("⚠️ Enter a valid deposit amount", "error");
 
-  // Validate using cached data (0 reads cost!)
+  // Check Daily Limit
+  const dailyUsed = getTodayLimitUsed(cachedUserData);
+  if (dailyUsed + amount > DAILY_LIMIT) {
+      return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
+  }
+
   if (cachedUserData.balance < amount) return showMsg("❌ Insufficient main balance", "error");
   if (cachedUserData.employmentStatus !== "Employed") return showMsg("❌ Only employed users can deposit", "error");
 
@@ -94,13 +144,14 @@ depositBtn?.addEventListener("click", async () => {
 
   try {
     const userRef = doc(db, "users", auth.currentUser.uid);
-
     const newBalance = cachedUserData.balance - amount;
     const newSavings = (cachedUserData.retirementSavings || 0) + amount;
 
     await updateDoc(userRef, {
       balance: newBalance,
-      retirementSavings: newSavings
+      retirementSavings: newSavings,
+      retirementDailyTotal: dailyUsed + amount,
+      lastRetirementDate: new Date().toISOString()
     });
 
     await logHistory(auth.currentUser.uid, `Retirement Deposit: $${amount.toLocaleString()}`, "transfer-out");
@@ -125,7 +176,12 @@ withdrawBtn?.addEventListener("click", async () => {
   const amount = parseFloat(withdrawInput.value);
   if (isNaN(amount) || amount <= 0) return showMsg("⚠️ Enter a valid withdrawal amount", "error");
 
-  // Validate using cached data (0 reads cost!)
+  // Check Daily Limit
+  const dailyUsed = getTodayLimitUsed(cachedUserData);
+  if (dailyUsed + amount > DAILY_LIMIT) {
+      return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
+  }
+
   if (cachedUserData.employmentStatus !== "Retired") return showMsg("❌ Only retired users can withdraw", "error");
   if ((cachedUserData.retirementSavings || 0) < amount) return showMsg("❌ Insufficient retirement savings", "error");
 
@@ -134,13 +190,14 @@ withdrawBtn?.addEventListener("click", async () => {
 
   try {
     const userRef = doc(db, "users", auth.currentUser.uid);
-
     const newBalance = cachedUserData.balance + amount;
     const newSavings = cachedUserData.retirementSavings - amount;
 
     await updateDoc(userRef, {
       balance: newBalance,
-      retirementSavings: newSavings
+      retirementSavings: newSavings,
+      retirementDailyTotal: dailyUsed + amount,
+      lastRetirementDate: new Date().toISOString()
     });
 
     await logHistory(auth.currentUser.uid, `Retirement Withdrawal: $${amount.toLocaleString()}`, "transfer-in");
@@ -161,7 +218,7 @@ async function applyInterestIfFirstDay(userData) {
   if (!userData?.retirementSavings || userData.retirementSavings <= 0) return;
 
   const now = new Date();
-  if (now.getDate() !== 1) return; // Only run on the 1st
+  if (now.getDate() !== 1) return; 
   
   const monthKey = now.toISOString().slice(0, 7); 
   if (userData.lastInterestApplied?.startsWith(monthKey)) return;

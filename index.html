@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Blutz Economy</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="styles.css">
   <style>
     /* Required CSS for the new Contract UI math boxes */
@@ -61,6 +62,15 @@
       100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
     }
     .status-online { animation: pulse-green 2s infinite; }
+    
+    /* Chart Container Styling */
+    .retirement-chart-container {
+      margin-top: 20px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 12px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
   </style>
 </head>
 <body>
@@ -93,9 +103,10 @@
 
       <section class="section-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-          <h3>Profile 
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h3>Profile</h3>
             <button id="theme-toggle-btn" class="btn-secondary cosmetic-feature" data-id="darkMode" type="button">🌙</button>
-          </h3>
+          </div>
           <div id="connection-indicator" style="display: inline-flex; align-items: center; background: rgba(0,0,0,0.05); padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);">
             <span id="status-dot" style="height: 8px; width: 8px; background-color: #bbb; border-radius: 50%; display: inline-block; margin-right: 8px;"></span>
             <span id="status-text" style="font-size: 0.65rem; font-weight: 800; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Connecting</span>
@@ -172,7 +183,12 @@
           <input type="number" id="retirement-withdraw" placeholder="Withdraw Amount">
           <button id="retirement-withdraw-btn" class="btn-secondary" type="button">Withdraw</button>
         </div>
-        <p id="retirement-message" style="font-weight: bold;"></p>
+        
+        <div class="retirement-chart-container">
+          <canvas id="retirementChart" style="width: 100%; max-height: 200px;"></canvas>
+        </div>
+        
+        <p id="retirement-message" style="font-weight: bold; margin-top: 10px;"></p>
       </section>
 
       <section class="section-card" style="border: 2px solid #e67e22;">
@@ -354,5 +370,5 @@
   <script type="module" src="cosmetics.js"></script> 
   <script type="module" src="loan.js"></script> 
   <script type="module" src="contracts.js"></script>
-</body>
+  </body>
 </html>
