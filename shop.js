@@ -1,11 +1,12 @@
-// ---------- shop.js (QUOTA OPTIMIZED + CONFIRMATION TAX) ----------
+// ---------- shop.js (QUOTA OPTIMIZED + USAGE-BASED PERKS) ----------
 console.log("shop.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  doc, getDoc, updateDoc, collection, getDocs, addDoc 
+  doc, getDoc, updateDoc, collection, getDocs, addDoc, increment 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
+import { PLANS, isNextItemFree } from "./membership_plans.js";
 
 const shopItemsContainer = document.getElementById("shop-items");
 
@@ -58,10 +59,11 @@ function renderShop(externalUserData = null) {
 
   const userBalance = Number(localUserData?.balance || 0);
   const activeDiscount = Number(localUserData?.activeDiscount || 0);
-
-  const now = new Date();
-  const expirationDate = localUserData?.expirationDate ? new Date(localUserData.expirationDate) : null;
-  const isExpired = expirationDate && expirationDate < now;
+  
+  // Membership Plan Context
+  const tier = localUserData?.membershipLevel || 'standard';
+  const plan = PLANS[tier];
+  const isFree = isNextItemFree('shop', localUserData);
 
   currentShopItems.forEach((item) => {
     const originalCost = Number(item.cost);
@@ -71,22 +73,25 @@ function renderShop(externalUserData = null) {
       discountedPrice = Math.floor(originalCost * (1 - activeDiscount));
     }
 
-    // Keep background math for button disabling (Total Cost = Price + 10%)
-    const totalCost = Math.floor(discountedPrice * 1.10);
+    // Calculate dynamic cost based on membership perks
+    const taxRate = plan.taxRate;
+    const taxAmount = isFree ? 0 : Math.floor(discountedPrice * taxRate);
+    const totalCost = isFree ? 0 : discountedPrice + taxAmount;
 
-    // UI shows ONLY the base price for a clean look
+    // UI shows ONLY the base price for a clean look, or "FREE" if perk active
     let priceDisplay = `
       <div style="font-weight: bold; font-size: 1.1em;">
-        ${activeDiscount > 0 ? `<span style="text-decoration: line-through; color: gray; font-size: 0.8em;">$${originalCost.toLocaleString()}</span> ` : ""}
-        $${discountedPrice.toLocaleString()}
+        ${isFree ? `<span style="color: #2ecc71;">FREE ITEM! 🎁</span>` : 
+          `${activeDiscount > 0 ? `<span style="text-decoration: line-through; color: gray; font-size: 0.8em;">$${originalCost.toLocaleString()}</span> ` : ""}
+           $${discountedPrice.toLocaleString()}`
+        }
       </div>
     `;
 
     const affordable = userBalance >= totalCost;
-    const isDisabled = !affordable || isExpired;
+    const isDisabled = !affordable || (localUserData?.expirationDate && new Date(localUserData.expirationDate) < new Date());
 
-    let btnText = affordable ? "Buy" : "Need Cash 💸";
-    if (isExpired) btnText = "ID Expired 🚫";
+    let btnText = isFree ? "Claim Free Item" : (affordable ? "Buy" : "Need Cash 💸");
 
     const itemCard = document.createElement("div");
     itemCard.classList.add("shop-item");
@@ -114,7 +119,6 @@ function renderShop(externalUserData = null) {
 function attachBuyListeners() {
   document.querySelectorAll(".buy-item-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
-        // We trigger the popup before disabling the button for better UX
         await buyItem(btn.dataset.id, btn);
     });
   });
@@ -146,60 +150,77 @@ async function buyItem(itemId, btnElement) {
         return resetBtn(btnElement);
     }
 
-    const currentBalance = Number(userData.balance || 0);
-    const currentBPS = Number(userData.bpsBalance || 0);
+    // --- MEMBERSHIP CALCULATION ---
+    const tier = userData.membershipLevel || 'standard';
+    const plan = PLANS[tier];
+    const isFree = isNextItemFree('shop', userData);
     const activeDiscount = Number(userData.activeDiscount || 0);
     
-    // --- CALCULATE COSTS ---
     let basePrice = Number(itemData.cost);
     if (activeDiscount > 0) {
         basePrice = Math.floor(basePrice * (1 - activeDiscount));
     }
-    const taxAmount = Math.floor(basePrice * 0.10);
-    const totalCost = basePrice + taxAmount;
+
+    const taxAmount = isFree ? 0 : Math.floor(basePrice * plan.taxRate);
+    const totalCost = isFree ? 0 : basePrice + taxAmount;
 
     // --- TAX CONFIRMATION POPUP ---
-    const confirmMsg = `Confirm Purchase: ${itemData.name}\n\n` +
-                       `Price: $${basePrice.toLocaleString()}\n` +
-                       `Sales Tax (10%): $${taxAmount.toLocaleString()}\n` +
-                       `---------------------------\n` +
-                       `Total Deduction: $${totalCost.toLocaleString()}\n\n` +
-                       `Would you like to proceed?`;
+    let confirmMsg = "";
+    if (isFree) {
+        confirmMsg = `🎁 Claim your FREE Membership Item: ${itemData.name}?`;
+    } else {
+        confirmMsg = `Confirm Purchase: ${itemData.name}\n\n` +
+                     `Price: $${basePrice.toLocaleString()}\n` +
+                     `Tax (${plan.taxRate * 100}%): $${taxAmount.toLocaleString()}\n` +
+                     `---------------------------\n` +
+                     `Total Deduction: $${totalCost.toLocaleString()}\n\n` +
+                     `Would you like to proceed?`;
+    }
 
     if (!confirm(confirmMsg)) {
-        return resetBtn(btnElement); // User cancelled
+        return resetBtn(btnElement);
     }
 
     // Now disable and process
     btnElement.disabled = true;
     btnElement.textContent = "Processing...";
 
-    if (currentBalance < totalCost) {
-        alert(`Insufficient funds! Total cost with tax is $${totalCost.toLocaleString()}`);
+    if (Number(userData.balance || 0) < totalCost) {
+        alert(`Insufficient funds! Total cost is $${totalCost.toLocaleString()}`);
         return resetBtn(btnElement);
     }
 
-    const newBalance = currentBalance - totalCost;
-    const newBPS = currentBPS + 5; 
-
-    await updateDoc(userRef, {
-      balance: newBalance,
-      bpsBalance: newBPS,
+    // --- UPDATE OBJECT ---
+    const updates = {
+      balance: increment(-totalCost),
+      bpsBalance: increment(plan.bpsPerPurchase),
       activeDiscount: 0
-    });
+    };
 
-    await logHistory(user.uid, `Bought ${itemData.name}: $${basePrice.toLocaleString()} + $${taxAmount.toLocaleString()} tax`, "purchase");
+    // LOGIC CHANGE: We ONLY reset the counter if a free item was claimed.
+    // Progression (+1) now happens in inventory.js upon usage.
+    if (isFree) {
+        updates.shopOrderCount = 0;
+    }
 
+    await updateDoc(userRef, updates);
+
+    const logMsg = isFree ? `FREE CLAIM: ${itemData.name}` : `Bought ${itemData.name}: $${basePrice.toLocaleString()} + $${taxAmount.toLocaleString()} tax`;
+    await logHistory(user.uid, logMsg, "purchase");
+
+    // --- INVENTORY ADDITION ---
     await addDoc(inventoryRef, {
       name: itemData.name,
-      value: Math.floor(basePrice / 2),
+      value: isFree ? 0 : Math.floor(basePrice / 2),
       originalId: itemId,
-      acquiredAt: new Date().toISOString()
+      acquiredAt: new Date().toISOString(),
+      isFree: isFree 
     });
     
-    alert(`Purchased ${itemData.name}! \nTotal paid: $${totalCost.toLocaleString()}`);
+    alert(isFree ? `🎁 Enjoy your free item!` : `Purchased ${itemData.name}! \nTotal paid: $${totalCost.toLocaleString()}`);
     
-    localUserData = { ...userData, balance: newBalance, bpsBalance: newBPS, activeDiscount: 0 };
+    // Refresh local cache and UI
+    localUserData = { ...userData, ...updates, balance: (Number(userData.balance) - totalCost) };
     renderShop();
 
   } catch (err) {

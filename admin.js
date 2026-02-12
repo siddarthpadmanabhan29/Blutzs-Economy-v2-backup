@@ -7,6 +7,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { showScreen } from "./auth.js"; 
 import { logHistory } from "./historyManager.js";
+import { PLANS } from "./membership_plans.js";
 
 // ---------- Elements ----------
 const adminPanel = document.getElementById("admin-panel");
@@ -30,16 +31,25 @@ const adminBpsUserInfo = document.getElementById("admin-bps-user-info");
 const renewalRequestsContainer = document.getElementById("renewal-requests");
 const adminRosterContainer = document.getElementById("admin-active-contracts-list");
 
+// --- MEMBERSHIP ADMIN ELEMENTS ---
+const adminTrialUsername = document.getElementById("admin-trial-username");
+const adminTrialUserInfo = document.getElementById("admin-trial-user-info");
+const adminTrialPlan = document.getElementById("admin-trial-plan");
+const adminTrialDuration = document.getElementById("admin-trial-duration");
+const adminTrialUnit = document.getElementById("admin-trial-unit");
+const adminGrantTrialBtn = document.getElementById("admin-grant-trial-btn");
+const adminRevokeTrialBtn = document.getElementById("admin-revoke-trial-btn"); // New Button
+
 // --- QUOTA PROTECTION STATE ---
 let balanceListener = null; 
 let bpsListener = null;
 let empListener = null;
 let cosmeticsUserListener = null;
 let contractLookupListener = null;
+let membershipLookupListener = null; 
 let adminCosmeticsCache = null; 
 let activeAdminListener = null;
 
-// DEBOUNCE TIMER: Prevents reading the DB on every single keystroke
 let lookupTimeout = null;
 
 // ---------- Admin Access Check ----------
@@ -77,6 +87,7 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
   if (type === "emp" && empListener) { empListener(); empListener = null; }
   if (type === "cosmetic" && cosmeticsUserListener) { cosmeticsUserListener(); cosmeticsUserListener = null; }
   if (type === "contract" && contractLookupListener) { contractLookupListener(); contractLookupListener = null; }
+  if (type === "membership" && membershipLookupListener) { membershipLookupListener(); membershipLookupListener = null; }
 
   if (!usernameInput) {
     infoEl.textContent = "N/A";
@@ -123,6 +134,11 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
         } else if (type === "contract") {
             infoEl.textContent = `Drafting for: ${displayName}`;
             infoEl.style.color = "green";
+        } else if (type === "membership") {
+            const tier = data.membershipLevel || "standard";
+            const isTrial = data.trialExpiration ? " (ACTIVE TRIAL)" : "";
+            infoEl.textContent = `Target: ${displayName} | Plan: ${tier.toUpperCase()}${isTrial}`;
+            infoEl.style.color = "#2ecc71";
         }
       });
 
@@ -131,12 +147,14 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
       else if (type === "emp") empListener = unsubscribe;
       else if (type === "cosmetic") cosmeticsUserListener = unsubscribe;
       else if (type === "contract") contractLookupListener = unsubscribe;
+      else if (type === "membership") membershipLookupListener = unsubscribe;
     }
   });
 }
 
 adminGiveUsername?.addEventListener("input", () => handleUserLookup(adminGiveUsername, adminUserInfo, adminGiveBtn, "money"));
 adminGiveBpsUsername?.addEventListener("input", () => handleUserLookup(adminGiveBpsUsername, adminBpsUserInfo, adminGiveBpsBtn, "bps"));
+adminTrialUsername?.addEventListener("input", () => handleUserLookup(adminTrialUsername, adminTrialUserInfo, adminGrantTrialBtn, "membership"));
 
 // ---------- Execute Give Functions ----------
 async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
@@ -164,6 +182,87 @@ async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
 
 async function giveMoney() { await executeGive(adminGiveUsername, adminGiveAmount, adminUserInfo, "balance", "money"); }
 async function giveBps() { await executeGive(adminGiveBpsUsername, adminGiveBpsAmount, adminBpsUserInfo, "bpsBalance", "BPS"); }
+
+// ---------- Membership & Trial Execution ----------
+async function grantTrialMembership() {
+    const targetUsername = adminTrialUsername.value.trim().toLowerCase();
+    const planKey = adminTrialPlan.value;
+    const duration = parseInt(adminTrialDuration.value);
+    const unit = adminTrialUnit.value;
+
+    if (!targetUsername || isNaN(duration) || duration <= 0) {
+        return alert("Please provide a valid username and duration.");
+    }
+
+    try {
+        const q = query(collection(db, "users"), where("username", "==", targetUsername));
+        const snap = await getDocs(q);
+        if (snap.empty) return alert("User not found!");
+
+        const targetUserDoc = snap.docs[0];
+        const targetUid = targetUserDoc.id;
+
+        // Calculate Expiration
+        let expirationDate = new Date();
+        if (unit === "days") {
+            expirationDate.setDate(expirationDate.getDate() + duration);
+        } else if (unit === "months") {
+            expirationDate.setMonth(expirationDate.getMonth() + duration);
+        }
+
+        await updateDoc(doc(db, "users", targetUid), {
+            membershipLevel: planKey,
+            trialExpiration: expirationDate.toISOString(),
+            membershipLastPaid: new Date().toISOString()
+        });
+
+        await logHistory(targetUid, `Admin granted ${duration} ${unit} of ${planKey} (Trial)`, "admin");
+        alert(`Successfully granted ${planKey} to ${targetUsername} until ${expirationDate.toLocaleDateString()}.`);
+        
+        adminTrialUsername.value = "";
+        adminTrialDuration.value = "";
+        adminTrialUserInfo.textContent = "N/A";
+    } catch (err) {
+        console.error("Trial Grant Error:", err);
+        alert("Failed to grant membership.");
+    }
+}
+
+// NEW: Revoke Membership Function
+async function revokeMembership() {
+    const targetUsername = adminTrialUsername.value.trim().toLowerCase();
+    if (!targetUsername) return alert("Please enter a username to revoke.");
+
+    if (!confirm(`Are you sure you want to revoke ALL membership perks and trials for ${targetUsername}?`)) return;
+
+    try {
+        const q = query(collection(db, "users"), where("username", "==", targetUsername));
+        const snap = await getDocs(q);
+        if (snap.empty) return alert("User not found.");
+
+        const userDoc = snap.docs[0];
+        const userRef = doc(db, "users", userDoc.id);
+
+        await updateDoc(userRef, {
+            membershipLevel: "standard",
+            trialExpiration: null,
+            membershipLastPaid: null,
+            shopOrderCount: 0
+        });
+
+        await logHistory(userDoc.id, "Admin revoked your membership/trial status.", "admin");
+        alert(`Successfully revoked membership for ${targetUsername}.`);
+        
+        adminTrialUsername.value = "";
+        adminTrialUserInfo.textContent = "N/A";
+    } catch (err) {
+        console.error("Revoke Error:", err);
+        alert("Failed to revoke membership.");
+    }
+}
+
+if (adminGrantTrialBtn) adminGrantTrialBtn.addEventListener("click", grantTrialMembership);
+if (adminRevokeTrialBtn) adminRevokeTrialBtn.addEventListener("click", revokeMembership);
 
 // ---------- Renewal Requests ----------
 export async function loadRenewalRequests() {
@@ -370,7 +469,6 @@ export function listenForAdminRoster() {
             const docId = contractDoc.id;
             const terms = data.terms || {};
 
-            // Payroll Logic: Divide yearly rates by 6 installments
             const targetG = (terms.guaranteedPay || 0) / 6;
             const targetB = (terms.nonGuaranteedPay || 0) / 6;
             
@@ -415,7 +513,6 @@ export function listenForAdminRoster() {
             `;
             adminRosterContainer.appendChild(div);
 
-            // --- LIVE REQUEST ALERT LISTENER ---
             const userRef = doc(db, "users", data.playerUID);
             onSnapshot(userRef, (uSnap) => {
                 const uData = uSnap.exists() ? uSnap.data() : {};

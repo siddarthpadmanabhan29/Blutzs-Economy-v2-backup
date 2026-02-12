@@ -48,6 +48,40 @@
       border: 1px solid var(--contract-border);
     }
 
+    /* Membership CSS */
+    .plans-container {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      margin-top: 15px;
+    }
+
+    .plan-card {
+      background: var(--contract-bg);
+      border: 1px solid var(--contract-border);
+      padding: 15px;
+      border-radius: 12px;
+      flex: 1;
+      min-width: 200px;
+      text-align: center;
+      transition: transform 0.2s;
+    }
+
+    .plan-card:hover { transform: translateY(-3px); }
+
+    .plan-card h4 { margin: 0 0 10px 0; font-size: 1.1em; }
+    .plan-price { font-size: 1.2em; font-weight: 800; color: #2ecc71; margin-bottom: 10px; }
+    .plan-perks { 
+        text-align: left; 
+        font-size: 0.8em; 
+        list-style: none; 
+        padding: 0; 
+        margin: 10px 0; 
+        opacity: 0.9;
+    }
+    .plan-perks li { margin-bottom: 5px; display: flex; align-items: flex-start; gap: 5px; }
+
     /* Contract Notification Bar Animation */
     @keyframes pulse-red {
       0% { opacity: 1; transform: scale(1); }
@@ -70,6 +104,17 @@
       border-radius: 12px;
       padding: 10px;
       border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Status Billing Box */
+    .billing-status-box {
+      background: rgba(46, 204, 113, 0.1);
+      border: 1px dashed #2ecc71;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 0.9em;
+      text-align: center;
     }
   </style>
 </head>
@@ -113,7 +158,7 @@
           </div>
         </div>
         
-        <p><strong>Username:</strong> <span id="profile-username"></span></p>
+        <p><strong>Username:</strong> <span id="profile-username"></span> <span id="profile-membership-badge"></span></p>
         <p><strong>ID:</strong> <span id="profile-uid"></span></p>
         <p><strong>Renewed On:</strong> <span id="profile-renewal"></span></p>
         <p><strong>Expires On:</strong> <span id="profile-expiration"></span></p>
@@ -121,6 +166,61 @@
             <strong>Employment:</strong> <span id="employment-status"></span></p>
         <button id="renew-btn" class="btn-primary" type="button">Request Renewal</button>
       </section>
+
+      <section class="section-card" style="border: 2px solid #2ecc71;">
+    <h3 style="color: #2ecc71;">💎 Membership Plans</h3>
+    <p style="font-size: 0.85em; opacity: 0.8;">Subscribe for exclusive perks and lower taxes. Auto-renews monthly.</p>
+    
+    <div id="membership-billing-info" class="billing-status-box hidden"></div>
+
+    <div class="plans-container">
+        <div class="plan-card">
+            <h4>🟢 Basic</h4>
+            <div class="plan-price">$100,000/Month</div>
+            <ul class="plan-perks">
+                <li>✅ 8% Shop Tax</li>
+                <li>✅ 4% Retirement Interest</li>
+                <li>✅ 1% Usage Cashback</li>
+                <li>✅ 1 Free Shop Item after every 3 used</li>
+                <li>✅ Basic Plan Profile Badge</li>
+            </ul>
+            <button class="btn-primary join-plan-btn" data-plan="basic">Join Basic</button>
+        </div>
+
+        <div class="plan-card" style="border-color: #9b59b6;">
+            <h4 style="color: #9b59b6;">💎 Premium</h4>
+            <div class="plan-price">$300,000/Month</div>
+            <ul class="plan-perks">
+                <li>✅ 4% Shop Tax</li>
+                <li>✅ 5% Retirement Interest</li>
+                <li>✅ 2% Usage Cashback</li>
+                <li>✅ 1 Free Shop Item after every 2 used</li>
+                <li>✅ Earn 10 BPS per shop purchase</li>
+                <li>✅ Premium Plan Profile Badge</li>
+            </ul>
+            <button class="btn-primary join-plan-btn" data-plan="premium" style="background-color: #9b59b6;">Join Premium</button>
+        </div>
+
+        <div class="plan-card" style="border-color: #f1c40f;">
+            <h4 style="color: #f1c40f;">👑 Platinum</h4>
+            <div class="plan-price">$500,000/Month</div>
+            <ul class="plan-perks">
+                <li>✅ 0% Shop Tax (Tax Exempt!)</li>
+                <li>✅ 5% Retirement Interest</li>
+                <li>✅ 3% Usage Cashback</li>
+                <li>✅ 1 Free Shop Item after every 1 used</li>
+                <li>✅ Earn 20 BPS per shop purchase</li>
+                <li>✅ Free Custom Nav Color</li>
+                <li>✅ Platinum Plan Profile Badge</li>
+            </ul>
+            <button class="btn-primary join-plan-btn" data-plan="platinum" style="background-color: #f1c40f;">Join Platinum</button>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 15px;">
+        <button id="cancel-plan-btn" class="btn-danger hidden" style="font-size: 0.8em;">Cancel Membership</button>
+    </div>
+</section>
 
       <section id="user-contract-section" class="section-card">
         <h3>My Sports Contract</h3>
@@ -175,7 +275,7 @@
       <section class="section-card">
         <h3>Retirement Savings</h3>
         <p>Total Savings: $<span id="retirement-savings">0</span></p>
-        <p>Interest (3% monthly): $<span id="retirement-interest">0</span></p>
+        <p id="retirement-interest">Interest (3%): $0.00</p>
         <p>Days until interest: <span id="retirement-days">0</span></p>
         <div class="retirement-actions">
           <input type="number" id="retirement-deposit" placeholder="Deposit Amount">
@@ -285,6 +385,45 @@
     <button id="admin-set-employment-btn" class="btn-primary" type="button">Set Status</button>
     <p><strong>User:</strong> <span id="admin-employment-user-info" style="color: gray;">N/A</span></p>
 
+    <div class="admin-section">
+    <h3 style="color: #2ecc71;">💎 Membership & Trial Manager</h3>
+    <p style="font-size: 0.85em; color: gray; margin-bottom: 10px;">Grant or Revoke membership tiers and trials.</p>
+    
+    <input id="admin-trial-username" placeholder="Target Username" class="admin-input-adaptive" autocomplete="off" style="margin-bottom: 10px;">
+    <p id="admin-trial-user-info" style="color: gray; font-weight: bold; margin-bottom: 10px;">N/A</p>
+    
+    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <div style="flex: 2; display: flex; flex-direction: column; gap: 4px;">
+            <label class="contract-label">SELECT PLAN</label>
+            <select id="admin-trial-plan" class="admin-input-adaptive">
+                <option value="basic">Basic Plan</option>
+                <option value="premium">Premium Plan</option>
+                <option value="platinum">Platinum Plan</option>
+            </select>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label class="contract-label">DURATION</label>
+            <input id="admin-trial-duration" type="number" placeholder="Qty" class="admin-input-adaptive">
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <label class="contract-label">UNIT</label>
+            <select id="admin-trial-unit" class="admin-input-adaptive">
+                <option value="days">Days</option>
+                <option value="months">Months</option>
+            </select>
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 10px;">
+        <button id="admin-grant-trial-btn" class="btn-primary" style="flex: 2; background-color: #2ecc71; border-color: #27ae60;">
+            Grant Membership / Trial
+        </button>
+        <button id="admin-revoke-trial-btn" class="btn-danger" style="flex: 1; font-size: 0.8em;">
+            Revoke Current
+        </button>
+    </div>
+</div>
+
     <div id="admin-request-actions" style="margin-top: 15px; border-top: 1px solid var(--contract-border); padding-top: 15px;">
       <div style="display: flex; flex-direction: column; gap: 10px;">
         <div class="contract-inner-box" style="display: flex; justify-content: space-between; align-items: center;">
@@ -370,5 +509,6 @@
   <script type="module" src="cosmetics.js"></script> 
   <script type="module" src="loan.js"></script> 
   <script type="module" src="contracts.js"></script>
+  <script type="module" src="membership_plans.js"></script>
   </body>
 </html>

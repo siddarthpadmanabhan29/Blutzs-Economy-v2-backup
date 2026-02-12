@@ -1,9 +1,10 @@
-// ---------- retirement.js (UPDATED WITH LIMITS & CHART) ----------
+// ---------- retirement.js (MEMBERSHIP INTEGRATED + DYNAMIC PERCENTAGE) ----------
 console.log("retirement.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
+import { PLANS } from "./membership_plans.js";
 
 // ---------- Elements ----------
 const savingsEl = document.getElementById("retirement-savings");
@@ -14,9 +15,6 @@ const depositBtn = document.getElementById("retirement-deposit-btn");
 const withdrawInput = document.getElementById("retirement-withdraw");
 const withdrawBtn = document.getElementById("retirement-withdraw-btn");
 const messageEl = document.getElementById("retirement-message");
-
-// --- CONSTANTS ---
-const DAILY_LIMIT = 500000;
 
 // --- LOCAL STATE ---
 let cachedUserData = null; 
@@ -29,6 +27,11 @@ function renderSavings(userData) {
   
   cachedUserData = userData;
 
+  // Membership Data
+  const tier = userData.membershipLevel || 'standard';
+  const plan = PLANS[tier];
+  const interestRatePercent = (plan.interest * 100).toFixed(0);
+  
   const savings = Number(userData.retirementSavings || 0);
   const status = userData.employmentStatus || "Unemployed";
 
@@ -38,11 +41,15 @@ function renderSavings(userData) {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   savingsEl.textContent = savings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  interestEl.textContent = (savings * 0.03).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  
+  // Dynamic Interest Display based on Plan: Interest (X%): $amount
+  const calculatedInterest = savings * plan.interest;
+  interestEl.innerHTML = `Interest (${interestRatePercent}%): $${calculatedInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  
   daysEl.textContent = diffDays;
 
-  // Update Visual Chart
-  renderGrowthChart(savings);
+  // Update Visual Chart using plan interest
+  renderGrowthChart(savings, plan.interest);
 
   if (retirementBusy) {
     toggleInputs(true);
@@ -82,7 +89,7 @@ function getTodayLimitUsed(userData) {
 }
 
 // ---------- Visual Growth Graph (Chart.js) ----------
-function renderGrowthChart(currentSavings) {
+function renderGrowthChart(currentSavings, interestRate) {
     const canvas = document.getElementById('retirementChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -90,9 +97,9 @@ function renderGrowthChart(currentSavings) {
     const months = ["Now", "Mo 1", "Mo 2", "Mo 3", "Mo 4", "Mo 5", "Mo 6"];
     const dataPoints = [currentSavings];
     
-    // Simulate 3% monthly compounding growth for 6 months
+    // Use the dynamic interest rate from membership plans
     for (let i = 1; i < 7; i++) {
-        dataPoints.push(dataPoints[i-1] * 1.03);
+        dataPoints.push(dataPoints[i-1] * (1 + interestRate));
     }
 
     if (retirementChart) retirementChart.destroy();
@@ -103,7 +110,7 @@ function renderGrowthChart(currentSavings) {
         data: {
             labels: months,
             datasets: [{
-                label: 'Projected 6-Month Growth (3% Int)',
+                label: `Projected Growth (${(interestRate * 100).toFixed(0)}% Int)`,
                 data: dataPoints,
                 borderColor: '#2ecc71',
                 backgroundColor: 'rgba(46, 204, 113, 0.1)',
@@ -124,15 +131,18 @@ function renderGrowthChart(currentSavings) {
 // ---------- Deposit Logic ----------
 depositBtn?.addEventListener("click", async () => {
   if (retirementBusy || !auth.currentUser || !cachedUserData) {
-    return showMsg("⚠️ System initializing, try again in a second...", "error");
+    return showMsg("⚠️ System initializing...", "error");
   }
 
   const amount = parseFloat(depositInput.value);
   if (isNaN(amount) || amount <= 0) return showMsg("⚠️ Enter a valid deposit amount", "error");
 
-  // Check Daily Limit
+  // Check Daily Limit (Platinum Plan has no limits)
+  const tier = cachedUserData.membershipLevel || 'standard';
+  const DAILY_LIMIT = 500000;
   const dailyUsed = getTodayLimitUsed(cachedUserData);
-  if (dailyUsed + amount > DAILY_LIMIT) {
+  
+  if (tier !== 'platinum' && (dailyUsed + amount > DAILY_LIMIT)) {
       return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
   }
 
@@ -176,9 +186,12 @@ withdrawBtn?.addEventListener("click", async () => {
   const amount = parseFloat(withdrawInput.value);
   if (isNaN(amount) || amount <= 0) return showMsg("⚠️ Enter a valid withdrawal amount", "error");
 
-  // Check Daily Limit
+  // Check Daily Limit (Platinum Plan has no limits)
+  const tier = cachedUserData.membershipLevel || 'standard';
+  const DAILY_LIMIT = 500000;
   const dailyUsed = getTodayLimitUsed(cachedUserData);
-  if (dailyUsed + amount > DAILY_LIMIT) {
+  
+  if (tier !== 'platinum' && (dailyUsed + amount > DAILY_LIMIT)) {
       return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
   }
 
@@ -223,7 +236,11 @@ async function applyInterestIfFirstDay(userData) {
   const monthKey = now.toISOString().slice(0, 7); 
   if (userData.lastInterestApplied?.startsWith(monthKey)) return;
 
-  const interest = userData.retirementSavings * 0.03;
+  // Use Tier-Based Interest
+  const tier = userData.membershipLevel || 'standard';
+  const interestRate = PLANS[tier].interest;
+  const interest = userData.retirementSavings * interestRate;
+  
   const userRef = doc(db, "users", auth.currentUser.uid);
 
   try {
@@ -232,7 +249,7 @@ async function applyInterestIfFirstDay(userData) {
       lastInterestApplied: now.toISOString()
     });
 
-    await logHistory(auth.currentUser.uid, `Monthly Interest Gained: $${interest.toFixed(2)}`, "usage");
+    await logHistory(auth.currentUser.uid, `Monthly Interest (${(interestRate * 100).toFixed(0)}%): $${interest.toFixed(2)}`, "usage");
   } catch (err) {
     console.error("Interest application failed:", err);
   }

@@ -1329,3 +1329,36 @@ body.dark-mode {
     --border-color: #333333;
     --input-bg: rgba(255, 255, 255, 0.03);
 }
+
+/* Fix for Admin Section Visibility */
+.admin-section {
+    background: var(--contract-bg);
+    color: var(--contract-text);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--contract-border);
+    margin-top: 20px;
+}
+
+/* Ensure Dropdowns and Inputs are visible in Dark Mode */
+.admin-input-adaptive {
+    background: var(--contract-bg) !important;
+    color: var(--contract-text) !important;
+    border: 1px solid var(--contract-border) !important;
+    padding: 8px;
+    border-radius: 8px;
+    width: 100%;
+    outline: none;
+}
+
+/* Fix for Select Options (some browsers need this for dark mode) */
+.admin-input-adaptive option {
+    background: var(--contract-bg);
+    color: var(--contract-text);
+}
+
+/* Sub-headings in Admin Panel */
+.admin-section h3 {
+    color: var(--contract-text);
+    margin-bottom: 10px;
+}

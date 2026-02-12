@@ -3,7 +3,7 @@ console.log("dashboard.js loaded");
 
 import { auth, db } from "./firebaseConfig.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { doc, onSnapshot, updateDoc, collection, query, orderBy, limit, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { doc, onSnapshot, updateDoc, collection, query, orderBy, limit, getDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 import { renderSavings } from "./retirement.js"; 
 import { applyInterest, takeOutLoan, repayLoan, getCreditStatus } from "./loan.js"; 
@@ -16,12 +16,15 @@ import { renderShop } from "./shop.js";
 import { renderBpsShop } from "./bpsShop.js";
 import { loadCosmetics } from "./cosmetics.js"; 
 
+// --- MEMBERSHIP IMPORTS ---
+import { PLANS, checkMembershipBilling, getTierBadge, getNextBillingDate } from "./membership_plans.js";
+
 /* =========================================================
     QUOTA PROTECTION: LISTENER MANAGER
 ========================================================= */
 let unsubUser = null;
 let unsubHistory = null;
-let listenersInitialized = false; // Flag to prevent redundant contract/roster listener spikes
+let listenersInitialized = false; 
 
 /* =========================================================
     CONNECTION STATUS UI ELEMENTS
@@ -81,7 +84,6 @@ let cachedHistory = [];
 ========================================================= */
 function getESTDate(offsetDays = 0) {
     const now = new Date();
-    // Adjust to EST (UTC-5)
     const estOffset = now.getTime() + (now.getTimezoneOffset() * 60000) - (5 * 3600000);
     const estDate = new Date(estOffset);
     estDate.setDate(estDate.getDate() + offsetDays);
@@ -103,10 +105,8 @@ function applyTheme(theme) {
 
 /**
  * REFACTORED AUTH STATE LOGIC
- * Optimized to prevent listener spikes and redundant registration
  */
 onAuthStateChanged(auth, async (user) => {
-  // Clear existing data listeners on state change
   if (unsubUser) { unsubUser(); unsubUser = null; }
   if (unsubHistory) { unsubHistory(); unsubHistory = null; }
 
@@ -114,7 +114,7 @@ onAuthStateChanged(auth, async (user) => {
     dashboard.classList.add("hidden");
     adminPanel.classList.add("hidden");
     currentDashboardData = null;
-    listenersInitialized = false; // Reset initialization flag on logout
+    listenersInitialized = false; 
     
     if (statusDot) {
         statusDot.style.backgroundColor = "#bbb";
@@ -130,8 +130,6 @@ onAuthStateChanged(auth, async (user) => {
 
   dashboard.classList.remove("hidden");
 
-  // INITIALIZE PERSISTENT LISTENERS ONLY ONCE PER SESSION
-  // This prevents the contract/roster logic from re-running every time the auth state flickers
   if (!listenersInitialized) {
       listenForContractOffers(user.uid);
       listenForAdminRoster(); 
@@ -140,6 +138,7 @@ onAuthStateChanged(auth, async (user) => {
 
   const userRef = doc(db, "users", user.uid);
   let themeAppliedOnce = false; 
+  let billingCheckedOnce = false;
 
   unsubUser = onSnapshot(userRef, async snap => { 
     if (statusDot) {
@@ -155,6 +154,12 @@ onAuthStateChanged(auth, async (user) => {
     if (!snap.exists()) return;
     currentDashboardData = snap.data();
 
+    // 1. Check Membership Billing once per login session
+    if (!billingCheckedOnce) {
+        await checkMembershipBilling(user.uid, currentDashboardData);
+        billingCheckedOnce = true;
+    }
+
     await applyInterest(user.uid, currentDashboardData);
 
     if (!themeAppliedOnce) {
@@ -167,13 +172,10 @@ onAuthStateChanged(auth, async (user) => {
 
     updateDashboardUI(user);
 
-    // Render components based on the new data snapshot
     if (typeof renderShop === "function") renderShop(currentDashboardData);
     if (typeof renderBpsShop === "function") renderBpsShop(currentDashboardData);
     if (typeof loadCosmetics === "function") loadCosmetics(currentDashboardData);
     if (typeof renderSavings === "function") renderSavings(currentDashboardData); 
-    
-    // Note: renderUserContract is a UI update, while listenForContractOffers (above) is the data link.
     if (typeof renderUserContract === "function") renderUserContract(user.uid, currentDashboardData);
 
   }, (error) => {
@@ -195,8 +197,6 @@ onAuthStateChanged(auth, async (user) => {
   unsubHistory = onSnapshot(q, (snapshot) => {
     cachedHistory = [];
     snapshot.forEach(doc => cachedHistory.push(doc.data()));
-    
-    // DEFAULT DATE LOGIC: FROM = Yesterday, TO = Today (EST)
     if (dateFilterInput && !dateFilterInput.value) {
         dateFilterInput.value = getESTDate(-1);
         endDateFilterInput.value = getESTDate(0);
@@ -206,7 +206,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 /* =========================================================
-    UNIFIED HISTORY RENDERING (UPDATED FOR CLEAN UI)
+    UNIFIED HISTORY RENDERING
 ========================================================= */
 function renderUnifiedHistory() {
     if (!unifiedHistoryList) return;
@@ -224,7 +224,6 @@ function renderUnifiedHistory() {
       const entryDate = new Date(entry.timestamp);
       const entryMsg = entry.message.toLowerCase();
       const matchesSearch = entryMsg.includes(searchTerm);
-      
       const logTime = entryDate.getTime();
       return matchesSearch && logTime >= filterStartTime && logTime <= filterEndTime;
     });
@@ -241,14 +240,12 @@ function renderUnifiedHistory() {
     filtered.forEach(entry => {
         let icon = getHistoryIcon(entry.type);
         const timeStr = getRelativeTime(new Date(entry.timestamp));
-        
-        // Colors & Branding Logic
         let statusColor = "var(--text-color)"; 
         let borderColor = "#888"; 
 
         if (entry.message.includes("Rejected") || entry.message.includes("Denied") || entry.message.includes("Terminated") || 
             entry.message.includes("Sent") || entry.message.includes("Voided") || entry.message.includes("CUT")) {
-            borderColor = "#e74c3c"; // Red
+            borderColor = "#e74c3c"; 
             if (entry.message.includes("Denied") || entry.message.includes("Sent") || entry.message.includes("CUT")) {
                 statusColor = "#e74c3c";
             }
@@ -256,30 +253,26 @@ function renderUnifiedHistory() {
         else if (entry.message.includes("Paid") || entry.message.includes("Approved") || 
                  entry.message.includes("Traded") || entry.message.includes("Signed") || 
                  entry.message.includes("Received") || entry.message.includes("Took")) {
-            borderColor = "#2ecc71"; // Green
+            borderColor = "#2ecc71"; 
         }
         else if (entry.type === "admin") {
-            borderColor = "#9b59b6"; // Purple Admin border as shown in requested image
+            borderColor = "#9b59b6"; 
         }
         else if (entry.message.includes("Status") || entry.message.includes("Withdrawn") || entry.message.includes("Extension")) {
-            borderColor = "#3498db"; // Blue
+            borderColor = "#3498db"; 
         }
 
-        // Template matches the clean image version with adaptive colors for light/dark mode
         unifiedHistoryList.innerHTML += `
             <div class="history-entry" style="display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color, #eee); gap: 15px; width: 100%;">
-                
                 <div style="flex-shrink: 0; width: 42px; height: 42px; background: var(--card-bg, #fff); border: 2.5px solid ${borderColor}; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                     ${icon}
                 </div>
-                
                 <div style="flex-grow: 1; min-width: 0;">
                     <div class="history-message" style="color: ${statusColor}; font-weight: 500; font-size: 0.95rem; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis;">
                         ${entry.message}
                     </div>
                     <div class="history-time" style="font-size: 0.8rem; color: var(--text-muted, #999);">${timeStr}</div>
                 </div>
-
                 <div class="history-type-tag" style="flex-shrink: 0; font-size: 0.65rem; color: var(--text-muted, #666); background: var(--input-bg, #f5f5f5); padding: 4px 10px; border-radius: 6px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; border: 1px solid var(--border-color, #e0e0e0); min-width: 75px; text-align: center;">
                     ${entry.type}
                 </div>
@@ -295,6 +288,7 @@ function getHistoryIcon(type) {
       case "usage":        return "🧪";
       case "admin":        return "🛡️";
       case "contract":     return "📝";
+      case "membership":   return "💎"; // Icon for memberships
       default:             return "📄";
     }
 }
@@ -316,6 +310,47 @@ function updateDashboardUI(user) {
   userBalance.textContent = `$${balance.toLocaleString()}`;
   profileUsername.textContent = data.username || user.email.split("@")[0];
   profileUid.textContent = user.uid.slice(0, 8);
+
+  // --- MEMBERSHIP UI UPDATES ---
+  const tier = data.membershipLevel || 'standard';
+  const profileBadge = document.getElementById("profile-membership-badge");
+  const cancelBtn = document.getElementById("cancel-plan-btn");
+  const billingInfoEl = document.getElementById("membership-billing-info");
+
+  if (profileBadge) profileBadge.innerHTML = getTierBadge(tier);
+  if (cancelBtn) cancelBtn.classList.toggle("hidden", tier === 'standard');
+
+  // Logic for Plan Buttons (In Use / Trial Active)
+  const onTrial = !!data.trialExpiration;
+  document.querySelectorAll(".join-plan-btn").forEach(btn => {
+      const btnPlan = btn.dataset.plan;
+      if (onTrial) {
+          btn.disabled = true;
+          btn.textContent = "Trial Active 🔒";
+          btn.style.opacity = "0.6";
+      } else if (tier === btnPlan) {
+          btn.disabled = true;
+          btn.textContent = "Current Plan ✅";
+          btn.style.backgroundColor = "#27ae60";
+      } else {
+          btn.disabled = false;
+          btn.textContent = `Join ${PLANS[btnPlan].label}`;
+          btn.style.backgroundColor = ""; // Reset
+          btn.style.opacity = "1";
+      }
+  });
+
+  // Display Billing Info (Now using Same-Day-Each-Month data)
+  if (billingInfoEl) {
+      if (tier !== 'standard' || onTrial) {
+          const nextDate = getNextBillingDate(data);
+          billingInfoEl.innerHTML = `Next Billing/Trial Renewal: <strong>${nextDate}</strong>`;
+          billingInfoEl.classList.remove("hidden");
+      } else {
+          billingInfoEl.classList.add("hidden");
+      }
+  }
+
   const score = data.creditScore || 600;
   const status = getCreditStatus(score);
   if (displayCreditScore) {
@@ -327,7 +362,6 @@ function updateDashboardUI(user) {
       if (debtAmountEl) debtAmountEl.textContent = `$${activeDebt.toLocaleString()}`;
       if (dailyInterestEl) dailyInterestEl.textContent = `$${(activeDebt * 0.05).toLocaleString()}`;
       
-      // --- LOAN DUE DATE DISPLAY ---
       const dueDateEl = document.getElementById("loan-due-date");
       if (dueDateEl && data.loanDeadline) {
           const dueDate = new Date(data.loanDeadline);
@@ -402,6 +436,58 @@ function updateDashboardUI(user) {
 }
 
 /* =========================================================
+    MEMBERSHIP HANDLERS
+========================================================= */
+window.joinPlan = async (planKey) => {
+    if (!auth.currentUser || !currentDashboardData) return;
+    const plan = PLANS[planKey];
+    const userRef = doc(db, "users", auth.currentUser.uid);
+
+    if (currentDashboardData.trialExpiration) {
+        alert("You cannot join a paid plan while an active free trial is running.");
+        return;
+    }
+
+    if (!confirm(`Join ${plan.label} for $${plan.price.toLocaleString()}/month?`)) return;
+
+    if (currentDashboardData.balance < plan.price) {
+        alert("Insufficient funds for the first month!");
+        return;
+    }
+
+    try {
+        await updateDoc(userRef, {
+            membershipLevel: planKey,
+            balance: increment(-plan.price),
+            membershipLastPaid: new Date().toISOString(),
+            shopOrderCount: 0
+        });
+        await logHistory(auth.currentUser.uid, `Subscribed to ${plan.label} Plan (-$${plan.price.toLocaleString()})`, "membership");
+        alert(`Welcome to ${plan.label}! Your perks are now active.`);
+    } catch (err) {
+        console.error(err);
+        alert("Failed to join plan.");
+    }
+};
+
+const cancelPlanBtn = document.getElementById("cancel-plan-btn");
+cancelPlanBtn?.addEventListener("click", async () => {
+    if (!auth.currentUser) return;
+    if (!confirm("Are you sure you want to cancel your membership? You will revert to Standard status immediately.")) return;
+
+    try {
+        await updateDoc(doc(db, "users", auth.currentUser.uid), {
+            membershipLevel: "standard",
+            shopOrderCount: 0
+        });
+        await logHistory(auth.currentUser.uid, "Cancelled Membership Subscription", "membership");
+        alert("Membership cancelled.");
+    } catch (err) {
+        console.error(err);
+    }
+});
+
+/* =========================================================
     EVENT LISTENERS
 ========================================================= */
 dateFilterInput?.addEventListener("change", renderUnifiedHistory);
@@ -409,7 +495,6 @@ endDateFilterInput?.addEventListener("change", renderUnifiedHistory);
 searchFilterInput?.addEventListener("input", renderUnifiedHistory);
 
 clearFiltersBtn?.addEventListener("click", () => {
-    // RESET TO DEFAULT: Yesterday and Today (EST)
     dateFilterInput.value = getESTDate(-1);
     endDateFilterInput.value = getESTDate(0);
     searchFilterInput.value = "";
@@ -451,11 +536,15 @@ loanAmountSelect?.addEventListener("change", () => {
     else if (amount === 1000000) { msgEl.textContent = "✨ Requirement: Elite Status (750-850)"; msgEl.style.color = "#f1c40f"; }
 });
 
-// --- UPDATED PLAYER REQUEST EVENT LISTENERS ---
 document.addEventListener('click', async (e) => {
     if (!auth.currentUser) return;
 
-    // 1. Handle Trade Request
+    // Handle Membership "Join" Buttons
+    if (e.target.classList.contains('join-plan-btn')) {
+        const planKey = e.target.dataset.plan;
+        await window.joinPlan(planKey);
+    }
+
     if (e.target.id === 'request-trade-btn') {
         if (!confirm("Are you sure you want to request a trade? The League Office will be notified.")) return;
         try {
@@ -469,7 +558,6 @@ document.addEventListener('click', async (e) => {
         }
     }
 
-    // 2. Handle Release Request
     if (e.target.id === 'request-release-btn') {
         const msg = "Requesting a release will terminate your contract if approved. Continue?";
         if (!confirm(msg)) return;

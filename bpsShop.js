@@ -113,6 +113,7 @@ async function buyBpsItem(itemId, btnElement) {
         return resetBtn(btnElement);
     }
 
+    // BPS SHOP CLEANUP: Coupons always cost BPS now as free perks were removed
     if(userData.bpsBalance < itemData.cost) {
         alert("Not enough BPS Tokens!");
         return resetBtn(btnElement);
@@ -130,7 +131,8 @@ async function buyBpsItem(itemId, btnElement) {
       type: "coupon", 
       discountValue: itemData.value, 
       value: 0, 
-      acquiredAt: new Date().toISOString()
+      acquiredAt: new Date().toISOString(),
+      isFree: false // Coupons are never free items via membership perks
     });
 
     alert(`Bought ${itemData.name}! Check your inventory.`);
