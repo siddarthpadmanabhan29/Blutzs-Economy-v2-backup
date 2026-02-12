@@ -1,4 +1,4 @@
-// ---------- shop.js (QUOTA OPTIMIZED) ----------
+// ---------- shop.js (QUOTA OPTIMIZED + CONFIRMATION TAX) ----------
 console.log("shop.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -24,15 +24,12 @@ async function loadShopItems() {
   const shopRef = collection(db, "shop");
 
   try {
-    // ONE-TIME FETCH: Instead of a live listener, we fetch the shop catalog once.
-    // This stops the "constant reading" that kills your quota.
     const querySnap = await getDocs(shopRef);
     currentShopItems = [];
     querySnap.forEach((doc) => {
       currentShopItems.push({ id: doc.id, ...doc.data() });
     });
 
-    // Fetch user data once for the initial render
     const userSnap = await getDoc(doc(db, "users", user.uid));
     if (userSnap.exists()) {
       localUserData = userSnap.data();
@@ -46,12 +43,10 @@ async function loadShopItems() {
 
 /**
  * Renders the shop UI based on local variables.
- * No database reads happen inside this function.
  */
 function renderShop(externalUserData = null) {
   if (!shopItemsContainer) return;
 
-  // If dashboard.js passes us fresh user data, use it. Otherwise use our local cache.
   if (externalUserData) localUserData = externalUserData;
   
   shopItemsContainer.innerHTML = "";
@@ -64,26 +59,30 @@ function renderShop(externalUserData = null) {
   const userBalance = Number(localUserData?.balance || 0);
   const activeDiscount = Number(localUserData?.activeDiscount || 0);
 
-  // --- CHECK EXPIRATION ---
   const now = new Date();
   const expirationDate = localUserData?.expirationDate ? new Date(localUserData.expirationDate) : null;
   const isExpired = expirationDate && expirationDate < now;
 
   currentShopItems.forEach((item) => {
     const originalCost = Number(item.cost);
-    let finalCost = originalCost;
-    let priceDisplay = `$${originalCost.toLocaleString()}`;
-
+    
+    let discountedPrice = originalCost;
     if (activeDiscount > 0) {
-      finalCost = Math.floor(originalCost * (1 - activeDiscount));
-      priceDisplay = `
-        <span style="text-decoration: line-through; color: gray; font-size: 0.8em;">$${originalCost}</span> 
-        <span style="color: #2ecc71; font-weight: bold;">$${finalCost}</span>
-        <span style="font-size: 0.7em; color: #e74c3c;">(-${activeDiscount * 100}%)</span>
-      `;
+      discountedPrice = Math.floor(originalCost * (1 - activeDiscount));
     }
 
-    const affordable = userBalance >= finalCost;
+    // Keep background math for button disabling (Total Cost = Price + 10%)
+    const totalCost = Math.floor(discountedPrice * 1.10);
+
+    // UI shows ONLY the base price for a clean look
+    let priceDisplay = `
+      <div style="font-weight: bold; font-size: 1.1em;">
+        ${activeDiscount > 0 ? `<span style="text-decoration: line-through; color: gray; font-size: 0.8em;">$${originalCost.toLocaleString()}</span> ` : ""}
+        $${discountedPrice.toLocaleString()}
+      </div>
+    `;
+
+    const affordable = userBalance >= totalCost;
     const isDisabled = !affordable || isExpired;
 
     let btnText = affordable ? "Buy" : "Need Cash 💸";
@@ -99,7 +98,7 @@ function renderShop(externalUserData = null) {
       </div>
       <div class="shop-item-info">
         <h4>${item.name}</h4>
-        <p class="shop-price">${priceDisplay}</p>
+        <div class="shop-price">${priceDisplay}</div>
         <button class="btn-primary buy-item-btn" data-id="${item.id}" ${isDisabled ? "disabled" : ""}>
           ${btnText}
         </button>
@@ -115,8 +114,7 @@ function renderShop(externalUserData = null) {
 function attachBuyListeners() {
   document.querySelectorAll(".buy-item-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
-        btn.disabled = true;
-        btn.textContent = "Processing...";
+        // We trigger the popup before disabling the button for better UX
         await buyItem(btn.dataset.id, btn);
     });
   });
@@ -131,7 +129,6 @@ async function buyItem(itemId, btnElement) {
   const inventoryRef = collection(db, "users", user.uid, "inventory");
 
   try {
-    // We use getDoc here because a purchase MUST have the most accurate current data
     const [userSnap, itemSnap] = await Promise.all([getDoc(userRef), getDoc(itemRef)]);
     
     if (!userSnap.exists() || !itemSnap.exists()) {
@@ -153,17 +150,36 @@ async function buyItem(itemId, btnElement) {
     const currentBPS = Number(userData.bpsBalance || 0);
     const activeDiscount = Number(userData.activeDiscount || 0);
     
-    let finalCost = Number(itemData.cost);
+    // --- CALCULATE COSTS ---
+    let basePrice = Number(itemData.cost);
     if (activeDiscount > 0) {
-        finalCost = Math.floor(finalCost * (1 - activeDiscount));
+        basePrice = Math.floor(basePrice * (1 - activeDiscount));
+    }
+    const taxAmount = Math.floor(basePrice * 0.10);
+    const totalCost = basePrice + taxAmount;
+
+    // --- TAX CONFIRMATION POPUP ---
+    const confirmMsg = `Confirm Purchase: ${itemData.name}\n\n` +
+                       `Price: $${basePrice.toLocaleString()}\n` +
+                       `Sales Tax (10%): $${taxAmount.toLocaleString()}\n` +
+                       `---------------------------\n` +
+                       `Total Deduction: $${totalCost.toLocaleString()}\n\n` +
+                       `Would you like to proceed?`;
+
+    if (!confirm(confirmMsg)) {
+        return resetBtn(btnElement); // User cancelled
     }
 
-    if (currentBalance < finalCost) {
-        alert("Insufficient funds!");
+    // Now disable and process
+    btnElement.disabled = true;
+    btnElement.textContent = "Processing...";
+
+    if (currentBalance < totalCost) {
+        alert(`Insufficient funds! Total cost with tax is $${totalCost.toLocaleString()}`);
         return resetBtn(btnElement);
     }
 
-    const newBalance = currentBalance - finalCost;
+    const newBalance = currentBalance - totalCost;
     const newBPS = currentBPS + 5; 
 
     await updateDoc(userRef, {
@@ -172,18 +188,17 @@ async function buyItem(itemId, btnElement) {
       activeDiscount: 0
     });
 
-    await logHistory(user.uid, `Bought ${itemData.name} for $${finalCost}`, "purchase");
+    await logHistory(user.uid, `Bought ${itemData.name}: $${basePrice.toLocaleString()} + $${taxAmount.toLocaleString()} tax`, "purchase");
 
     await addDoc(inventoryRef, {
       name: itemData.name,
-      value: Math.floor(finalCost / 2),
+      value: Math.floor(basePrice / 2),
       originalId: itemId,
       acquiredAt: new Date().toISOString()
     });
     
-    alert(`Purchased ${itemData.name} for $${finalCost}!`);
+    alert(`Purchased ${itemData.name}! \nTotal paid: $${totalCost.toLocaleString()}`);
     
-    // Refresh local cache after purchase
     localUserData = { ...userData, balance: newBalance, bpsBalance: newBPS, activeDiscount: 0 };
     renderShop();
 
@@ -201,16 +216,14 @@ function resetBtn(btn) {
     }
 }
 
-// Initialize on Auth
 auth.onAuthStateChanged((user) => { 
     if (user) loadShopItems(); 
 });
 
-// The heartbeat is now purely visual/local. It does NOT read from the database.
 setInterval(() => {
   if (localUserData) {
     renderShop(); 
   }
-}, 10000); // Increased to 10s to save CPU; since data is local, this is safe.
+}, 10000);
 
 export { loadShopItems, renderShop };
