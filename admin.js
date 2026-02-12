@@ -1,11 +1,12 @@
 // ---------- admin.js (QUOTA OPTIMIZED) ----------
 console.log("admin.js loaded");
 
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth, secondaryAuth } from "./firebaseConfig.js"; // Added secondaryAuth
 import { 
   collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot, deleteDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { showScreen } from "./auth.js"; 
+import { createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"; // Added Auth imports
+import { showScreen, createOrUpdateUserDoc } from "./auth.js"; 
 import { logHistory } from "./historyManager.js";
 import { PLANS } from "./membership_plans.js";
 
@@ -38,7 +39,7 @@ const adminTrialPlan = document.getElementById("admin-trial-plan");
 const adminTrialDuration = document.getElementById("admin-trial-duration");
 const adminTrialUnit = document.getElementById("admin-trial-unit");
 const adminGrantTrialBtn = document.getElementById("admin-grant-trial-btn");
-const adminRevokeTrialBtn = document.getElementById("admin-revoke-trial-btn"); // New Button
+const adminRevokeTrialBtn = document.getElementById("admin-revoke-trial-btn"); 
 
 // --- QUOTA PROTECTION STATE ---
 let balanceListener = null; 
@@ -202,7 +203,6 @@ async function grantTrialMembership() {
         const targetUserDoc = snap.docs[0];
         const targetUid = targetUserDoc.id;
 
-        // Calculate Expiration
         let expirationDate = new Date();
         if (unit === "days") {
             expirationDate.setDate(expirationDate.getDate() + duration);
@@ -228,7 +228,6 @@ async function grantTrialMembership() {
     }
 }
 
-// NEW: Revoke Membership Function
 async function revokeMembership() {
     const targetUsername = adminTrialUsername.value.trim().toLowerCase();
     if (!targetUsername) return alert("Please enter a username to revoke.");
