@@ -1,4 +1,4 @@
-// ---------- shop.js (QUOTA OPTIMIZED + USAGE-BASED PERKS) ----------
+// ---------- shop.js (QUOTA OPTIMIZED + USAGE-BASED PERKS + SLACK NOTIFICATIONS) ----------
 console.log("shop.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -7,6 +7,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 import { PLANS, isNextItemFree } from "./membership_plans.js";
+import { sendSlackMessage } from "./slackNotifier.js"; // <-- NEW
 
 const shopItemsContainer = document.getElementById("shop-items");
 
@@ -216,6 +217,11 @@ async function buyItem(itemId, btnElement) {
       acquiredAt: new Date().toISOString(),
       isFree: isFree 
     });
+
+    // --- SLACK NOTIFICATION ---
+    sendSlackMessage(
+      `${localUserData?.displayName || 'A user'} bought '${itemData.name}' for $${totalCost.toLocaleString()}!`
+    );
     
     alert(isFree ? `🎁 Enjoy your free item!` : `Purchased ${itemData.name}! \nTotal paid: $${totalCost.toLocaleString()}`);
     
