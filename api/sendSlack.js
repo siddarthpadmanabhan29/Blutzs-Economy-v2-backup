@@ -20,7 +20,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    const response = await fetch(process.env.SLACK_WEBHOOK_URL, {
+    const response = await fetch(process.env.SLACK_WEBHOOK, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
