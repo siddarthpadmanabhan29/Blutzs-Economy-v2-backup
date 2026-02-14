@@ -1,11 +1,6 @@
 // slackNotifier.js
 // Reusable function to send Slack notifications from the frontend
 
-/**
- * Sends a message to your Slack webhook via your Vercel serverless function.
- *
- * @param {string} message - The text message to send to Slack
- */
 export async function sendSlackMessage(message) {
   if (!message || typeof message !== "string") {
     console.warn("Slack message is empty or not a string. Skipping send.");
@@ -14,7 +9,7 @@ export async function sendSlackMessage(message) {
 
   try {
     const response = await fetch(
-      "https://slack-webhook-r4il3h249-siddarth-padmanabhan29.vercel.app/api/sendSlack",
+      "https://slack-webhook-lyart.vercel.app/api/sendSlack",
       {
         method: "POST",
         headers: {
