@@ -83,8 +83,7 @@ function renderShop(externalUserData = null) {
     let priceDisplay = `
       <div style="font-weight: bold; font-size: 1.1em;">
         ${isFree ? `<span style="color: #2ecc71;">FREE ITEM! 🎁</span>` : 
-          `${activeDiscount > 0 ? `<span style="text-decoration: line-through; color: gray; font-size: 0.8em;">$${originalCost.toLocaleString()}</span> ` : ""}
-           $${discountedPrice.toLocaleString()}`
+          `${activeDiscount > 0 ? `<span style="text-decoration: line-through; color: gray; font-size: 0.8em;">$${originalCost.toLocaleString()}</span> ` : ""} $${discountedPrice.toLocaleString()}`
         }
       </div>
     `;
@@ -198,8 +197,6 @@ async function buyItem(itemId, btnElement) {
       activeDiscount: 0
     };
 
-    // LOGIC CHANGE: We ONLY reset the counter if a free item was claimed.
-    // Progression (+1) now happens in inventory.js upon usage.
     if (isFree) {
         updates.shopOrderCount = 0;
     }
@@ -218,9 +215,11 @@ async function buyItem(itemId, btnElement) {
       isFree: isFree 
     });
 
-    // --- SLACK NOTIFICATION ---
+    // --- SLACK NOTIFICATION (username + timestamp) ---
+    const buyerName = localUserData?.displayName || localUserData?.username || 'Unknown user';
+    const timestamp = new Date().toLocaleString();
     sendSlackMessage(
-      `${localUserData?.displayName || 'A user'} bought '${itemData.name}' for $${totalCost.toLocaleString()}!`
+      `🛒 *Purchase Alert!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Amount:* $${totalCost.toLocaleString()} \n*Time:* ${timestamp}`
     );
     
     alert(isFree ? `🎁 Enjoy your free item!` : `Purchased ${itemData.name}! \nTotal paid: $${totalCost.toLocaleString()}`);
