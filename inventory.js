@@ -1,4 +1,4 @@
-// ---------- inventory.js (QUOTA OPTIMIZED + MEMBERSHIP USAGE TRACKING) ----------
+// ---------- inventory.js (QUOTA OPTIMIZED + MEMBERSHIP USAGE TRACKING + SLACK NOTIFICATIONS) ----------
 console.log("inventory.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -8,6 +8,7 @@ import {
 import { updateBalanceDisplay } from "./main.js";
 import { logHistory } from "./historyManager.js";
 import { PLANS } from "./membership_plans.js";
+import { sendSlackMessage } from "./slackNotifier.js"; // <-- NEW
 
 const inventoryContainer = document.getElementById("inventory-items");
 const inventoryValueEl = document.getElementById("inventory-value");
@@ -17,7 +18,6 @@ let unsubscribeInventory = null;
 
 function loadInventory() {
   auth.onAuthStateChanged(async (user) => {
-    // 1. If a listener is already running, kill it to save reads
     if (unsubscribeInventory) {
       unsubscribeInventory();
       unsubscribeInventory = null;
@@ -28,7 +28,6 @@ function loadInventory() {
     const userRef = doc(db, "users", user.uid);
     const invRef = collection(userRef, "inventory");
 
-    // 2. Store the new unsubscribe function
     unsubscribeInventory = onSnapshot(invRef, (snapshot) => {
       inventoryContainer.innerHTML = "";
       let totalValue = 0;
@@ -46,14 +45,13 @@ function loadInventory() {
         const itemCard = document.createElement("div");
         itemCard.classList.add("inventory-item");
         
-        // --- FREE ITEM UI CHECK ---
         const isFreeItem = item.isFree === true;
 
         if (item.type === 'coupon') {
             itemCard.classList.add('coupon-item'); 
             itemCard.style.border = "2px dashed #8e44ad"; 
         } else if (isFreeItem) {
-            itemCard.style.border = "2px solid #2ecc71"; // Special border for free items
+            itemCard.style.border = "2px solid #2ecc71"; 
         }
 
         itemCard.innerHTML = `
@@ -110,14 +108,20 @@ async function useItem(itemId, btnElement) {
     const tier = userData.membershipLevel || 'standard';
     const plan = PLANS[tier];
 
+    const buyerName = userData.displayName || userData.username || 'Unknown user';
+    const timestamp = new Date().toLocaleString();
+
     // 1. Handle Coupon Logic
     if (itemData.type === "coupon") {
-      await updateDoc(userRef, {
-        activeDiscount: itemData.discountValue
-      });
+      await updateDoc(userRef, { activeDiscount: itemData.discountValue });
       await logHistory(user.uid, `Activated Coupon: ${itemData.name}`, "usage");
       await deleteDoc(itemRef);
       alert(`✅ Coupon Activated! You now have ${(itemData.discountValue * 100)}% off.`);
+
+      // --- SLACK NOTIFICATION ---
+      sendSlackMessage(
+        `🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Type:* Coupon \n*Time:* ${timestamp}`
+      );
       return; 
     }
 
@@ -126,31 +130,22 @@ async function useItem(itemId, btnElement) {
     let cashbackMsg = "";
 
     if (itemData.type !== "coupon") {
-        // --- PERK A: Cashback ---
         if (plan.cashback > 0) {
             const purchasePriceEstimate = itemData.value * 2;
             const cashbackAmount = Math.floor(purchasePriceEstimate * plan.cashback);
-            
             if (cashbackAmount > 0) {
                 updates.balance = increment(cashbackAmount);
                 cashbackMsg = ` (Received $${cashbackAmount.toLocaleString()} Cashback!)`;
             }
         }
 
-        // --- PERK B: Order Counting ---
-        // Increment count only if:
-        // 1. The plan has a free frequency
-        // 2. The user isn't using an item they already got for free
         if (plan.shopFreeFreq > 0 && itemData.isFree !== true) {
             updates.shopOrderCount = increment(1);
         }
     }
 
-    // Execute combined updates
     if (Object.keys(updates).length > 0) {
         await updateDoc(userRef, updates);
-        
-        // Update local UI if balance changed
         if (updates.balance) {
             const cashbackVal = Math.floor((itemData.value * 2) * plan.cashback);
             updateBalanceDisplay(Number(userData.balance) + cashbackVal, "user-balance", "gain");
@@ -160,6 +155,11 @@ async function useItem(itemId, btnElement) {
     await logHistory(user.uid, `Used ${itemData.name}${cashbackMsg}`, "usage");
     await deleteDoc(itemRef);
     alert(`You used ${itemData.name}!${cashbackMsg}`);
+
+    // --- SLACK NOTIFICATION ---
+    sendSlackMessage(
+      `🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Type:* Regular \n*Time:* ${timestamp}`
+    );
 
   } catch(e) {
     console.error(e);
@@ -191,7 +191,6 @@ async function sellItem(itemId, btnElement) {
     const userData = userSnap.data();
     const item = itemSnap.data();
 
-    // --- FREE ITEM SELL BLOCK ---
     if (item.isFree === true) {
         alert("⛔ Membership 'Free Items' cannot be sold for cash.");
         if(btnElement) {
@@ -203,12 +202,17 @@ async function sellItem(itemId, btnElement) {
 
     const newBalance = (userData.balance || 0) + (item.value || 0);
 
-    await updateDoc(userRef, { 
-        balance: newBalance
-    });
+    await updateDoc(userRef, { balance: newBalance });
     await logHistory(user.uid, `Sold ${item.name} for $${item.value}`, "transfer-in");
     await deleteDoc(itemRef);
     updateBalanceDisplay(newBalance, "user-balance", "gain");
+
+    // --- SLACK NOTIFICATION ---
+    const sellerName = userData.displayName || userData.username || 'Unknown user';
+    const timestamp = new Date().toLocaleString();
+    sendSlackMessage(
+      `💰 *Item Sold!* \n*User:* ${sellerName} \n*Item:* ${item.name} \n*Amount:* $${item.value} \n*Time:* ${timestamp}`
+    );
 
   } catch(e) {
     alert("Error selling item: " + e.message);
