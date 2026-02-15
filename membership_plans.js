@@ -1,4 +1,4 @@
-// ---------- membership_plans.js (Updated for Complete Slack Notifications + New Subscriber Alerts) ----------
+// ---------- membership_plans.js (Updated for Complete Slack Notifications + Cost Display) ----------
 import { db } from "./firebaseConfig.js";
 import { 
     doc, updateDoc, increment, getDoc 
@@ -83,7 +83,6 @@ export function isNextItemFree(type, userData) {
 
 /**
  * BILLING & TRIAL CHECK: Processes monthly fees using Calendar Month logic.
- * Includes Slack notifications for all membership events.
  */
 export async function checkMembershipBilling(userId, userData) {
     const tier = userData.membershipLevel || 'standard';
@@ -100,10 +99,9 @@ export async function checkMembershipBilling(userId, userData) {
             });
             alert("Your Admin-granted Free Trial has expired. Reverting to Standard tier.");
 
-            // Slack notification: trial expiration downgrade
             const username = userData.displayName || userData.username || 'Unknown user';
             const timestamp = new Date().toLocaleString();
-            sendSlackMessage(`⚠️ *Membership Downgrade:* ${username}'s free trial expired. Reverted to Standard.\n*Time:* ${timestamp}`);
+            sendSlackMessage(`⏰ *Trial Expired:* ${username}'s free trial has ended. Reverted to Standard.\n*Time:* ${timestamp}`);
             return; 
         }
         return; 
@@ -123,46 +121,25 @@ export async function checkMembershipBilling(userId, userData) {
         const username = userData.displayName || userData.username || 'Unknown user';
         const timestamp = new Date().toLocaleString();
 
-        // --- New Subscriber Slack Notification ---
         if (isFirstSubscription) {
             sendSlackMessage(`💥 *New Subscriber:* ${username} subscribed to ${tier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
         }
 
         if ((userData.balance || 0) >= cost) {
-            // Auto-renew
             await updateDoc(doc(db, "users", userId), {
                 balance: increment(-cost),
                 membershipLastPaid: now.toISOString()
             });
-            console.log(`Auto-renewed ${tier} for $${cost}`);
-
-            // Slack notification: auto-renewal
             sendSlackMessage(`💳 *Membership Renewal:* ${username} renewed their ${tier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
         } else {
-            // Insufficient funds - demote to Standard
             await updateDoc(doc(db, "users", userId), {
                 membershipLevel: "standard",
                 shopOrderCount: 0
             });
             alert("Membership cancelled due to insufficient funds. Reverting to Standard.");
-
             sendSlackMessage(`⚠️ *Membership Cancelled:* ${username} could not renew ${tier.toUpperCase()} membership due to insufficient funds. Downgraded to Standard.\n*Time:* ${timestamp}`);
         }
     }
-}
-
-/**
- * ADMIN HELPER: Get time remaining on a trial
- */
-export function getTrialTimeLeft(expirationISO) {
-    if (!expirationISO) return null;
-    const now = new Date();
-    const exp = new Date(expirationISO);
-    const diff = exp - now;
-    if (diff <= 0) return "Expired";
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-    return `${days}d ${hours}h remaining`;
 }
 
 /**
@@ -176,46 +153,47 @@ export function getTierBadge(tier) {
 }
 
 /**
- * SLACK HELPERS: Manual membership purchase / upgrade
+ * SLACK HELPERS: Manual membership purchase / upgrade / downgrade
  */
-export async function purchaseMembership(userId, newTier, userData) {
-    const currentTier = userData.membershipLevel || 'standard';
+export async function purchaseMembership(userId, newTier, userData, oldTier = null) {
+    const currentTier = oldTier || userData.membershipLevel || 'standard';
     const plan = PLANS[newTier];
     if (!plan) throw new Error("Invalid membership tier");
 
+    const username = userData.displayName || userData.username || 'Unknown user';
+    const timestamp = new Date().toLocaleString();
     const cost = plan.price;
-    if ((userData.balance || 0) < cost) throw new Error("Insufficient funds for membership purchase");
 
-    const isNewSubscriber = currentTier === 'standard' && cost > 0;
+    // determine message based on tier change logic
+    if (currentTier === 'standard') {
+        sendSlackMessage(`💥 *New Subscriber:* ${username} subscribed to ${newTier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+    } 
+    else if (PLANS[newTier].price > PLANS[currentTier].price) {
+        // UPGRADE
+        sendSlackMessage(`🟢 *Membership Upgrade:* ${username} upgraded from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()} for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+    } 
+    else if (PLANS[newTier].price < PLANS[currentTier].price) {
+        // DOWNGRADE
+        sendSlackMessage(`🟠 *Membership Downgrade:* ${username} moved from ${currentTier.toUpperCase()} down to ${newTier.toUpperCase()} for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+    } 
+    else {
+        // RE-PURCHASE SAME TIER
+        sendSlackMessage(`💳 *Membership Update:* ${username} refreshed their ${newTier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+    }
 
+    // DB update handled here for consistency
     await updateDoc(doc(db, "users", userId), {
-        balance: increment(-cost),
         membershipLevel: newTier,
         membershipLastPaid: new Date().toISOString()
     });
-
-    const username = userData.displayName || userData.username || 'Unknown user';
-    const timestamp = new Date().toLocaleString();
-
-    // Slack notifications
-    if (isNewSubscriber) {
-        sendSlackMessage(`💥 *New Subscriber:* ${username} subscribed to ${newTier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
-    } else if (PLANS[newTier].price > PLANS[currentTier].price) {
-        sendSlackMessage(`⬆️ *Membership Upgrade:* ${username} upgraded from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()} for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
-    } else if (PLANS[newTier].price < PLANS[currentTier].price) {
-        sendSlackMessage(`⬇️ *Membership Downgrade:* ${username} downgraded from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()}.\n*Time:* ${timestamp}`);
-    } else {
-        sendSlackMessage(`💳 *Membership Purchase:* ${username} purchased ${newTier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
-    }
 }
 
 /**
  * CANCEL MEMBERSHIP (manual)
  */
-export async function cancelMembership(userId, userData) {
-    const tier = userData.membershipLevel || 'standard';
-    if (tier === 'standard') return;
-
+export async function cancelMembership(userId, userData, previousTier = null) {
+    const tierToReport = previousTier || userData.membershipLevel || 'standard';
+    
     await updateDoc(doc(db, "users", userId), {
         membershipLevel: "standard",
         shopOrderCount: 0
@@ -223,5 +201,8 @@ export async function cancelMembership(userId, userData) {
 
     const username = userData.displayName || userData.username || 'Unknown user';
     const timestamp = new Date().toLocaleString();
-    sendSlackMessage(`⚠️ *Membership Cancelled:* ${username} cancelled their ${tier.toUpperCase()} membership. Reverted to Standard.\n*Time:* ${timestamp}`);
+    
+    if (tierToReport !== 'standard') {
+        sendSlackMessage(`🚫 *Membership Cancelled:* ${username} cancelled their ${tierToReport.toUpperCase()} membership. Reverted to Standard.\n*Time:* ${timestamp}`);
+    }
 }

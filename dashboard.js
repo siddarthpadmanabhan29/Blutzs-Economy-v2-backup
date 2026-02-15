@@ -16,8 +16,8 @@ import { renderShop } from "./shop.js";
 import { renderBpsShop } from "./bpsShop.js";
 import { loadCosmetics } from "./cosmetics.js"; 
 
-// --- MEMBERSHIP IMPORTS ---
-import { PLANS, checkMembershipBilling, getTierBadge, getNextBillingDate } from "./membership_plans.js";
+// --- MEMBERSHIP IMPORTS (Updated with Slack integration functions) ---
+import { PLANS, checkMembershipBilling, getTierBadge, getNextBillingDate, purchaseMembership, cancelMembership } from "./membership_plans.js";
 
 /* =========================================================
     QUOTA PROTECTION: LISTENER MANAGER
@@ -436,12 +436,15 @@ function updateDashboardUI(user) {
 }
 
 /* =========================================================
-    MEMBERSHIP HANDLERS
+    MEMBERSHIP HANDLERS (Updated with Slack notifications)
 ========================================================= */
 window.joinPlan = async (planKey) => {
     if (!auth.currentUser || !currentDashboardData) return;
     const plan = PLANS[planKey];
     const userRef = doc(db, "users", auth.currentUser.uid);
+
+    // Capture the old tier BEFORE updating DB to correctly identify upgrades/downgrades in Slack
+    const oldTier = currentDashboardData.membershipLevel || 'standard';
 
     if (currentDashboardData.trialExpiration) {
         alert("You cannot join a paid plan while an active free trial is running.");
@@ -463,16 +466,26 @@ window.joinPlan = async (planKey) => {
             shopOrderCount: 0
         });
         await logHistory(auth.currentUser.uid, `Subscribed to ${plan.label} Plan (-$${plan.price.toLocaleString()})`, "membership");
+        
+        // Trigger Slack notification - Passing current data AND oldTier for comparison
+        if (typeof purchaseMembership === "function") {
+            await purchaseMembership(auth.currentUser.uid, planKey, currentDashboardData, oldTier);
+        }
+
         alert(`Welcome to ${plan.label}! Your perks are now active.`);
     } catch (err) {
         console.error(err);
-        alert("Failed to join plan.");
+        alert("Failed to join plan via Slack integration.");
     }
 };
 
 const cancelPlanBtn = document.getElementById("cancel-plan-btn");
 cancelPlanBtn?.addEventListener("click", async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || !currentDashboardData) return;
+    
+    // CAPTURE THE TIER BEFORE UPDATING DB SO SLACK KNOWS WHAT WAS CANCELLED
+    const tierToCancel = currentDashboardData.membershipLevel || 'standard';
+    
     if (!confirm("Are you sure you want to cancel your membership? You will revert to Standard status immediately.")) return;
 
     try {
@@ -481,9 +494,16 @@ cancelPlanBtn?.addEventListener("click", async () => {
             shopOrderCount: 0
         });
         await logHistory(auth.currentUser.uid, "Cancelled Membership Subscription", "membership");
+
+        // Trigger Slack notification - Pass captured previous tier
+        if (typeof cancelMembership === "function") {
+            await cancelMembership(auth.currentUser.uid, currentDashboardData, tierToCancel);
+        }
+
         alert("Membership cancelled.");
     } catch (err) {
         console.error(err);
+        alert("Failed to cancel plan via Slack integration.");
     }
 });
 

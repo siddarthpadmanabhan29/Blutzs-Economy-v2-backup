@@ -9,6 +9,7 @@ import { createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com
 import { showScreen, createOrUpdateUserDoc } from "./auth.js"; 
 import { logHistory } from "./historyManager.js";
 import { PLANS } from "./membership_plans.js";
+import { sendSlackMessage } from "./slackNotifier.js"; // <-- Added Slack integration
 
 // ---------- Elements ----------
 const adminPanel = document.getElementById("admin-panel");
@@ -217,6 +218,16 @@ async function grantTrialMembership() {
         });
 
         await logHistory(targetUid, `Admin granted ${duration} ${unit} of ${planKey} (Trial)`, "admin");
+
+        // --- SLACK NOTIFICATION FOR TRIAL GRANT ---
+        const timestamp = new Date().toLocaleString();
+        sendSlackMessage(
+            `🎁 *Admin Grant:* Free Trial issued to *${targetUsername}*.\n` +
+            `🔹 *Plan:* ${planKey.toUpperCase()}\n` +
+            `⏳ *Duration:* ${duration} ${unit}\n` +
+            `🕒 *Time:* ${timestamp}`
+        );
+
         alert(`Successfully granted ${planKey} to ${targetUsername} until ${expirationDate.toLocaleDateString()}.`);
         
         adminTrialUsername.value = "";
@@ -250,6 +261,11 @@ async function revokeMembership() {
         });
 
         await logHistory(userDoc.id, "Admin revoked your membership/trial status.", "admin");
+
+        // --- SLACK NOTIFICATION FOR REVOCATION ---
+        const timestamp = new Date().toLocaleString();
+        sendSlackMessage(`🚫 *Admin Revoke:* ${targetUsername}'s membership/trial has been manually revoked by Admin.\n*Time:* ${timestamp}`);
+
         alert(`Successfully revoked membership for ${targetUsername}.`);
         
         adminTrialUsername.value = "";
@@ -311,8 +327,16 @@ function attachRenewalListeners() {
       const expirationDate = new Date(dateInput.value);
       expirationDate.setHours(23, 59, 59); 
       try {
+        const userSnap = await getDoc(doc(db, "users", userId));
+        const username = userSnap.exists() ? userSnap.data().username : "Unknown User";
+
         await updateDoc(doc(db, "users", userId), { renewalDate: new Date().toISOString(), expirationDate: expirationDate.toISOString(), renewalPending: false });
         await logHistory(userId, `ID Renewal Approved`, "admin");
+        
+        // --- SLACK NOTIFICATION FOR ID RENEWAL ---
+        const timestamp = new Date().toLocaleString();
+        sendSlackMessage(`🪪 *ID Renewal:* Admin approved identity renewal for *${username}*.\n*New Expiration:* ${expirationDate.toLocaleDateString()}\n*Time:* ${timestamp}`);
+
         alert(`✅ Approved!`);
         loadRenewalRequests();
       } catch (err) { alert("Error: " + err.message); }
