@@ -216,7 +216,7 @@ async function buyItem(itemId, btnElement) {
     });
 
     // --- SLACK NOTIFICATION (username + timestamp) ---
-    const buyerName = localUserData?.displayName || localUserData?.username || 'Unknown user';
+    const buyerName = userData.displayName || userData.username || 'Unknown user';
     const timestamp = new Date().toLocaleString();
     sendSlackMessage(
       `🛒 *Purchase Alert!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Amount:* $${totalCost.toLocaleString()} \n*Time:* ${timestamp}`
