@@ -13,18 +13,18 @@ const dashboardNavbar = document.getElementById("dashboard-navbar");
 
 // ---------- CACHE COSMETICS ----------
 let cosmeticsCache = null;
-let localUserData = null; // Store local user state to avoid redundant reads
+let localUserData = null; 
 
 /**
  * Optimized Load: Uses getDocs for items (read once)
  */
 async function getCosmeticsMap() {
   if (cosmeticsCache) return cosmeticsCache;
-
-  // ONE-TIME FETCH: Instead of a live listener, we fetch the catalog once.
   const snap = await getDocs(collection(db, "cosmeticsShop"));
   cosmeticsCache = {};
-  snap.forEach(d => cosmeticsCache[d.id] = { ...d.data(), id: d.id });
+  snap.forEach(d => {
+    cosmeticsCache[d.id] = { ...d.data(), id: d.id };
+  });
   return cosmeticsCache;
 }
 
@@ -41,77 +41,55 @@ function applySavedTheme() {
 }
 applySavedTheme();
 
-// ---------- APPLY NAVBAR COLOR (OWNERSHIP SAFE + AUTO RESET) ----------
-async function applyNavbarFromFirestore(userData, cosmeticsMap) {
-  if (!dashboardNavbar || !userData) return;
+// ---------- APPLY NAVBAR & BACKGROUND (OWNERSHIP SAFE) ----------
+async function applyCosmeticsFromFirestore(userData, cosmeticsMap) {
+  if (!userData) return;
 
+  // 1. Handle Navbar
   let navbarColor = "#3498db"; // default
-  let validEquipped = false;
-
   if (userData.navbarColor && cosmeticsMap) {
-    for (const [id, item] of Object.entries(cosmeticsMap)) {
-      if (
-        item.type === "navbarColor" &&
-        item.color === userData.navbarColor &&
-        userData.cosmeticsOwned?.[id] === true
-      ) {
-        validEquipped = true;
-        break;
-      }
-    }
+    const isValid = Object.values(cosmeticsMap).some(item => 
+      item.type === "navbarColor" && item.color === userData.navbarColor && userData.cosmeticsOwned?.[item.id]
+    );
+    if (isValid) navbarColor = userData.navbarColor;
   }
+  if (dashboardNavbar) dashboardNavbar.style.backgroundColor = navbarColor;
 
-  if (validEquipped) {
-    navbarColor = userData.navbarColor;
-  } else if (userData.navbarColor) {
-    // Admin removed cosmetic → reset equipped
-    const userRef = doc(db, "users", auth.currentUser.uid);
-    await updateDoc(userRef, { navbarColor: "" }).catch(console.error);
+  // 2. Handle Background Color
+  if (userData.equippedBackground) {
+    document.body.style.setProperty('background-color', userData.equippedBackground, 'important');
+    document.body.classList.add("custom-bg-active");
+  } else {
+    document.body.style.backgroundColor = ""; 
+    document.body.classList.remove("custom-bg-active");
   }
-
-  dashboardNavbar.style.backgroundColor = navbarColor;
-  localStorage.setItem("navbarColor", navbarColor);
 }
 
 // ---------- LOAD COSMETICS ----------
-/**
- * Renders the UI based on passed userData or local state.
- * No database reads happen inside the loop.
- */
 async function loadCosmetics(userData = null) {
   if (!auth.currentUser || !cosmeticsShopEl) return;
 
-  // Use passed data from dashboard.js master listener if available
-  if (userData) {
-    localUserData = userData;
-  }
+  if (userData) localUserData = userData;
 
-  // If we still have no data, fetch once (cold start fallback)
   if (!localUserData) {
-    const userRef = doc(db, "users", auth.currentUser.uid);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) {
-      cosmeticsShopEl.innerHTML = "<p class='text-error'>User data not found.</p>";
-      return;
-    }
+    const userSnap = await getDoc(doc(db, "users", auth.currentUser.uid));
+    if (!userSnap.exists()) return;
     localUserData = userSnap.data();
   }
 
   if (!localUserData.cosmeticsOwned) localUserData.cosmeticsOwned = {};
-
   const cosmeticsMap = await getCosmeticsMap();
 
-  // Apply navbar safely
-  await applyNavbarFromFirestore(localUserData, cosmeticsMap);
+  // Apply visual styles
+  await applyCosmeticsFromFirestore(localUserData, cosmeticsMap);
 
-  // ---------- ACCESS CHECK ----------
+  // Access Check
   const now = new Date();
   const expirationDate = localUserData.expirationDate ? new Date(localUserData.expirationDate) : null;
   const canAccess = !localUserData.renewalPending && expirationDate && expirationDate > now;
 
   if (!canAccess) {
-    cosmeticsShopEl.innerHTML =
-      "<p class='text-muted'>Your ID is expired or renewal pending. Cannot access cosmetics.</p>";
+    cosmeticsShopEl.innerHTML = "<p class='text-muted'>Access denied: Expired or Pending.</p>";
     return;
   }
 
@@ -119,34 +97,30 @@ async function loadCosmetics(userData = null) {
 
   Object.entries(cosmeticsMap).forEach(([docId, item]) => {
     const owned = localUserData.cosmeticsOwned[docId] === true;
-    const equipped =
-      item.type === "navbarColor" &&
-      localUserData.navbarColor &&
-      item.color === localUserData.navbarColor;
+    
+    // Check if equipped
+    const isNavbarEquipped = item.type === "navbarColor" && localUserData.navbarColor === item.color;
+    const isBgEquipped = item.type === "backgroundColor" && localUserData.equippedBackground === item.color;
+    const equipped = isNavbarEquipped || isBgEquipped;
 
     const div = document.createElement("div");
     div.className = `cosmetic-item ${owned ? "owned" : ""} ${equipped ? "equipped" : ""}`;
     div.dataset.id = docId;
 
     let actionHTML = "";
-
     if (!owned) {
-      actionHTML = `
-        <button class="btn-primary buy-cosmetic" data-id="${docId}">Buy</button>
-      `;
-    } else if (item.feature || item.type === "navbarColor") {
+      actionHTML = `<button class="btn-primary buy-cosmetic" data-id="${docId}">Buy</button>`;
+    } else if (item.feature || item.type === "navbarColor" || item.type === "backgroundColor") {
+      // Button text changes based on equipped status
+      actionHTML = `<button class="btn-secondary cosmetic-feature" data-id="${docId}">${equipped ? 'Remove' : 'Apply'}</button>`;
       if (equipped) {
-        actionHTML = `<div class="equipped-badge">Applied</div>`;
-      } else {
-        actionHTML = `
-          <button class="btn-secondary cosmetic-feature" data-id="${docId}">Apply</button>
-        `;
+        actionHTML += `<div class="equipped-badge" style="margin-top:5px; background:#2ecc71; color:white; border-radius:4px; font-size:0.75rem;">Applied</div>`;
       }
     }
 
     div.innerHTML = `
       <div class="shop-item-image" style="background:${item.color || '#151525'};">
-        ${item.img ? `<img src="${item.img}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/64?text=No+Image'">` : ""}
+        ${item.img ? `<img src="${item.img}" alt="${item.name}">` : ""}
       </div>
       <div class="shop-item-info">
         <h4>${item.name}</h4>
@@ -155,7 +129,6 @@ async function loadCosmetics(userData = null) {
         ${actionHTML}
       </div>
     `;
-
     cosmeticsShopEl.appendChild(div);
   });
 }
@@ -166,17 +139,15 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
   const user = auth.currentUser;
   if (!user) return;
 
-  // ----- BUY -----
+  // ----- BUY LOGIC -----
   if (btn.classList.contains("buy-cosmetic")) {
     const itemId = btn.dataset.id;
-    // Accuracy check: get current state only on click
     const [userSnap, itemSnap] = await Promise.all([
         getDoc(doc(db, "users", user.uid)),
         getDoc(doc(db, "cosmeticsShop", itemId))
     ]);
 
-    if (!itemSnap.exists()) return alert("Item not found!");
-
+    if (!itemSnap.exists()) return;
     const item = itemSnap.data();
     const userData = userSnap.data();
     const balance = Number(userData.balance || 0);
@@ -185,72 +156,77 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
 
     try {
       const newCosmetics = { ...(userData.cosmeticsOwned || {}), [itemId]: true };
-
       await updateDoc(doc(db, "users", user.uid), {
         balance: balance - item.price,
         cosmeticsOwned: newCosmetics
       });
 
-      // Update local state for immediate re-render
       localUserData.balance = balance - item.price;
       localUserData.cosmeticsOwned = newCosmetics;
-      loadCosmetics();
+      loadCosmetics(localUserData);
 
-      const historyRef = collection(db, "users", user.uid, "history_logs");
-      await addDoc(historyRef, {
-        message: `Purchased ${item.name} for $${item.price.toFixed(0)}`,
+      await addDoc(collection(db, "users", user.uid, "history_logs"), {
+        message: `Purchased ${item.name} for $${item.price}`,
         type: "purchase",
         timestamp: new Date().toISOString()
       });
-
       alert(`✅ Purchased ${item.name}!`);
-
-    } catch (err) {
-      console.error(err);
-      alert("Purchase failed: " + err.message);
-    }
+    } catch (err) { alert("Purchase failed"); }
   }
 
-  // ----- APPLY (EQUIP) -----
+  // ----- APPLY / UNEQUIP LOGIC -----
   if (btn.classList.contains("cosmetic-feature")) {
     const featureId = btn.dataset.id;
-    const userRef = doc(db, "users", user.uid);
+    const cosmeticsMap = await getCosmeticsMap();
+    const itemData = cosmeticsMap[featureId];
     
-    // Use the cache for the item data to save a read
-    const itemData = cosmeticsCache[featureId];
-    if (!itemData) return;
+    if (!itemData || !localUserData.cosmeticsOwned?.[featureId]) return;
 
-    if (!localUserData.cosmeticsOwned?.[featureId]) {
-      return alert("🔒 Unlock this by purchasing in the Cosmetics Shop!");
-    }
+    const userRef = doc(db, "users", user.uid);
 
-    // Dark mode toggle
+    // 1. Dark mode toggle (Special case: Toggle)
     if (featureId === "darkMode") {
       const isDark = document.body.classList.contains("dark-mode");
+      const newMode = !isDark ? "dark" : "light";
       document.body.classList.toggle("dark-mode", !isDark);
       document.body.classList.toggle("light-mode", isDark);
-      localStorage.setItem("theme", !isDark ? "dark" : "light");
+      localStorage.setItem("theme", newMode);
+      await updateDoc(userRef, { theme: newMode });
     }
 
-    // Navbar equip (ONLY ONE ACTIVE)
-    if (itemData.type === "navbarColor" && dashboardNavbar) {
-      dashboardNavbar.style.backgroundColor = itemData.color;
-      localStorage.setItem("navbarColor", itemData.color);
-      await updateDoc(userRef, { navbarColor: itemData.color });
+    // 2. Navbar Toggle Logic
+    if (itemData.type === "navbarColor") {
+      const isCurrentlyEquipped = localUserData.navbarColor === itemData.color;
+      const colorToSet = isCurrentlyEquipped ? "" : itemData.color;
       
-      localUserData.navbarColor = itemData.color;
-      loadCosmetics();
+      localUserData.navbarColor = colorToSet;
+      await updateDoc(userRef, { navbarColor: colorToSet });
     }
+
+    // 3. Background Color Toggle Logic
+    if (itemData.type === "backgroundColor") {
+      const isCurrentlyEquipped = localUserData.equippedBackground === itemData.color;
+      const colorToSet = isCurrentlyEquipped ? "" : itemData.color;
+
+      if (colorToSet === "") {
+        console.log("Removing background color");
+        document.body.style.backgroundColor = "";
+        document.body.classList.remove("custom-bg-active");
+      } else {
+        console.log("Applying custom background:", colorToSet);
+        document.body.style.setProperty('background-color', colorToSet, 'important');
+        document.body.classList.add("custom-bg-active");
+      }
+      
+      localUserData.equippedBackground = colorToSet;
+      await updateDoc(userRef, { equippedBackground: colorToSet });
+    }
+
+    // Refresh the UI to update "Applied/Remove" buttons
+    loadCosmetics(localUserData);
   }
 });
 
-// ---------- CLEAN INITIALIZATION ----------
-auth.onAuthStateChanged(user => {
-  if (user) {
-    // Note: We removed the duplicate onSnapshot(userRef) here.
-    // dashboard.js now handles the "Live" updates via loadCosmetics(currentDashboardData).
-    loadCosmetics();
-  }
-});
+auth.onAuthStateChanged(user => { if (user) loadCosmetics(); });
 
-export { loadCosmetics };
+export { loadCosmetics };  

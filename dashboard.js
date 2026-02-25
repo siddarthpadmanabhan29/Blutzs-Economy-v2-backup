@@ -206,7 +206,7 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 /* =========================================================
-    UNIFIED HISTORY RENDERING
+    UPDATED UNIFIED HISTORY RENDERING (Modern Dark UI)
 ========================================================= */
 function renderUnifiedHistory() {
     if (!unifiedHistoryList) return;
@@ -233,50 +233,42 @@ function renderUnifiedHistory() {
     }
 
     if (filtered.length === 0) {
-        unifiedHistoryList.innerHTML = `<div style="color: gray; padding: 20px; text-align: center; border: 1px dashed var(--border-color, #333); border-radius: 8px;">No matching activity found.</div>`;
+        unifiedHistoryList.innerHTML = `<div style="color: gray; padding: 40px; text-align: center; border: 1px dashed #333; border-radius: 10px; font-style: italic;">No matching activity found.</div>`;
         return;
     }
 
     filtered.forEach(entry => {
         let icon = getHistoryIcon(entry.type);
         const timeStr = getRelativeTime(new Date(entry.timestamp));
-        let statusColor = "var(--text-color)"; 
-        let borderColor = "#888"; 
-
-        if (entry.message.includes("Rejected") || entry.message.includes("Denied") || entry.message.includes("Terminated") || 
-            entry.message.includes("Sent") || entry.message.includes("Voided") || entry.message.includes("CUT")) {
-            borderColor = "#e74c3c"; 
-            if (entry.message.includes("Denied") || entry.message.includes("Sent") || entry.message.includes("CUT")) {
-                statusColor = "#e74c3c";
-            }
-        } 
-        else if (entry.message.includes("Paid") || entry.message.includes("Approved") || 
-                 entry.message.includes("Traded") || entry.message.includes("Signed") || 
-                 entry.message.includes("Received") || entry.message.includes("Took")) {
-            borderColor = "#2ecc71"; 
-        }
-        else if (entry.type === "admin") {
-            borderColor = "#9b59b6"; 
-        }
-        else if (entry.message.includes("Status") || entry.message.includes("Withdrawn") || entry.message.includes("Extension")) {
-            borderColor = "#3498db"; 
+        
+        let accentColor = "#444"; 
+        if (entry.type === "transfer-in" || entry.message.includes("Paid") || entry.message.includes("Received") || entry.message.includes("Approved")) {
+            accentColor = "#2ecc71"; 
+        } else if (entry.type === "transfer-out" || entry.message.includes("Rejected") || entry.message.includes("Denied") || entry.message.includes("Sent") || entry.message.includes("CUT") || entry.message.includes("Repaid")) {
+            accentColor = "#e74c3c"; 
+        } else if (entry.type === "membership") {
+            accentColor = "#f1c40f";
         }
 
         unifiedHistoryList.innerHTML += `
-            <div class="history-entry" style="display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color, #eee); gap: 15px; width: 100%;">
-                <div style="flex-shrink: 0; width: 42px; height: 42px; background: var(--card-bg, #fff); border: 2.5px solid ${borderColor}; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                    ${icon}
-                </div>
-                <div style="flex-grow: 1; min-width: 0;">
-                    <div class="history-message" style="color: ${statusColor}; font-weight: 500; font-size: 0.95rem; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis;">
-                        ${entry.message}
-                    </div>
-                    <div class="history-time" style="font-size: 0.8rem; color: var(--text-muted, #999);">${timeStr}</div>
-                </div>
-                <div class="history-type-tag" style="flex-shrink: 0; font-size: 0.65rem; color: var(--text-muted, #666); background: var(--input-bg, #f5f5f5); padding: 4px 10px; border-radius: 6px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; border: 1px solid var(--border-color, #e0e0e0); min-width: 75px; text-align: center;">
-                    ${entry.type}
-                </div>
-            </div>`;
+    <div class="history-entry-row" style="display: flex; align-items: center; padding: 16px 12px; border-bottom: 1px solid var(--border-color); gap: 20px; width: 100%; box-sizing: border-box; overflow: hidden;">
+        <div class="history-icon-wrapper" style="flex-shrink: 0; width: 48px; height: 48px; background: var(--input-bg); border: 2.5px solid ${accentColor}; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1.2rem; box-shadow: 0 4px 8px rgba(0,0,0,0.15);">
+            ${icon}
+        </div>
+        
+        <div style="flex-grow: 1; min-width: 0; overflow: hidden;">
+            <div class="history-message" style="color: var(--text-color); font-weight: 600; font-size: 1.05rem; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${entry.message}
+            </div>
+            <div class="history-time" style="font-size: 0.85rem; color: var(--text-muted);">${timeStr}</div>
+        </div>
+
+        <div class="history-tag-wrapper" style="flex-shrink: 0; margin-left: auto;">
+            <span class="history-type-pill" style="font-size: 0.65rem; color: var(--text-muted); background: var(--input-bg); padding: 4px 12px; border-radius: 6px; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; border: 1px solid var(--border-color); white-space: nowrap;">
+                ${entry.type}
+            </span>
+        </div>
+    </div>`;
     });
 }
 
@@ -288,7 +280,7 @@ function getHistoryIcon(type) {
       case "usage":        return "🧪";
       case "admin":        return "🛡️";
       case "contract":     return "📝";
-      case "membership":   return "💎"; // Icon for memberships
+      case "membership":   return "💎"; 
       default:             return "📄";
     }
 }
@@ -311,6 +303,13 @@ function updateDashboardUI(user) {
   profileUsername.textContent = data.username || user.email.split("@")[0];
   profileUid.textContent = user.uid.slice(0, 8);
 
+  // --- COSMETIC PERSISTENCE UPDATES ---
+  if (data.equippedBackground) {
+    document.body.style.setProperty('background-color', data.equippedBackground, 'important');
+  } else {
+    document.body.style.backgroundColor = ""; 
+  }
+
   // --- MEMBERSHIP UI UPDATES ---
   const tier = data.membershipLevel || 'standard';
   const profileBadge = document.getElementById("profile-membership-badge");
@@ -320,7 +319,6 @@ function updateDashboardUI(user) {
   if (profileBadge) profileBadge.innerHTML = getTierBadge(tier);
   if (cancelBtn) cancelBtn.classList.toggle("hidden", tier === 'standard');
 
-  // Logic for Plan Buttons (In Use / Trial Active)
   const onTrial = !!data.trialExpiration;
   document.querySelectorAll(".join-plan-btn").forEach(btn => {
       const btnPlan = btn.dataset.plan;
@@ -335,12 +333,11 @@ function updateDashboardUI(user) {
       } else {
           btn.disabled = false;
           btn.textContent = `Join ${PLANS[btnPlan].label}`;
-          btn.style.backgroundColor = ""; // Reset
+          btn.style.backgroundColor = ""; 
           btn.style.opacity = "1";
       }
   });
 
-  // Display Billing Info (Now using Same-Day-Each-Month data)
   if (billingInfoEl) {
       if (tier !== 'standard' || onTrial) {
           const nextDate = getNextBillingDate(data);
@@ -411,7 +408,8 @@ function updateDashboardUI(user) {
   const employmentStatus = data.employmentStatus || "Unemployed";
   let color = "red";
   if (employmentStatus === "Employed") color = "green";
-  if (employmentStatus === "Retired") color = "blue";
+  else if (employmentStatus === "Retired") color = "blue";
+  
   if (employmentStatusEl) {
     employmentStatusEl.textContent = employmentStatus;
     employmentStatusEl.style.color = color;
@@ -436,14 +434,12 @@ function updateDashboardUI(user) {
 }
 
 /* =========================================================
-    MEMBERSHIP HANDLERS (Updated with Slack notifications)
+    MEMBERSHIP HANDLERS
 ========================================================= */
 window.joinPlan = async (planKey) => {
     if (!auth.currentUser || !currentDashboardData) return;
     const plan = PLANS[planKey];
     const userRef = doc(db, "users", auth.currentUser.uid);
-
-    // Capture the old tier BEFORE updating DB to correctly identify upgrades/downgrades in Slack
     const oldTier = currentDashboardData.membershipLevel || 'standard';
 
     if (currentDashboardData.trialExpiration) {
@@ -467,26 +463,21 @@ window.joinPlan = async (planKey) => {
         });
         await logHistory(auth.currentUser.uid, `Subscribed to ${plan.label} Plan (-$${plan.price.toLocaleString()})`, "membership");
         
-        // Trigger Slack notification - Passing current data AND oldTier for comparison
         if (typeof purchaseMembership === "function") {
             await purchaseMembership(auth.currentUser.uid, planKey, currentDashboardData, oldTier);
         }
-
         alert(`Welcome to ${plan.label}! Your perks are now active.`);
     } catch (err) {
         console.error(err);
-        alert("Failed to join plan via Slack integration.");
+        alert("Failed to join plan.");
     }
 };
 
 const cancelPlanBtn = document.getElementById("cancel-plan-btn");
 cancelPlanBtn?.addEventListener("click", async () => {
     if (!auth.currentUser || !currentDashboardData) return;
-    
-    // CAPTURE THE TIER BEFORE UPDATING DB SO SLACK KNOWS WHAT WAS CANCELLED
     const tierToCancel = currentDashboardData.membershipLevel || 'standard';
-    
-    if (!confirm("Are you sure you want to cancel your membership? You will revert to Standard status immediately.")) return;
+    if (!confirm("Are you sure you want to cancel your membership?")) return;
 
     try {
         await updateDoc(doc(db, "users", auth.currentUser.uid), {
@@ -495,15 +486,13 @@ cancelPlanBtn?.addEventListener("click", async () => {
         });
         await logHistory(auth.currentUser.uid, "Cancelled Membership Subscription", "membership");
 
-        // Trigger Slack notification - Pass captured previous tier
         if (typeof cancelMembership === "function") {
             await cancelMembership(auth.currentUser.uid, currentDashboardData, tierToCancel);
         }
-
         alert("Membership cancelled.");
     } catch (err) {
         console.error(err);
-        alert("Failed to cancel plan via Slack integration.");
+        alert("Failed to cancel plan.");
     }
 });
 
@@ -559,19 +548,18 @@ loanAmountSelect?.addEventListener("change", () => {
 document.addEventListener('click', async (e) => {
     if (!auth.currentUser) return;
 
-    // Handle Membership "Join" Buttons
     if (e.target.classList.contains('join-plan-btn')) {
         const planKey = e.target.dataset.plan;
         await window.joinPlan(planKey);
     }
 
     if (e.target.id === 'request-trade-btn') {
-        if (!confirm("Are you sure you want to request a trade? The League Office will be notified.")) return;
+        if (!confirm("Are you sure you want to request a trade?")) return;
         try {
             const userRef = doc(db, "users", auth.currentUser.uid);
             await updateDoc(userRef, { tradePending: true, releasePending: false });
-            await logHistory(auth.currentUser.uid, "📤 Sent Trade Request to Team Office", "contract");
-            alert("✅ Trade request sent to Admin.");
+            await logHistory(auth.currentUser.uid, "📤 Sent Trade Request", "contract");
+            alert("✅ Trade request sent.");
         } catch (err) {
             console.error(err);
             alert("Failed to send request.");
@@ -579,13 +567,12 @@ document.addEventListener('click', async (e) => {
     }
 
     if (e.target.id === 'request-release-btn') {
-        const msg = "Requesting a release will terminate your contract if approved. Continue?";
-        if (!confirm(msg)) return;
+        if (!confirm("Requesting a release will terminate your contract. Continue?")) return;
         try {
             const userRef = doc(db, "users", auth.currentUser.uid);
             await updateDoc(userRef, { releasePending: true, tradePending: false });
-            await logHistory(auth.currentUser.uid, "📤 Sent Release Request to Team Office", "contract");
-            alert("✅ Release request sent to Admin.");
+            await logHistory(auth.currentUser.uid, "📤 Sent Release Request", "contract");
+            alert("✅ Release request sent.");
         } catch (err) {
             console.error(err);
             alert("Failed to send request.");
