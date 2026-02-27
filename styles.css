@@ -1362,3 +1362,112 @@ body.dark-mode {
     color: var(--contract-text);
     margin-bottom: 10px;
 }
+
+/* The switch - the box around the slider */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #f1c40f; /* Gold for protection */
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/* Container for the floating label effect */
+.input-group {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.floating-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    margin-left: 4px;
+}
+
+/* Base input styling */
+.input-group input {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+    padding: 12px !important;
+    border-radius: 10px !important;
+    font-size: 0.95rem !important;
+    transition: all 0.2s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.input-group input:focus {
+    border-color: #3498db !important;
+    background: rgba(52, 152, 219, 0.05) !important;
+    outline: none;
+    box-shadow: 0 0 10px rgba(52, 152, 219, 0.1);
+}
+
+/* Currency symbol styling */
+.currency-wrapper {
+    position: relative;
+}
+
+.currency-prefix {
+    position: absolute;
+    left: 12px;
+    top: 32px; /* Adjusted for the label height */
+    color: #2ecc71;
+    font-weight: bold;
+    font-size: 0.95rem;
+}
+
+.currency-wrapper input {
+    padding-left: 25px !important; /* Make room for the $ sign */
+    font-weight: bold;
+    color: #2ecc71 !important;
+}

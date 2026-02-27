@@ -116,6 +116,91 @@
       font-size: 0.9em;
       text-align: center;
     }
+
+    /* Transfer & Request UI helpers */
+    .hidden { display: none !important; }
+    #request-count-badge, #escrow-count-badge { 
+      font-weight: bold; 
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 0.7rem;
+      margin-left: 5px;
+    }
+
+    /* --- HUB TABS CSS --- */
+    .hub-tabs-container {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 15px;
+      background: rgba(0,0,0,0.05);
+      padding: 5px;
+      border-radius: 10px;
+    }
+    .hub-tab {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: gray;
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: bold;
+      transition: 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .hub-tab.active {
+      background: var(--contract-bg);
+      color: var(--contract-text);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    /* --- MODERN TOGGLE SWITCH CSS --- */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .4s;
+    }
+    input:checked + .slider {
+      background-color: #f1c40f;
+    }
+    input:checked + .slider:before {
+      transform: translateX(18px);
+    }
+    .slider.round {
+      border-radius: 34px;
+    }
+    .slider.round:before {
+      border-radius: 50%;
+    }
+    .protection-toggle-container {
+      transition: all 0.3s ease;
+    }
   </style>
 </head>
 <body>
@@ -271,13 +356,57 @@
       </section>
 
       <section class="section-card">
-        <h3>Transfer Money</h3>
-        <div class="transfer-container">
-            <input id="transfer-to" placeholder="Recipient Username" autocomplete="off">
-            <input id="transfer-amount" type="number" placeholder="Amount">
-            <button id="transfer-btn" class="btn-primary" type="button">Send</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin:0;">💸 Transfer Hub</h3>
+          <div id="protection-badge-ui" style="font-size: 0.65rem; background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 6px; font-weight: bold;">
+            🛡️ Escrow System Active
+          </div>
         </div>
-        <p id="transfer-message"></p>
+
+        <div class="hub-tabs-container">
+            <button class="hub-tab active" data-target="send-div">Send / Request</button>
+            <button class="hub-tab" data-target="invoices-div">Invoices <span id="request-count-badge" class="hidden" style="background:#e74c3c; color:white;">0</span></button>
+            <button class="hub-tab" data-target="escrow-div">Escrow <span id="escrow-count-badge" class="hidden" style="background:#f1c40f; color:black;">0</span></button>
+        </div>
+
+        <div id="send-div" class="transfer-container">
+            <input id="transfer-to" placeholder="Target Username" autocomplete="off">
+            <input id="transfer-amount" type="number" placeholder="Amount">
+            
+            <div class="protection-toggle-container" style="margin: 15px 0; padding: 12px; background: rgba(0,0,0,0.03); border-radius: 10px; border: 1px solid rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="use-protection" style="font-size: 0.9rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <span id="shield-icon" style="font-size: 1.1rem; filter: grayscale(100%); transition: 0.3s;">🛡️</span> 
+                        Transfer Protection
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" id="use-protection">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <div id="protection-details" class="hidden" style="margin-top: 10px; font-size: 0.75rem; color: #f1c40f; line-height: 1.2; border-top: 1px solid rgba(241, 196, 15, 0.2); padding-top: 8px;">
+                    🔒 <strong>Escrow Enabled:</strong> Funds locked for 2h. Recipient claims after timer ends. Fee: 5 BPS.
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <button id="transfer-btn" class="btn-primary" style="flex: 1;" type="button">Send</button>
+              <button id="request-btn" class="btn-secondary" style="flex: 1;" type="button">Request</button>
+            </div>
+            <p id="transfer-message" style="text-align: center; margin-top: 10px; font-size: 0.85rem;"></p>
+        </div>
+
+        <div id="invoices-div" class="hidden">
+            <div id="incoming-requests-list">
+                <p style="color: gray; font-style: italic; text-align: center; padding: 10px;">No pending requests found.</p>
+            </div>
+        </div>
+
+        <div id="escrow-div" class="hidden">
+            <div id="escrow-list">
+                <p style="color: gray; font-style: italic; text-align: center; padding: 10px;">Checking for protected funds...</p>
+            </div>
+        </div>
       </section>
 
       <section class="section-card">
@@ -445,6 +574,14 @@
       </div>
     </div>
 
+    <div class="admin-section" style="border: 2px solid #e74c3c; margin-top: 20px; padding: 15px;">
+      <h3 style="color: #e74c3c;">🚨 Escrow Oversight (Admin Only)</h3>
+      <p style="font-size: 0.8rem; color: gray; margin-bottom: 10px;">Void transfers to refund senders or force release them.</p>
+      <div id="admin-escrow-list">
+          <p style="color: gray; font-style: italic;">Loading active escrow transfers...</p>
+      </div>
+    </div>
+
     <div class="admin-section" style="border-top: 1px solid var(--contract-border); margin-top: 20px; padding-top: 20px;">
       <h3>🏀 Sports Contract Office</h3>
       <p style="font-size: 0.85em; color: gray; margin-bottom: 10px;">Draft professional contracts and manage the league roster.</p>
@@ -518,6 +655,8 @@
   <script type="module" src="loan.js"></script> 
   <script type="module" src="contracts.js"></script>
   <script type="module" src="membership_plans.js"></script>
+  <script type="module" src="requests.js"></script>
+  <script type="module" src="escrow.js"></script>
   <script type="module" src="admin.js"></script>
   </body>
 </html>

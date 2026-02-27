@@ -1,15 +1,15 @@
-// ---------- admin.js (QUOTA OPTIMIZED) ----------
+// ---------- admin.js (UPGRADED: Escrow Oversight - QUOTA OPTIMIZED) ----------
 console.log("admin.js loaded");
 
-import { db, auth, secondaryAuth } from "./firebaseConfig.js"; // Added secondaryAuth
+import { db, auth, secondaryAuth } from "./firebaseConfig.js";
 import { 
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot, deleteDoc
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot, deleteDoc, runTransaction, increment 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"; // Added Auth imports
+import { createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { showScreen, createOrUpdateUserDoc } from "./auth.js"; 
 import { logHistory } from "./historyManager.js";
 import { PLANS } from "./membership_plans.js";
-import { sendSlackMessage } from "./slackNotifier.js"; // <-- Added Slack integration
+import { sendSlackMessage } from "./slackNotifier.js";
 
 // ---------- Elements ----------
 const adminPanel = document.getElementById("admin-panel");
@@ -32,6 +32,7 @@ const adminBpsUserInfo = document.getElementById("admin-bps-user-info");
 
 const renewalRequestsContainer = document.getElementById("renewal-requests");
 const adminRosterContainer = document.getElementById("admin-active-contracts-list");
+const adminEscrowList = document.getElementById("admin-escrow-list"); 
 
 // --- MEMBERSHIP ADMIN ELEMENTS ---
 const adminTrialUsername = document.getElementById("admin-trial-username");
@@ -49,6 +50,7 @@ let empListener = null;
 let cosmeticsUserListener = null;
 let contractLookupListener = null;
 let membershipLookupListener = null; 
+let adminEscrowListener = null; 
 let adminCosmeticsCache = null; 
 let activeAdminListener = null;
 
@@ -219,7 +221,6 @@ async function grantTrialMembership() {
 
         await logHistory(targetUid, `Admin granted ${duration} ${unit} of ${planKey} (Trial)`, "admin");
 
-        // --- SLACK NOTIFICATION FOR TRIAL GRANT ---
         const timestamp = new Date().toLocaleString();
         sendSlackMessage(
             `🎁 *Admin Grant:* Free Trial issued to *${targetUsername}*.\n` +
@@ -262,7 +263,6 @@ async function revokeMembership() {
 
         await logHistory(userDoc.id, "Admin revoked your membership/trial status.", "admin");
 
-        // --- SLACK NOTIFICATION FOR REVOCATION ---
         const timestamp = new Date().toLocaleString();
         sendSlackMessage(`🚫 *Admin Revoke:* ${targetUsername}'s membership/trial has been manually revoked by Admin.\n*Time:* ${timestamp}`);
 
@@ -333,7 +333,6 @@ function attachRenewalListeners() {
         await updateDoc(doc(db, "users", userId), { renewalDate: new Date().toISOString(), expirationDate: expirationDate.toISOString(), renewalPending: false });
         await logHistory(userId, `ID Renewal Approved`, "admin");
         
-        // --- SLACK NOTIFICATION FOR ID RENEWAL ---
         const timestamp = new Date().toLocaleString();
         sendSlackMessage(`🪪 *ID Renewal:* Admin approved identity renewal for *${username}*.\n*New Expiration:* ${expirationDate.toLocaleDateString()}\n*Time:* ${timestamp}`);
 
@@ -472,6 +471,68 @@ adminContractUsername?.addEventListener("input", () => handleUserLookup(adminCon
 if (adminContractBtn) adminContractBtn.addEventListener("click", sendContractOffer);
 
 /* =========================================================
+    ESCROW OVERSIGHT (ADMIN CONTROL - QUOTA SAVER)
+========================================================= */
+export function listenToAllEscrow() {
+  if (!adminEscrowList) return;
+  if (adminEscrowListener) adminEscrowListener();
+
+  const q = query(collection(db, "pending_transfers"));
+
+  adminEscrowListener = onSnapshot(q, (snapshot) => {
+    adminEscrowList.innerHTML = "";
+    if (snapshot.empty) {
+      adminEscrowList.innerHTML = "<p style='color: gray; font-style: italic;'>No active escrow transfers.</p>";
+      return;
+    }
+
+    // SAVES READS: We don't perform a lookup here. We use data.toName saved in transfer.js.
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const div = document.createElement("div");
+      div.style = "background: rgba(231, 76, 60, 0.05); border: 1px solid #e74c3c; padding: 12px; margin-bottom: 10px; border-radius: 8px;";
+      
+      div.innerHTML = `
+        <div style="font-size: 0.85rem; margin-bottom: 8px;">
+            <strong>From:</strong> ${data.fromName} → <strong>To:</strong> ${data.toName || "Unknown"}<br>
+            <strong>Amount:</strong> <span style="color: #e74c3c; font-weight: bold;">$${data.amount.toLocaleString()}</span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button class="admin-void-btn" data-id="${docSnap.id}" style="flex: 1; background: #e74c3c; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">VOID (REFUND)</button>
+            <button class="admin-release-btn" data-id="${docSnap.id}" style="flex: 1; background: #2ecc71; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">FORCE RELEASE</button>
+        </div>
+      `;
+      adminEscrowList.appendChild(div);
+    });
+  });
+}
+
+async function handleAdminEscrowAction(escrowId, action) {
+  const escrowRef = doc(db, "pending_transfers", escrowId);
+  
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(escrowRef);
+      if (!snap.exists()) throw "Transfer not found.";
+      const data = snap.data();
+      
+      const targetUid = (action === 'void') ? data.from : data.to;
+      const userRef = doc(db, "users", targetUid);
+      const userSnap = await transaction.get(userRef);
+      
+      transaction.update(userRef, { balance: (userSnap.data().balance || 0) + data.amount });
+      transaction.delete(escrowRef);
+    });
+    alert(action === 'void' ? "Refund successful." : "Funds released early.");
+  } catch (e) { alert("Action failed: " + e); }
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.classList.contains("admin-void-btn")) handleAdminEscrowAction(e.target.dataset.id, 'void');
+  if (e.target.classList.contains("admin-release-btn")) handleAdminEscrowAction(e.target.dataset.id, 'release');
+});
+
+/* =========================================================
     ADMIN ROSTER: SPLIT PAYMENT CONTROLS
 ========================================================= */
 export function listenForAdminRoster() {
@@ -583,9 +644,11 @@ const openAdminBtn = document.getElementById("open-admin");
 if (openAdminBtn) openAdminBtn.addEventListener("click", () => { 
     loadRenewalRequests(); 
     listenForAdminRoster(); 
+    listenToAllEscrow(); 
 });
 
 if (adminPanel && !adminPanel.classList.contains("hidden")) { 
     loadRenewalRequests(); 
     listenForAdminRoster();
+    listenToAllEscrow(); 
 }
