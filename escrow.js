@@ -1,17 +1,16 @@
-// ---------- escrow.js (Unified Hub Version) ----------
+// ---------- escrow.js (Unified Hub Version + Live Timer) ----------
 import { db, auth } from "./firebaseConfig.js";
 import { 
-    collection, query, where, onSnapshot, doc, runTransaction, serverTimestamp 
+    collection, query, where, onSnapshot, doc, runTransaction 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { logHistory } from "./historyManager.js";
 import { updateBalanceDisplay } from "./main.js";
 
 const escrowList = document.getElementById("escrow-list");
-const escrowBadge = document.getElementById("escrow-count-badge"); // For the Hub Tab Badge
+const escrowBadge = document.getElementById("escrow-count-badge");
 
-/**
- * Exported initialization function to be called from transfer.js
- */
+// Local cache to allow the timer to refresh the UI without extra database reads
+let currentEscrowSnapshot = [];
+
 export function initEscrow(uid) {
     if (!escrowList) return;
     listenForEscrow(uid);
@@ -25,22 +24,35 @@ function listenForEscrow(uid) {
     );
 
     onSnapshot(q, (snapshot) => {
-        // Update UI Badge for the Hub
+        // Update local cache
+        currentEscrowSnapshot = [];
+        snapshot.forEach(docSnap => {
+            currentEscrowSnapshot.push({ id: docSnap.id, data: docSnap.data() });
+        });
+
+        // Update Hub Badge
         if (escrowBadge) {
             const count = snapshot.size;
             escrowBadge.textContent = count;
             count > 0 ? escrowBadge.classList.remove("hidden") : escrowBadge.classList.add("hidden");
         }
 
-        escrowList.innerHTML = "";
-        if (snapshot.empty) {
-            escrowList.innerHTML = `<p style="color:gray; font-size:0.85rem; text-align:center; padding: 20px;">No protected funds currently in escrow.</p>`;
-            return;
-        }
+        refreshEscrowUI();
+    }, (error) => console.error("Escrow Listener Error:", error));
+}
 
-        snapshot.forEach(docSnap => {
-            renderEscrowItem(docSnap.id, docSnap.data());
-        });
+// Recalculates time and redraws the list
+function refreshEscrowUI() {
+    if (!escrowList) return;
+    escrowList.innerHTML = "";
+
+    if (currentEscrowSnapshot.length === 0) {
+        escrowList.innerHTML = `<p style="color:gray; font-size:0.85rem; text-align:center; padding: 20px;">No protected funds currently in escrow.</p>`;
+        return;
+    }
+
+    currentEscrowSnapshot.forEach(item => {
+        renderEscrowItem(item.id, item.data);
     });
 }
 
@@ -48,6 +60,13 @@ function renderEscrowItem(id, data) {
     const now = Date.now();
     const isReady = now >= data.releaseDate;
     const timeLeft = data.releaseDate - now;
+
+    // Precise Math: Hours + Minutes
+    const totalMinutes = Math.max(0, Math.floor(timeLeft / (1000 * 60)));
+    const displayHours = Math.floor(totalMinutes / 60);
+    const displayMinutes = totalMinutes % 60;
+
+    let timeText = displayHours > 0 ? `${displayHours}h ${displayMinutes}m` : `${displayMinutes}m`;
 
     const item = document.createElement("div");
     item.className = "escrow-item";
@@ -59,17 +78,24 @@ function renderEscrowItem(id, data) {
                 <div style="font-weight: bold; color: #f1c40f;">$${data.amount.toLocaleString()}</div>
                 <div style="font-size: 0.8rem; color: #eee;">From: ${data.fromName}</div>
                 <div style="font-size: 0.7rem; color: #aaa; margin-top: 4px;">
-                    ${isReady ? "✅ Ready to claim" : `🔒 Unlocks in ${Math.ceil(timeLeft / (1000 * 60 * 60))} hours`}
+                    ${isReady ? "✅ Ready to claim" : `🔒 Unlocks in ${timeText}`}
                 </div>
             </div>
             <button class="claim-btn btn-primary" data-id="${id}" 
-                ${!isReady ? 'disabled style="opacity:0.4; cursor:not-allowed; background:#444;"' : 'style="background:#f1c40f; color:black; border:none; padding:8px 12px; border-radius:6px; font-weight:bold;"'}>
+                ${!isReady ? 'disabled style="opacity:0.4; cursor:not-allowed; background:#444;"' : 'style="background: #f1c40f; color: black; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;"'}>
                 Claim
             </button>
         </div>
     `;
     escrowList.appendChild(item);
 }
+
+// Re-render UI every 60 seconds to update the "minutes remaining"
+setInterval(() => {
+    if (currentEscrowSnapshot.length > 0) {
+        refreshEscrowUI();
+    }
+}, 60000);
 
 async function claimFunds(escrowId) {
     const user = auth.currentUser;
@@ -93,16 +119,13 @@ async function claimFunds(escrowId) {
             transaction.delete(escrowRef); 
         });
 
-        // Optional: Update global balance display if main.js function is available
         if (typeof updateBalanceDisplay === "function") updateBalanceDisplay();
-
         alert("Funds successfully added to your balance!");
     } catch (err) {
         alert("Claim failed: " + err);
     }
 }
 
-// Event Delegation for Claim Buttons
 document.addEventListener("click", (e) => {
     if (e.target.classList.contains("claim-btn")) {
         claimFunds(e.target.dataset.id);

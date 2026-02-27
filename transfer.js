@@ -1,4 +1,4 @@
-// ---------- transfer.js (UNIFIED HUB VERSION) ----------
+// ---------- transfer.js (UNIFIED HUB VERSION - OPTIMIZED) ----------
 console.log("transfer.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -26,16 +26,13 @@ const transferMessage = document.getElementById("transfer-message");
 const hubTabs = document.querySelectorAll(".hub-tab");
 hubTabs.forEach(tab => {
     tab.addEventListener("click", () => {
-        // Remove active class from all tabs
         hubTabs.forEach(t => t.classList.remove("active"));
         tab.classList.add("active");
 
-        // Hide all panes
         document.getElementById("send-div").classList.add("hidden");
         document.getElementById("invoices-div").classList.add("hidden");
         document.getElementById("escrow-div").classList.add("hidden");
 
-        // Show targeted pane
         const target = tab.dataset.target;
         document.getElementById(target).classList.remove("hidden");
     });
@@ -85,8 +82,6 @@ async function handleTransfer() {
   transferBtn.disabled = true;
   transferBtn.textContent = "Processing...";
 
-  let senderNameForLog = "";
-
   try {
     const usersRef = collection(db, "users");
     const q = query(usersRef, where("username", "==", toUsername));
@@ -108,10 +103,9 @@ async function handleTransfer() {
       if (!senderSnap.exists()) throw new Error("Sender data missing.");
       
       const senderData = senderSnap.data();
-      senderNameForLog = senderData.username; 
 
+      // Transaction Validation
       if (senderData.balance < amount) throw new Error("Insufficient Cash.");
-
       if (isProtected && (senderData.bpsBalance || 0) < BPS_FEE) {
         throw new Error(`Insufficient BPS. Protection costs ${BPS_FEE} BPS.`);
       }
@@ -126,7 +120,7 @@ async function handleTransfer() {
           amount: amount,
           status: "pending",
           timestamp: serverTimestamp(),
-          releaseDate: Date.now() + (2 * 60 * 60 * 1000) 
+          releaseDate: Date.now() + (2 * 60 * 60 * 1000) // EXACTLY 2 HOURS
         });
 
         transaction.update(senderRef, {
@@ -140,10 +134,10 @@ async function handleTransfer() {
     });
 
     const protectionNote = isProtected ? " (Protected - 5 BPS Fee Applied)" : "";
-    await Promise.all([
-      logHistory(user.uid, `Sent $${amount.toLocaleString()} to ${recipientUsername}${protectionNote}`, "transfer-out"),
-      logHistory(recipientUid, `Received $${amount.toLocaleString()} from ${senderNameForLog}`, "transfer-in")
-    ]);
+    
+    // Log history separately to ensure transfer succeeds even if logs fail
+    logHistory(user.uid, `Sent $${amount.toLocaleString()} to ${recipientUsername}${protectionNote}`, "transfer-out");
+    logHistory(recipientUid, `Received $${amount.toLocaleString()} from ${toUsername}`, "transfer-in");
 
     showMessage(isProtected ? "Protected transfer sent to Escrow!" : "Transfer successful!", "success");
     clearInputs();
@@ -171,6 +165,8 @@ async function handleRequest() {
     return showMessage("Enter recipient and amount to request.", "error");
   }
 
+  requestBtn.disabled = true;
+
   try {
     const usersRef = collection(db, "users");
     const qTarget = query(usersRef, where("username", "==", targetUsernameInput));
@@ -183,8 +179,10 @@ async function handleRequest() {
 
     if (targetUid === user.uid) throw new Error("You cannot request money from yourself.");
 
+    // Optimized: Get sender name from already existing user state if possible
+    // Here we get fresh data once to be sure
     const senderSnap = await getDoc(doc(db, "users", user.uid));
-    const realUsername = senderSnap.exists() ? senderSnap.data().username : "Unknown User";
+    const realUsername = senderSnap.data().username;
 
     await addDoc(collection(db, "requests"), {
       requesterUid: user.uid,
@@ -201,6 +199,8 @@ async function handleRequest() {
   } catch (err) {
     console.error(err);
     showMessage(err.message, "error");
+  } finally {
+    requestBtn.disabled = false;
   }
 }
 
@@ -219,11 +219,11 @@ function clearInputs() {
   transferAmountInput.value = "";
   if (protectionCheckbox) {
       protectionCheckbox.checked = false;
+      // Trigger change event to reset the UI styles
       protectionCheckbox.dispatchEvent(new Event('change'));
   }
 }
 
-// Initialize Hub Listeners on Login
 auth.onAuthStateChanged((user) => {
     if (user) {
         initRequests(user.uid);
