@@ -1,4 +1,4 @@
-// ---------- retirement.js (MEMBERSHIP INTEGRATED + DYNAMIC PERCENTAGE) ----------
+// ---------- retirement.js (CATCH-UP + LIFETIME TRACKER) ----------
 console.log("retirement.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -9,6 +9,7 @@ import { PLANS } from "./membership_plans.js";
 // ---------- Elements ----------
 const savingsEl = document.getElementById("retirement-savings");
 const interestEl = document.getElementById("retirement-interest");
+const totalEarnedEl = document.getElementById("retirement-total-earned"); // New Element
 const daysEl = document.getElementById("retirement-days");
 const depositInput = document.getElementById("retirement-deposit");
 const depositBtn = document.getElementById("retirement-deposit-btn");
@@ -23,54 +24,59 @@ let retirementChart = null; // Chart.js instance
 
 // ---------- Render Retirement UI ----------
 function renderSavings(userData) {
-  if (!userData || !savingsEl) return;
-  
-  cachedUserData = userData;
+    if (!userData || !savingsEl) return;
+    
+    cachedUserData = userData;
 
-  // Membership Data
-  const tier = userData.membershipLevel || 'standard';
-  const plan = PLANS[tier];
-  const interestRatePercent = (plan.interest * 100).toFixed(0);
-  
-  const savings = Number(userData.retirementSavings || 0);
-  const status = userData.employmentStatus || "Unemployed";
+    // Membership Data
+    const tier = userData.membershipLevel || 'standard';
+    const plan = PLANS[tier];
+    const interestRatePercent = (plan.interest * 100).toFixed(0);
+    
+    const savings = Number(userData.retirementSavings || 0);
+    const totalEarned = Number(userData.totalInterestEarned || 0); // New Field
+    const status = userData.employmentStatus || "Unemployed";
 
-  const now = new Date();
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const diffTime = nextMonth - now;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const diffTime = nextMonth - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-  savingsEl.textContent = savings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  
-  // Dynamic Interest Display based on Plan: Interest (X%): $amount
-  const calculatedInterest = savings * plan.interest;
-  interestEl.innerHTML = `Interest (${interestRatePercent}%): $${calculatedInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  
-  daysEl.textContent = diffDays;
+    // Update Text Elements
+    savingsEl.textContent = savings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (totalEarnedEl) {
+        totalEarnedEl.textContent = totalEarned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    
+    const calculatedInterest = savings * plan.interest;
+    interestEl.innerHTML = `Next Interest (${interestRatePercent}%): $${calculatedInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    
+    daysEl.textContent = diffDays;
 
-  // Update Visual Chart using plan interest
-  renderGrowthChart(savings, plan.interest);
+    // Update Visual Chart
+    renderGrowthChart(savings, plan.interest);
 
-  if (retirementBusy) {
-    toggleInputs(true);
-    return;
-  }
+    if (retirementBusy) {
+        toggleInputs(true);
+        return;
+    }
 
-  if (status === "Employed") {
-    depositBtn.disabled = false;
-    withdrawBtn.disabled = true;
-    depositInput.disabled = false;
-    withdrawInput.disabled = true;
-  } else if (status === "Retired") {
-    depositBtn.disabled = true;
-    withdrawBtn.disabled = false;
-    depositInput.disabled = true;
-    withdrawInput.disabled = false;
-  } else {
-    toggleInputs(true); 
-  }
-  
-  applyInterestIfFirstDay(userData);
+    if (status === "Employed") {
+        depositBtn.disabled = false;
+        withdrawBtn.disabled = true;
+        depositInput.disabled = false;
+        withdrawInput.disabled = true;
+    } else if (status === "Retired") {
+        depositBtn.disabled = true;
+        withdrawBtn.disabled = false;
+        depositInput.disabled = true;
+        withdrawInput.disabled = false;
+    } else {
+        toggleInputs(true); 
+    }
+    
+    // NEW: Trigger Catch-up check instead of standard check
+    applyInterestCatchUp(userData);
 }
 
 function toggleInputs(disabled) {
@@ -97,7 +103,6 @@ function renderGrowthChart(currentSavings, interestRate) {
     const months = ["Now", "Mo 1", "Mo 2", "Mo 3", "Mo 4", "Mo 5", "Mo 6"];
     const dataPoints = [currentSavings];
     
-    // Use the dynamic interest rate from membership plans
     for (let i = 1; i < 7; i++) {
         dataPoints.push(dataPoints[i-1] * (1 + interestRate));
     }
@@ -130,138 +135,150 @@ function renderGrowthChart(currentSavings, interestRate) {
 
 // ---------- Deposit Logic ----------
 depositBtn?.addEventListener("click", async () => {
-  if (retirementBusy || !auth.currentUser || !cachedUserData) {
-    return showMsg("⚠️ System initializing...", "error");
-  }
+    if (retirementBusy || !auth.currentUser || !cachedUserData) {
+        return showMsg("⚠️ System initializing...", "error");
+    }
 
-  const amount = parseFloat(depositInput.value);
-  if (isNaN(amount) || amount <= 0) return showMsg("⚠️ Enter a valid deposit amount", "error");
+    const amount = parseFloat(depositInput.value);
+    if (isNaN(amount) || amount <= 0) return showMsg("⚠️ Enter a valid deposit amount", "error");
 
-  // Check Daily Limit (Platinum Plan has no limits)
-  const tier = cachedUserData.membershipLevel || 'standard';
-  const DAILY_LIMIT = 500000;
-  const dailyUsed = getTodayLimitUsed(cachedUserData);
-  
-  if (tier !== 'platinum' && (dailyUsed + amount > DAILY_LIMIT)) {
-      return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
-  }
+    const tier = cachedUserData.membershipLevel || 'standard';
+    const DAILY_LIMIT = 500000;
+    const dailyUsed = getTodayLimitUsed(cachedUserData);
+    
+    if (tier !== 'platinum' && (dailyUsed + amount > DAILY_LIMIT)) {
+        return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
+    }
 
-  if (cachedUserData.balance < amount) return showMsg("❌ Insufficient main balance", "error");
-  if (cachedUserData.employmentStatus !== "Employed") return showMsg("❌ Only employed users can deposit", "error");
+    if (cachedUserData.balance < amount) return showMsg("❌ Insufficient main balance", "error");
+    if (cachedUserData.employmentStatus !== "Employed") return showMsg("❌ Only employed users can deposit", "error");
 
-  retirementBusy = true;
-  showMsg("Processing deposit...", "success");
+    retirementBusy = true;
+    showMsg("Processing deposit...", "success");
 
-  try {
-    const userRef = doc(db, "users", auth.currentUser.uid);
-    const newBalance = cachedUserData.balance - amount;
-    const newSavings = (cachedUserData.retirementSavings || 0) + amount;
+    try {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const newBalance = cachedUserData.balance - amount;
+        const newSavings = (cachedUserData.retirementSavings || 0) + amount;
 
-    await updateDoc(userRef, {
-      balance: newBalance,
-      retirementSavings: newSavings,
-      retirementDailyTotal: dailyUsed + amount,
-      lastRetirementDate: new Date().toISOString()
-    });
+        await updateDoc(userRef, {
+            balance: newBalance,
+            retirementSavings: newSavings,
+            retirementDailyTotal: dailyUsed + amount,
+            lastRetirementDate: new Date().toISOString()
+        });
 
-    await logHistory(auth.currentUser.uid, `Retirement Deposit: $${amount.toLocaleString()}`, "transfer-out");
+        await logHistory(auth.currentUser.uid, `Retirement Deposit: $${amount.toLocaleString()}`, "transfer-out");
 
-    depositInput.value = "";
-    showMsg(`✅ Successfully deposited $${amount.toLocaleString()}`, "success");
-  } catch (err) {
-    console.error(err);
-    showMsg("Deposit failed: " + err.message, "error");
-  } finally {
-    retirementBusy = false;
-    renderSavings(cachedUserData);
-  }
+        depositInput.value = "";
+        showMsg(`✅ Successfully deposited $${amount.toLocaleString()}`, "success");
+    } catch (err) {
+        console.error(err);
+        showMsg("Deposit failed: " + err.message, "error");
+    } finally {
+        retirementBusy = false;
+        renderSavings(cachedUserData);
+    }
 });
 
 // ---------- Withdrawal Logic ----------
 withdrawBtn?.addEventListener("click", async () => {
-  if (retirementBusy || !auth.currentUser || !cachedUserData) {
-    return showMsg("⚠️ System initializing...", "error");
-  }
+    if (retirementBusy || !auth.currentUser || !cachedUserData) {
+        return showMsg("⚠️ System initializing...", "error");
+    }
 
-  const amount = parseFloat(withdrawInput.value);
-  if (isNaN(amount) || amount <= 0) return showMsg("⚠️ Enter a valid withdrawal amount", "error");
+    const amount = parseFloat(withdrawInput.value);
+    if (isNaN(amount) || amount <= 0) return showMsg("⚠️ Enter a valid withdrawal amount", "error");
 
-  // Check Daily Limit (Platinum Plan has no limits)
-  const tier = cachedUserData.membershipLevel || 'standard';
-  const DAILY_LIMIT = 500000;
-  const dailyUsed = getTodayLimitUsed(cachedUserData);
-  
-  if (tier !== 'platinum' && (dailyUsed + amount > DAILY_LIMIT)) {
-      return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
-  }
+    const tier = cachedUserData.membershipLevel || 'standard';
+    const DAILY_LIMIT = 500000;
+    const dailyUsed = getTodayLimitUsed(cachedUserData);
+    
+    if (tier !== 'platinum' && (dailyUsed + amount > DAILY_LIMIT)) {
+        return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
+    }
 
-  if (cachedUserData.employmentStatus !== "Retired") return showMsg("❌ Only retired users can withdraw", "error");
-  if ((cachedUserData.retirementSavings || 0) < amount) return showMsg("❌ Insufficient retirement savings", "error");
+    if (cachedUserData.employmentStatus !== "Retired") return showMsg("❌ Only retired users can withdraw", "error");
+    if ((cachedUserData.retirementSavings || 0) < amount) return showMsg("❌ Insufficient retirement savings", "error");
 
-  retirementBusy = true;
-  showMsg("Processing withdrawal...", "success");
+    retirementBusy = true;
+    showMsg("Processing withdrawal...", "success");
 
-  try {
-    const userRef = doc(db, "users", auth.currentUser.uid);
-    const newBalance = cachedUserData.balance + amount;
-    const newSavings = cachedUserData.retirementSavings - amount;
+    try {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const newBalance = cachedUserData.balance + amount;
+        const newSavings = cachedUserData.retirementSavings - amount;
 
-    await updateDoc(userRef, {
-      balance: newBalance,
-      retirementSavings: newSavings,
-      retirementDailyTotal: dailyUsed + amount,
-      lastRetirementDate: new Date().toISOString()
-    });
+        await updateDoc(userRef, {
+            balance: newBalance,
+            retirementSavings: newSavings,
+            retirementDailyTotal: dailyUsed + amount,
+            lastRetirementDate: new Date().toISOString()
+        });
 
-    await logHistory(auth.currentUser.uid, `Retirement Withdrawal: $${amount.toLocaleString()}`, "transfer-in");
+        await logHistory(auth.currentUser.uid, `Retirement Withdrawal: $${amount.toLocaleString()}`, "transfer-in");
 
-    withdrawInput.value = "";
-    showMsg(`✅ Successfully withdrew $${amount.toLocaleString()}`, "success");
-  } catch (err) {
-    console.error(err);
-    showMsg("Withdrawal failed: " + err.message, "error");
-  } finally {
-    retirementBusy = false;
-    renderSavings(cachedUserData);
-  }
+        withdrawInput.value = "";
+        showMsg(`✅ Successfully withdrew $${amount.toLocaleString()}`, "success");
+    } catch (err) {
+        console.error(err);
+        showMsg("Withdrawal failed: " + err.message, "error");
+    } finally {
+        retirementBusy = false;
+        renderSavings(cachedUserData);
+    }
 });
 
-// ---------- Monthly Interest Logic ----------
-async function applyInterestIfFirstDay(userData) {
-  if (!userData?.retirementSavings || userData.retirementSavings <= 0) return;
+/* =========================================================
+    NEW LOGIC: Catch-up Compound Interest & Lifetime Tracker
+========================================================= */
+async function applyInterestCatchUp(userData) {
+    if (!userData?.retirementSavings || userData.retirementSavings <= 0) return;
 
-  const now = new Date();
-  if (now.getDate() !== 1) return; 
-  
-  const monthKey = now.toISOString().slice(0, 7); 
-  if (userData.lastInterestApplied?.startsWith(monthKey)) return;
+    // Use current time if lastInterestApplied is missing
+    const lastApplied = userData.lastInterestApplied ? new Date(userData.lastInterestApplied) : new Date();
+    const now = new Date();
+    
+    // Calculate total months passed since last success
+    const monthsDiff = (now.getFullYear() - lastApplied.getFullYear()) * 12 + (now.getMonth() - lastApplied.getMonth());
 
-  // Use Tier-Based Interest
-  const tier = userData.membershipLevel || 'standard';
-  const interestRate = PLANS[tier].interest;
-  const interest = userData.retirementSavings * interestRate;
-  
-  const userRef = doc(db, "users", auth.currentUser.uid);
+    if (monthsDiff > 0) {
+        const tier = userData.membershipLevel || 'standard';
+        const rate = PLANS[tier].interest;
+        const currentSavings = userData.retirementSavings;
 
-  try {
-    await updateDoc(userRef, {
-      retirementSavings: userData.retirementSavings + interest,
-      lastInterestApplied: now.toISOString()
-    });
+        // Compound Formula: A = P(1 + r)^n
+        const newSavings = currentSavings * Math.pow((1 + rate), monthsDiff);
+        const amountEarned = newSavings - currentSavings;
+        const newLifetimeEarned = (userData.totalInterestEarned || 0) + amountEarned;
 
-    await logHistory(auth.currentUser.uid, `Monthly Interest (${(interestRate * 100).toFixed(0)}%): $${interest.toFixed(2)}`, "usage");
-  } catch (err) {
-    console.error("Interest application failed:", err);
-  }
+        const userRef = doc(db, "users", auth.currentUser.uid);
+
+        try {
+            await updateDoc(userRef, {
+                retirementSavings: newSavings,
+                totalInterestEarned: newLifetimeEarned,
+                lastInterestApplied: now.toISOString()
+            });
+
+            await logHistory(
+                auth.currentUser.uid, 
+                `Retirement Catch-up (${monthsDiff} mo): +$${amountEarned.toLocaleString(undefined, {maximumFractionDigits:2})}`, 
+                "usage"
+            );
+        } catch (err) {
+            console.error("Interest catch-up failed:", err);
+        }
+    }
 }
 
 // ---------- Notifications ----------
 function showMsg(msg, type) {
-  if (!messageEl) return;
-  messageEl.textContent = msg;
-  messageEl.style.color = type === "error" ? "#e74c3c" : "#2ecc71";
-  messageEl.style.fontWeight = "bold";
-  setTimeout(() => { if(messageEl.textContent === msg) messageEl.textContent = ""; }, 4000);
+    if (!messageEl) return;
+    messageEl.textContent = msg;
+    messageEl.style.color = type === "error" ? "#e74c3c" : "#2ecc71";
+    messageEl.style.fontWeight = "bold";
+    setTimeout(() => { if(messageEl.textContent === msg) messageEl.textContent = ""; }, 4000);
 }
 
 // ---------- Export ----------

@@ -175,7 +175,10 @@ onAuthStateChanged(auth, async (user) => {
     if (typeof renderShop === "function") renderShop(currentDashboardData);
     if (typeof renderBpsShop === "function") renderBpsShop(currentDashboardData);
     if (typeof loadCosmetics === "function") loadCosmetics(currentDashboardData);
+    
+    // UPDATED: Ensure renderSavings gets full data for catch-up interest logic
     if (typeof renderSavings === "function") renderSavings(currentDashboardData); 
+    
     if (typeof renderUserContract === "function") renderUserContract(user.uid, currentDashboardData);
 
   }, (error) => {
