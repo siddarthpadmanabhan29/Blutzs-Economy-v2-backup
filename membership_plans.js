@@ -1,4 +1,4 @@
-// ---------- membership_plans.js (Updated for Complete Slack Notifications + Cost Display) ----------
+// ---------- membership_plans.js (Updated for Complete Slack Notifications + BPS Converter) ----------
 import { db } from "./firebaseConfig.js";
 import { 
     doc, updateDoc, increment, getDoc 
@@ -17,6 +17,8 @@ export const PLANS = {
         cashback: 0,
         bpsPerPurchase: 5,
         shopFreeFreq: 0, 
+        bpsConversionLimit: 0, // Cannot use converter
+        bpsConversionRate: 0,
         badge: "⚪",
         color: "#95a5a6"
     },
@@ -28,6 +30,8 @@ export const PLANS = {
         cashback: 0.01,
         bpsPerPurchase: 5,
         shopFreeFreq: 3, 
+        bpsConversionLimit: 25, // Updated limit: 25
+        bpsConversionRate: 1000,
         badge: "🟢",
         color: "#2ecc71"
     },
@@ -39,6 +43,8 @@ export const PLANS = {
         cashback: 0.02,
         bpsPerPurchase: 10,
         shopFreeFreq: 2, 
+        bpsConversionLimit: 50, // Updated limit: 50
+        bpsConversionRate: 1000,
         badge: "💎",
         color: "#9b59b6"
     },
@@ -50,6 +56,8 @@ export const PLANS = {
         cashback: 0.03,
         bpsPerPurchase: 20,
         shopFreeFreq: 1, 
+        bpsConversionLimit: 75, // Updated limit: 75
+        bpsConversionRate: 1000,
         badge: "👑",
         color: "#f1c40f"
     }

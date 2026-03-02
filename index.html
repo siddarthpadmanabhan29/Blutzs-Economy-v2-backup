@@ -279,7 +279,7 @@
         <button id="renew-btn" class="btn-primary" type="button">Request Renewal</button>
       </section>
 
-      <section class="section-card" style="border: 2px solid #2ecc71;">
+      <section id="membership-plans-anchor" class="section-card" style="border: 2px solid #2ecc71;">
     <h3 style="color: #2ecc71;">💎 Membership Plans</h3>
     <p style="font-size: 0.85em; opacity: 0.8;">Subscribe for exclusive perks and lower taxes. Auto-renews monthly.</p>
     
@@ -293,6 +293,7 @@
                 <li>✅ 8% Shop Tax</li>
                 <li>✅ 4% Retirement Interest</li>
                 <li>✅ 1% Usage Cashback</li>
+                <li>✅ Exchange 25 BPS Weekly</li>
                 <li>✅ 1 Free Shop Item after every 3 used</li>
                 <li>✅ Basic Plan Profile Badge</li>
             </ul>
@@ -306,6 +307,7 @@
                 <li>✅ 4% Shop Tax</li>
                 <li>✅ 5% Retirement Interest</li>
                 <li>✅ 2% Usage Cashback</li>
+                <li>✅ Exchange 50 BPS Weekly</li>
                 <li>✅ 1 Free Shop Item after every 2 used</li>
                 <li>✅ Earn 10 BPS per shop purchase</li>
                 <li>✅ Premium Plan Profile Badge</li>
@@ -320,6 +322,7 @@
                 <li>✅ 0% Shop Tax (Tax Exempt!)</li>
                 <li>✅ 5% Retirement Interest</li>
                 <li>✅ 3% Usage Cashback</li>
+                <li>✅ Exchange 75 BPS Weekly</li>
                 <li>✅ 1 Free Shop Item after every 1 used</li>
                 <li>✅ Earn 20 BPS per shop purchase</li>
                 <li>✅ Free Custom Nav Color</li>
@@ -476,6 +479,30 @@
         </div>
         <p id="loan-message" style="margin-top: 10px; font-weight: bold;"></p>
       </section>
+
+      <section id="bps-converter-section" class="section-card hidden" style="border: 2px solid #d1bce3;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="color: #d1bce3; margin: 0;">💱 BPS Exchange</h3>
+        <span class="history-type-pill" style="background: rgba(209, 188, 227, 0.1); color: #d1bce3; border-color: #d1bce3;">Member Exclusive</span>
+    </div>
+    <p style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">Convert BPS to Cash (Rate: 1 BPS = $1,000)</p>
+    
+    <div id="bps-converter-ui" style="margin-top: 15px; padding: 15px; background: rgba(209, 188, 227, 0.05); border-radius: 12px; border: 1px dashed rgba(209, 188, 227, 0.3);">
+        <div style="display: flex; gap: 10px; align-items: flex-end;">
+            <div style="flex: 1;">
+                <label class="contract-label">Amount to Convert</label>
+                <input type="number" id="bps-convert-amount" placeholder="e.g. 10" style="width: 100%; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 8px; padding: 10px; box-sizing: border-box;">
+            </div>
+            <button id="convert-bps-btn" class="btn-primary" style="height: 42px; background: #8e44ad; border: none; padding: 0 20px;">Convert</button>
+        </div>
+        
+        <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <p style="font-size: 0.8rem; color: #aaa; margin: 0;">Weekly Limit: <strong id="bps-weekly-remaining"></strong> / -- BPS</p>
+            <p id="bps-countdown-timer" class="hidden" style="font-size: 0.8rem; color: #e67e22; font-weight: bold;"></p>
+        </div>
+    </div>
+    <p id="bps-converter-message" style="margin-top: 10px; font-size: 0.85rem; font-weight: bold; text-align: center;"></p>
+</section>
 
       <section class="section-card compact-history">
         <div class="history-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -682,6 +709,14 @@
   <script type="module" src="membership_plans.js"></script>
   <script type="module" src="requests.js"></script>
   <script type="module" src="escrow.js"></script>
+  <script type="module" src="bpsConverter.js"></script>
   <script type="module" src="admin.js"></script>
+  <script>
+    // Global helper for the Locked State scroll button
+    window.scrollToPlans = function() {
+      const el = document.getElementById('membership-plans-anchor');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
   </body>
 </html>
