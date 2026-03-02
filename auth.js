@@ -1,11 +1,12 @@
-// ---------- auth.js (Complete - Username Lookup with Status Feedback) ----------
+// ---------- auth.js ----------
 import { auth, db } from "./firebaseConfig.js";
 import { 
     signInWithEmailAndPassword, 
     signOut, 
     onAuthStateChanged,
     setPersistence,
-    browserLocalPersistence
+    browserLocalPersistence,
+    sendPasswordResetEmail // ADDED
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { 
     doc, 
@@ -28,8 +29,8 @@ const loginUsername = document.getElementById("login-username");
 const loginPassword = document.getElementById("login-password");
 const loginBtn = document.getElementById("login-btn");
 const logoutBtn = document.getElementById("logout-btn");
+const forgotPasswordLink = document.getElementById("forgot-password-link"); // ADDED
 
-// Global flag to prevent spam clicking without hard-disabling
 let isAuthenticating = false;
 
 // ---------- Helper: Show Screen ----------
@@ -40,9 +41,25 @@ export function showScreen(id) {
 }
 
 /**
- * EXPORTED HELPER: Create/Update User Doc
- * Now includes the actual email field for the lookup login
+ * Helper: Look up email by username
  */
+async function getEmailFromUsername(username) {
+    const inputName = username.trim().toLowerCase().replace(/\s/g, '');
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("usernameLower", "==", inputName));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+        throw new Error("Username not found.");
+    }
+
+    const userData = querySnapshot.docs[0].data();
+    if (!userData.email) {
+        throw new Error("No email linked to this account. Contact an admin.");
+    }
+    return userData.email;
+}
+
 export async function createOrUpdateUserDoc(uid, username, email) {
     const now = new Date();
     const expiration = new Date(now);
@@ -54,11 +71,10 @@ export async function createOrUpdateUserDoc(uid, username, email) {
     const isAdmin = usernameLower === ADMIN_USERNAME.toLowerCase();
 
     if (!snap.exists()) {
-        // Brand New User Setup
         await setDoc(userRef, {
             username: username, 
             usernameLower: usernameLower,
-            email: email, // Added this for lookup login
+            email: email, 
             balance: 0,
             bpsBalance: 0,
             history: [],
@@ -74,50 +90,30 @@ export async function createOrUpdateUserDoc(uid, username, email) {
             shopOrderCount: 0,
             createdAt: now.toISOString()
         });
-        console.log(`Firestore document created for ${usernameLower}`);
     } else {
-        // Existing User (Update email field if it's missing)
         await updateDoc(userRef, { 
             lastLogin: now.toISOString(),
-            email: email // Keep email in sync
+            email: email 
         });
-        console.log(`Firestore document linked for existing user: ${usernameLower}`);
     }
 }
 
-// ---------- Login Flow (Username Lookup + "Authenticating" Feedback) ----------
+// ---------- Login Flow ----------
 loginBtn.addEventListener("click", async () => {
-    // If we are already in the middle of a request, ignore additional clicks
     if (isAuthenticating) return;
 
-    const inputName = loginUsername.value.trim().toLowerCase().replace(/\s/g, '');
+    const username = loginUsername.value;
     const password = loginPassword.value;
 
-    if (!inputName || !password) return alert("Enter both fields");
+    if (!username || !password) return alert("Enter both fields");
 
-    // Start state
     isAuthenticating = true;
     loginBtn.textContent = "Authenticating...";
     loginBtn.style.opacity = "0.8";
 
     try {
-        // 1. Search Firestore for the email linked to this username
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("usernameLower", "==", inputName));
-        const querySnapshot = await getDocs(q);
+        const actualEmail = await getEmailFromUsername(username);
 
-        if (querySnapshot.empty) {
-            throw new Error("Username not found.");
-        }
-
-        const userData = querySnapshot.docs[0].data();
-        const actualEmail = userData.email;
-
-        if (!actualEmail) {
-            throw new Error("No email linked to this account.");
-        }
-
-        // 2. Authenticate
         await setPersistence(auth, browserLocalPersistence);
         const cred = await signInWithEmailAndPassword(auth, actualEmail, password);
         
@@ -132,11 +128,29 @@ loginBtn.addEventListener("click", async () => {
             alert(error.message);
         }
     } finally {
-        // Reset state so user can try again if an error occurred
-        // If login was successful, the onAuthStateChanged will handle the screen flip
         isAuthenticating = false;
         loginBtn.textContent = "Login";
         loginBtn.style.opacity = "1";
+    }
+});
+
+// ---------- Forgot Password Flow ----------
+forgotPasswordLink?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    
+    const username = loginUsername.value.trim();
+    if (!username) {
+        return alert("Please enter your username in the login box first so we know which account to reset.");
+    }
+
+    if (!confirm(`Send a password reset link for user "${username}"?`)) return;
+
+    try {
+        const email = await getEmailFromUsername(username);
+        await sendPasswordResetEmail(auth, email);
+        alert(`Success! A password reset link has been sent to the email linked to "${username}". Check your inbox (and spam folder).`);
+    } catch (error) {
+        alert("Error: " + error.message);
     }
 });
 
@@ -161,14 +175,12 @@ onAuthStateChanged(auth, (user) => {
         if (dashboardScreen) dashboardScreen.classList.add("hidden");
     } else {
         currentUser = user;
-        // Ensure reset in case of page refresh/persistence
         isAuthenticating = false;
         loginBtn.textContent = "Login";
         showScreen("dashboard");
     }
 });
 
-// Support for "Enter" key login
 loginPassword.addEventListener("keypress", (e) => {
     if (e.key === "Enter") loginBtn.click();
 });
