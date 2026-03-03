@@ -22,6 +22,15 @@ import { PLANS, checkMembershipBilling, getTierBadge, getNextBillingDate, purcha
 // --- BPS CONVERTER IMPORT ---
 import { renderBpsConverter } from "./bpsConverter.js";
 
+// --- ECONOMIC STATS IMPORT ---
+import { renderStatsTeaser } from "./estats.js";
+
+// NEW: Import the shared utility for Option A math synchronization
+import { getLiveMarketRate } from "./economyUtils.js";
+
+// NEW: Import the economy logger to archive daily snapshots for real charts
+import { logDailyEconomySnapshot } from "./economyLogger.js";
+
 /* =========================================================
     QUOTA PROTECTION: LISTENER MANAGER
 ========================================================= */
@@ -100,7 +109,7 @@ function applyTheme(theme) {
     if (themeToggleBtn) themeToggleBtn.textContent = "🌙 Dark Mode";
   } else {
     document.body.classList.add("dark-mode");
-    document.body.classList.remove("light-mode");
+   document.body.classList.remove("light-mode");
     if (themeToggleBtn) themeToggleBtn.textContent = "☀️ Light Mode";
   }
   localStorage.setItem("theme", theme);
@@ -133,6 +142,9 @@ onAuthStateChanged(auth, async (user) => {
 
   dashboard.classList.remove("hidden");
 
+  // DATA ENGINEERING TRIGGER: Snapshot today's economy for historical trends
+  logDailyEconomySnapshot();
+
   if (!listenersInitialized) {
       listenForContractOffers(user.uid);
       listenForAdminRoster(); 
@@ -150,7 +162,7 @@ onAuthStateChanged(auth, async (user) => {
         statusDot.style.boxShadow = "0 0 8px rgba(46, 204, 113, 0.6)";
     }
     if (statusText) {
-        statusText.textContent = "Live Connection";
+        statusText.textContent = "LIVE CONNECTION";
         statusText.style.color = "#2ecc71";
     }
 
@@ -173,7 +185,9 @@ onAuthStateChanged(auth, async (user) => {
         themeAppliedOnce = true; 
     }
 
-    updateDashboardUI(user);
+    // SYNC UPDATE: Fetch dynamic market rate to calculate Net Worth
+    const { rate: liveRate } = await getLiveMarketRate();
+    updateDashboardUI(user, liveRate);
 
     if (typeof renderShop === "function") renderShop(currentDashboardData);
     if (typeof renderBpsShop === "function") renderBpsShop(currentDashboardData);
@@ -182,8 +196,11 @@ onAuthStateChanged(auth, async (user) => {
     // UPDATED: Ensure renderSavings gets full data for catch-up interest logic
     if (typeof renderSavings === "function") renderSavings(currentDashboardData); 
     
-    // NEW: Handle BPS Converter membership checks and limits
-    if (typeof renderBpsConverter === "function") renderBpsConverter(currentDashboardData);
+    // NEW: Handle BPS Converter membership checks and limits
+    if (typeof renderBpsConverter === "function") renderBpsConverter(currentDashboardData);
+
+    // NEW: Handle Economic Stats Teaser
+    if (typeof renderStatsTeaser === "function") renderStatsTeaser(currentDashboardData);
 
     if (typeof renderUserContract === "function") renderUserContract(user.uid, currentDashboardData);
 
@@ -232,7 +249,7 @@ function renderUnifiedHistory() {
     const filtered = cachedHistory.filter(entry => {
       const entryDate = new Date(entry.timestamp);
       const entryMsg = entry.message.toLowerCase();
-      const matchesSearch = entryMsg.includes(searchTerm);
+      const matchesSearch = entryMsg.includes(searchTerm);
       const logTime = entryDate.getTime();
       return matchesSearch && logTime >= filterStartTime && logTime <= filterEndTime;
     });
@@ -303,12 +320,55 @@ function getRelativeTime(date) {
   return date.toLocaleDateString(); 
 }
 
-function updateDashboardUI(user) {
+/**
+ * UPDATED: Reactive Economy Engine (RESISTANCE MODEL)
+ * Formula: Uses liveRate passed from getLiveMarketRate()
+ */
+function updateDashboardUI(user, dynamicRate) {
   if (!currentDashboardData) return;
   const data = currentDashboardData;
+
+  // 1. DATA EXTRACTION
   const balance = Number(data.balance) || 0;
+  const bpsBalance = Number(data.bpsBalance) || 0;
+  const savings = Number(data.retirementSavings) || 0;
+  
+  // 2. THE RESISTANCE ENGINE
+  const vIndex = Number(data.volatilityIndex) || 34000000;
+  
+  // 3. NET WORTH CALCULATION
+  // Using the liveRate passed from the snapshot for perfect synchronization
+  const totalWealth = balance + savings + (bpsBalance * dynamicRate);
+
   userName.textContent = data.username || user.email.split("@")[0];
-  userBalance.textContent = `$${balance.toLocaleString()}`;
+  
+  // Header now only shows liquid spendable balance
+  userBalance.textContent = `$${balance.toLocaleString()}`; 
+
+  // Update Resistance Display Text
+  const volDisplay = document.getElementById("volatility-display");
+  if (volDisplay) {
+    // SYNCED: Logic matches economyStatsPage.js thresholds
+    if (vIndex > 45000000) {
+        volDisplay.style.color = "#e74c3c"; 
+        volDisplay.textContent = "HEAVY RESISTANCE (BEARISH)"; 
+    } else if (vIndex < 25000000) {
+        volDisplay.style.color = "#2ecc71"; 
+        volDisplay.textContent = "OPEN MARKET (BULLISH)"; 
+    } else {
+        volDisplay.style.color = "#3498db"; 
+        volDisplay.textContent = "STABLE MARKET"; 
+    }
+  }
+
+  // Update BPS Rate Display (Matches Stats and Converter)
+  const rateDisplay = document.getElementById("dynamic-bps-rate");
+  if (rateDisplay) rateDisplay.textContent = `$${dynamicRate.toLocaleString()}`;
+
+  // Update Net Worth Display
+  const netWorthDisplay = document.getElementById("net-worth-display");
+  if (netWorthDisplay) netWorthDisplay.textContent = `$${totalWealth.toLocaleString()}`;
+
   profileUsername.textContent = data.username || user.email.split("@")[0];
   profileUid.textContent = user.uid.slice(0, 8);
 
@@ -369,7 +429,7 @@ function updateDashboardUI(user) {
       if (dailyInterestEl) dailyInterestEl.textContent = `$${(activeDebt * 0.05).toLocaleString()}`;
       
       const dueDateEl = document.getElementById("loan-due-date");
-      if (dueDateEl && data.loanDeadline) {
+     if (dueDateEl && data.loanDeadline) {
           const dueDate = new Date(data.loanDeadline);
           dueDateEl.textContent = `Due: ${dueDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}`;
           dueDateEl.style.color = "#e74c3c";
@@ -405,7 +465,7 @@ function updateDashboardUI(user) {
 
   if (data.renewalPending) {
     renewalStatus.textContent = "Pending Approval";
-    renewalStatus.style.color = "orange";
+   renewalStatus.style.color = "orange";
   } else if (expirationDate && expirationDate < new Date()) {
     renewalStatus.textContent = "Expired";
     renewalStatus.style.color = "red";
@@ -415,13 +475,13 @@ function updateDashboardUI(user) {
   }
 
   const employmentStatus = data.employmentStatus || "Unemployed";
-  let color = "red";
-  if (employmentStatus === "Employed") color = "green";
-  else if (employmentStatus === "Retired") color = "blue";
+  let statusColor = "red";
+  if (employmentStatus === "Employed") statusColor = "green";
+  else if (employmentStatus === "Retired") statusColor = "blue";
   
   if (employmentStatusEl) {
     employmentStatusEl.textContent = employmentStatus;
-    employmentStatusEl.style.color = color;
+    employmentStatusEl.style.color = statusColor;
     employmentStatusEl.style.fontWeight = "bold";
   }
 
@@ -515,7 +575,7 @@ searchFilterInput?.addEventListener("input", renderUnifiedHistory);
 clearFiltersBtn?.addEventListener("click", () => {
     dateFilterInput.value = getESTDate(-1);
     endDateFilterInput.value = getESTDate(0);
-    searchFilterInput.value = "";
+   searchFilterInput.value = "";
     renderUnifiedHistory();
 });
 
@@ -558,7 +618,7 @@ document.addEventListener('click', async (e) => {
     if (!auth.currentUser) return;
 
     if (e.target.classList.contains('join-plan-btn')) {
-        const planKey = e.target.dataset.plan;
+      const planKey = e.target.dataset.plan;
         await window.joinPlan(planKey);
     }
 

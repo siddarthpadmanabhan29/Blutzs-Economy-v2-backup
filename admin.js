@@ -1,4 +1,4 @@
-// ---------- admin.js (UPGRADED: Escrow Oversight - QUOTA OPTIMIZED) ----------
+// ---------- admin.js (UPGRADED: Escrow Oversight & Central Bank) ----------
 console.log("admin.js loaded");
 
 import { db, auth, secondaryAuth } from "./firebaseConfig.js";
@@ -10,6 +10,8 @@ import { showScreen, createOrUpdateUserDoc } from "./auth.js";
 import { logHistory } from "./historyManager.js";
 import { PLANS } from "./membership_plans.js";
 import { sendSlackMessage } from "./slackNotifier.js";
+// NEW: Import the central source of truth for economy math
+import { getLiveMarketRate } from "./economyUtils.js";
 
 // ---------- Elements ----------
 const adminPanel = document.getElementById("admin-panel");
@@ -43,6 +45,29 @@ const adminTrialUnit = document.getElementById("admin-trial-unit");
 const adminGrantTrialBtn = document.getElementById("admin-grant-trial-btn");
 const adminRevokeTrialBtn = document.getElementById("admin-revoke-trial-btn"); 
 
+// --- CENTRAL BANK ELEMENTS ---
+const adminCurrentVolatility = document.getElementById("admin-current-volatility");
+const newVolatilityInput = document.getElementById("new-volatility-input");
+const updateVolatilityBtn = document.getElementById("update-volatility-btn");
+
+// UI FIX: Ensure the input box is wide and tall enough to see the full numeric values clearly
+if (newVolatilityInput) {
+    newVolatilityInput.style.display = "block"; 
+    newVolatilityInput.style.width = "100%";    
+    newVolatilityInput.style.minWidth = "180px";   // Reduced width
+    newVolatilityInput.style.maxWidth = "220px";   // Fixed typo and set a smaller max
+    newVolatilityInput.style.height = "38px";      // Shorter height (standard input size)
+    newVolatilityInput.style.padding = "8px 12px"; // Less internal "puffiness"
+    newVolatilityInput.style.fontSize = "0.7rem";    // Standard text size
+    newVolatilityInput.style.marginBottom = "12px"; 
+    newVolatilityInput.style.boxSizing = "border-box"; 
+    newVolatilityInput.style.backgroundColor = "#111"; 
+    newVolatilityInput.style.color = "#f1c40f"; 
+    newVolatilityInput.style.border = "1px solid #444"; // Thinner border for a cleaner look
+    newVolatilityInput.style.borderRadius = "6px";  // Slightly smaller corners
+    newVolatilityInput.style.fontWeight = "normal"; // Less bulky text
+}
+
 // --- QUOTA PROTECTION STATE ---
 let balanceListener = null; 
 let bpsListener = null;
@@ -53,6 +78,7 @@ let membershipLookupListener = null;
 let adminEscrowListener = null; 
 let adminCosmeticsCache = null; 
 let activeAdminListener = null;
+let economyListener = null;
 
 let lookupTimeout = null;
 
@@ -64,6 +90,77 @@ export async function checkAdminAccess() {
   const userSnap = await getDoc(userRef);
   return userSnap.exists() && userSnap.data().isAdmin === true;
 }
+
+/* =========================================================
+    CENTRAL BANK CONTROLS: RESISTANCE ENGINE (SYNCED)
+========================================================= */
+export function listenToEconomyStats() {
+    if (!adminCurrentVolatility || !auth.currentUser) return;
+    if (economyListener) economyListener();
+
+    // Listen to the Admin's own doc for the master Resistance Index
+    const adminRef = doc(db, "users", auth.currentUser.uid);
+    economyListener = onSnapshot(adminRef, (snap) => {
+        if (snap.exists()) {
+            const vIndex = snap.data().volatilityIndex || 34000000;
+            adminCurrentVolatility.textContent = `$${(vIndex / 1000000).toFixed(1)}M`;
+            
+            // DATA ENGINEERING SYNC: Update the input placeholder to show current state
+            if (newVolatilityInput) {
+                newVolatilityInput.placeholder = `Current: ${vIndex}`;
+            }
+        }
+    });
+
+    // NEW: MARKET SUGGESTION PREVIEW Logic
+    if (newVolatilityInput) {
+        newVolatilityInput.addEventListener("input", async () => {
+            const newIndex = parseInt(newVolatilityInput.value);
+            // Validation range based on simulation boundaries ($14M to $54M)
+            if (newIndex >= 1000000) {
+                try {
+                    const { globalSupply } = await getLiveMarketRate();
+                    // Use the 1350 constant from economyUtils logic
+                    const predictedPrice = Math.floor((globalSupply / newIndex) * 1350);
+                    
+                    // Display the predicted BPS price in the admin info area
+                    adminCurrentVolatility.innerHTML = `
+                        Index: $${(newIndex / 1000000).toFixed(1)}M | 
+                        <span style="color: #2ecc71;">Pred. BPS: $${predictedPrice.toLocaleString()}</span>
+                    `;
+                } catch (err) { console.error("Preview failed:", err); }
+            }
+        });
+    }
+}
+
+async function updateGlobalEconomy() {
+    const newValue = parseInt(newVolatilityInput.value);
+    if (isNaN(newValue) || newValue < 1000000) {
+        return alert("⚠️ Please enter a valid full number (e.g., 34000000 for $34M Resistance).");
+    }
+
+    // Logic description: In Resistance Model, High Index = Lower BPS Price
+    if (!confirm(`Shift Market Resistance to $${(newValue/1000000).toFixed(1)}M? (Higher value = more price resistance)`)) return;
+
+    try {
+        const adminRef = doc(db, "users", auth.currentUser.uid);
+        await updateDoc(adminRef, { volatilityIndex: newValue });
+        
+        await logHistory(auth.currentUser.uid, `Market Resistance Shifted to $${(newValue/1000000).toFixed(1)}M`, "admin");
+        
+        const timestamp = new Date().toLocaleString();
+        sendSlackMessage(`🏛️ *Central Bank Update:* Market resistance shifted to *$${(newValue/1000000).toFixed(1)}M*.\n*Time:* ${timestamp}`);
+
+        alert("🚀 Resistance Synchronized.");
+        newVolatilityInput.value = "";
+    } catch (err) {
+        console.error(err);
+        alert("Failed to update resistance.");
+    }
+}
+
+if (updateVolatilityBtn) updateVolatilityBtn.addEventListener("click", updateGlobalEconomy);
 
 // ---------- Add Shop Item ----------
 async function addShopItem() {
@@ -486,7 +583,6 @@ export function listenToAllEscrow() {
       return;
     }
 
-    // SAVES READS: We don't perform a lookup here. We use data.toName saved in transfer.js.
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const div = document.createElement("div");
@@ -533,7 +629,7 @@ document.addEventListener("click", (e) => {
 });
 
 /* =========================================================
-    ADMIN ROSTER: SPLIT PAYMENT CONTROLS
+    ADMIN ROSTER: OPTIMIZED SPLIT PAYMENT CONTROLS
 ========================================================= */
 export function listenForAdminRoster() {
     if (!adminRosterContainer) return;
@@ -597,13 +693,12 @@ export function listenForAdminRoster() {
             `;
             adminRosterContainer.appendChild(div);
 
-            const userRef = doc(db, "users", data.playerUID);
-            onSnapshot(userRef, (uSnap) => {
-                const uData = uSnap.exists() ? uSnap.data() : {};
+            // DATA ENGINEERING FIX: Optimized lookup using one-time fetch to preserve quota
+            getDoc(doc(db, "users", data.playerUID)).then(uSnap => {
+                if (!uSnap.exists()) return;
+                const uData = uSnap.data();
                 const alertContainer = document.getElementById(`admin-alert-area-${data.playerUID}`);
-                if (!alertContainer) return;
-
-                if (uData.tradePending || uData.releasePending) {
+                if (alertContainer && (uData.tradePending || uData.releasePending)) {
                     const isTrade = uData.tradePending;
                     alertContainer.innerHTML = `
                         <div style="border: 2px solid #e74c3c; background: rgba(231, 76, 60, 0.05); padding: 12px; border-radius: 8px; margin: 15px 0;">
@@ -627,8 +722,6 @@ export function listenForAdminRoster() {
                             </div>
                         </div>
                     `;
-                } else {
-                    alertContainer.innerHTML = ""; 
                 }
             });
         });
@@ -644,11 +737,13 @@ const openAdminBtn = document.getElementById("open-admin");
 if (openAdminBtn) openAdminBtn.addEventListener("click", () => { 
     loadRenewalRequests(); 
     listenForAdminRoster(); 
-    listenToAllEscrow(); 
+    listenToAllEscrow();
+    listenToEconomyStats(); // NEW: Economy Listener
 });
 
 if (adminPanel && !adminPanel.classList.contains("hidden")) { 
     loadRenewalRequests(); 
     listenForAdminRoster();
     listenToAllEscrow(); 
+    listenToEconomyStats(); // NEW: Economy Listener
 }

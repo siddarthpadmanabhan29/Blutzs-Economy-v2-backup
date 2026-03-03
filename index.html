@@ -261,7 +261,7 @@
       <section class="section-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <h3>Profile</h3>
+            <h3 style="margin:0;">Profile</h3>
             <button id="theme-toggle-btn" class="btn-secondary cosmetic-feature" data-id="darkMode" type="button">🌙</button>
           </div>
           <div id="connection-indicator" style="display: inline-flex; align-items: center; background: rgba(0,0,0,0.05); padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);">
@@ -336,6 +336,14 @@
         <button id="cancel-plan-btn" class="btn-danger hidden" style="font-size: 0.8em;">Cancel Membership</button>
     </div>
 </section>
+
+      <section id="economy-stats-teaser" class="section-card" style="border: 2px solid #3498db; text-align: center;">
+        <h3 style="color: #3498db;">📊 Economic Insights</h3>
+        <div id="estats-lock-ui">
+          <p style="font-size: 0.85rem; color: #888;">Analyzing Global Liquidity...</p>
+        </div>
+        <p id="volatility-display" style="font-size: 0.7rem; color: #555; margin-top: 10px; font-weight: bold; text-transform: uppercase;">MARKET STATE ADJUSTED BY RESISTANCE INDEX</p>
+      </section>
 
       <section id="user-contract-section" class="section-card">
         <h3>My Sports Contract</h3>
@@ -485,7 +493,12 @@
         <h3 style="color: #d1bce3; margin: 0;">💱 BPS Exchange</h3>
         <span class="history-type-pill" style="background: rgba(209, 188, 227, 0.1); color: #d1bce3; border-color: #d1bce3;">Member Exclusive</span>
     </div>
-    <p style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">Convert BPS to Cash (Rate: 1 BPS = $1,000)</p>
+    <p style="font-size: 0.85em; opacity: 0.8; margin-top: 8px;">
+        Convert BPS to Cash 
+        <span style="font-size: 0.8rem; color: #888;">
+            (Rate: 1 BPS = <span id="dynamic-bps-rate" style="color: #2ecc71;">$200</span>)
+        </span>
+    </p>
     
     <div id="bps-converter-ui" style="margin-top: 15px; padding: 15px; background: rgba(209, 188, 227, 0.05); border-radius: 12px; border: 1px dashed rgba(209, 188, 227, 0.3);">
         <div style="display: flex; gap: 10px; align-items: flex-end;">
@@ -540,6 +553,16 @@
   <div id="admin-panel" class="screen hidden">
     <h2>Admin Panel</h2>
     <button id="back-to-dashboard" class="btn-secondary" type="button">Back</button>
+
+    <div class="admin-section" style="border: 2px solid #f1c40f; margin-top: 20px; padding: 15px;">
+      <h3 style="color: #f1c40f;">🏛️ Central Bank Controls</h3>
+      <p style="font-size: 0.85em; color: gray;">Market Resistance Baseline: <strong id="admin-current-volatility">$34.0M</strong></p>
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <input type="number" id="new-volatility-input" placeholder="New Resistance (e.g. 54000000)" class="admin-input-adaptive" style="flex: 1; padding: 8px; border-radius: 8px;">
+          <button id="update-volatility-btn" class="btn-primary" style="background-color: #f1c40f; color: black; border: none;">Synchronize Resistance</button>
+      </div>
+      <p style="font-size: 0.65rem; color: #888; margin-top: 8px;">LOW RESISTANCE ($14M Index = Higher BPS) | HIGH RESISTANCE ($54M Index = Lower BPS)</p>
+    </div>
 
     <h3>Add Shop Item</h3>
     <input id="new-item-name" placeholder="Item Name">
@@ -710,6 +733,7 @@
   <script type="module" src="requests.js"></script>
   <script type="module" src="escrow.js"></script>
   <script type="module" src="bpsConverter.js"></script>
+  <script type="module" src="estats.js"></script>
   <script type="module" src="admin.js"></script>
   <script>
     // Global helper for the Locked State scroll button

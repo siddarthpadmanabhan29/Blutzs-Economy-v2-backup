@@ -3,7 +3,10 @@ import { db, auth } from "./firebaseConfig.js";
 import { doc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 import { PLANS } from "./membership_plans.js"; 
-import { sendSlackMessage } from "./slackNotifier.js"; // <-- Added Slack Import
+import { sendSlackMessage } from "./slackNotifier.js";
+
+// NEW: Shared Source of Truth for Rate Math
+import { getLiveMarketRate } from "./economyUtils.js";
 
 const converterSection = document.getElementById("bps-converter-section");
 const converterUI = document.getElementById("bps-converter-ui"); 
@@ -13,11 +16,20 @@ let currentData = null;
 /**
  * Main Render Function
  */
-export function renderBpsConverter(userData) {
+export async function renderBpsConverter(userData) {
     if (!userData || !converterSection) return;
     currentData = userData;
 
-    // Ensure the section is always visible to act as a teaser
+    // --- REAL-TIME RATIO ENGINE SYNC (RESISTANCE MODEL) ---
+    // Fetching master rate directly from the centralized utility
+    const { rate: liveRate } = await getLiveMarketRate();
+
+    const rateEl = document.getElementById("dynamic-bps-rate");
+    if (rateEl) {
+        rateEl.textContent = `$${liveRate.toLocaleString()}`;
+    }
+
+    // Ensure the section is always visible
     converterSection.classList.remove("hidden");
 
     const tier = userData.membershipLevel || "standard";
@@ -41,7 +53,7 @@ export function renderBpsConverter(userData) {
         return;
     }
 
-    // 2. RESTORE UI STRUCTURE (If user just upgraded)
+    // 2. RESTORE UI STRUCTURE
     if (!document.getElementById("bps-convert-amount")) {
         rebuildConverterUI();
     }
@@ -57,10 +69,6 @@ export function renderBpsConverter(userData) {
     const activeTimerEl = document.getElementById("bps-countdown-timer");
 
     if (activeRemainingEl) {
-        activeRemainingEl.textContent = remaining;
-        activeRemainingEl.style.color = remaining <= 0 ? "#e74c3c" : "#2ecc71";
-        
-        // FIX: Update the parent text to ensure the denominator matches the plan
         const parentPara = activeRemainingEl.parentElement;
         if (parentPara) {
             parentPara.innerHTML = `Weekly Limit: <strong id="bps-weekly-remaining" style="color: ${remaining <= 0 ? '#e74c3c' : '#2ecc71'}">${remaining}</strong> / ${weeklyLimit} BPS`;
@@ -126,6 +134,7 @@ async function resetWeeklyLimit() {
 
 /**
  * Handle Conversion Action
+ * UPDATED: Uses the synced rate from the UI to save Quota and ensure accuracy.
  */
 async function handleConversion() {
     const input = document.getElementById("bps-convert-amount");
@@ -134,21 +143,25 @@ async function handleConversion() {
     const amount = parseInt(input.value);
     if (!amount || amount <= 0) return alert("Please enter a valid amount.");
     
+    // DATA ENGINEERING OPTIMIZATION: Pull the live rate that was already rendered
+    // to ensure transaction price matches the screen perfectly without a new DB read.
+    const rateEl = document.getElementById("dynamic-bps-rate");
+    const liveRate = parseInt(rateEl.textContent.replace(/[$,]/g, '')) || 500;
+    
+    const cashValue = amount * liveRate;
+    
     const tier = currentData.membershipLevel || "standard";
     const planConfig = PLANS[tier];
-    
     const currentBps = currentData.bpsBalance || 0;
     const convertedThisWeek = currentData.bpsConvertedThisWeek || 0;
     const weeklyLimit = planConfig.bpsConversionLimit || 25;
-    const rate = planConfig.bpsConversionRate || 1000;
     
     if (amount > currentBps) return alert("Insufficient BPS balance!");
     if (convertedThisWeek + amount > weeklyLimit) {
         return alert(`Limit reached. You can only convert ${weeklyLimit - convertedThisWeek} more BPS this week.`);
     }
 
-    const cashValue = amount * rate;
-    if (!confirm(`Confirm: Convert ${amount} BPS into $${cashValue.toLocaleString()}?`)) return;
+    if (!confirm(`Confirm: Convert ${amount} BPS into $${cashValue.toLocaleString()}?\n(Synced Market Rate: $${liveRate.toLocaleString()} / BPS)`)) return;
 
     try {
         const userRef = doc(db, "users", auth.currentUser.uid);
@@ -158,18 +171,17 @@ async function handleConversion() {
             bpsConvertedThisWeek: increment(amount)
         };
 
-        // STRICT WEEKLY: Reset date only on the first conversion of the cycle
         if (convertedThisWeek === 0) {
             updates.lastBpsConversionDate = new Date().toISOString();
         }
 
         await updateDoc(userRef, updates);
-        await logHistory(auth.currentUser.uid, `Exchanged ${amount} BPS for $${cashValue.toLocaleString()}`, "transfer-in");
+        await logHistory(auth.currentUser.uid, `Exchanged ${amount} BPS for $${cashValue.toLocaleString()} at $${liveRate.toLocaleString()}/BPS`, "transfer-in");
         
-        // --- SLACK NOTIFICATION ---
+        // Slack notification
         const username = currentData.username || "Unknown User";
         const timestamp = new Date().toLocaleString();
-        const slackMsg = `💱 *BPS Conversion:* ${username} exchanged ${amount} BPS for *$${cashValue.toLocaleString()}*.\n*Tier:* ${tier.toUpperCase()}\n*Time:* ${timestamp}`;
+        const slackMsg = `💱 *BPS Conversion:* ${username} exchanged ${amount} BPS for *$${cashValue.toLocaleString()}*.\n*Market Rate:* $${liveRate.toLocaleString()}\n*Tier:* ${tier.toUpperCase()}\n*Time:* ${timestamp}`;
         sendSlackMessage(slackMsg);
 
         alert(`✅ Success! Added $${cashValue.toLocaleString()} to your balance.`);
@@ -179,7 +191,6 @@ async function handleConversion() {
     }
 }
 
-// Global click listener for the dynamically created button
 document.addEventListener('click', (e) => {
     if (e.target && e.target.id === 'convert-bps-btn') {
         handleConversion();

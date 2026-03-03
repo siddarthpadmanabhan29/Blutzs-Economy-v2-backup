@@ -1,13 +1,15 @@
-// ---------- shop.js (QUOTA OPTIMIZED + USAGE-BASED PERKS + SLACK NOTIFICATIONS) ----------
+// ---------- shop.js (QUOTA OPTIMIZED + REAL-TIME ECONOMY UTILS) ----------
 console.log("shop.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-  doc, getDoc, updateDoc, collection, getDocs, addDoc, increment 
+ doc, getDoc, updateDoc, collection, getDocs, addDoc, increment 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 import { PLANS, isNextItemFree } from "./membership_plans.js";
-import { sendSlackMessage } from "./slackNotifier.js"; // <-- NEW
+import { sendSlackMessage } from "./slackNotifier.js";
+// NEW: Import the central source of truth for economy math
+import { getLiveMarketRate } from "./economyUtils.js";
 
 const shopItemsContainer = document.getElementById("shop-items");
 
@@ -52,6 +54,9 @@ function renderShop(externalUserData = null) {
   if (externalUserData) localUserData = externalUserData;
   
   shopItemsContainer.innerHTML = "";
+
+  // Update Summary Bar with Real-Time Resistance Math
+  populateSummaryBar(localUserData);
 
   if (currentShopItems.length === 0) {
     shopItemsContainer.innerHTML = "<p>No items available. Click Refresh to check again.</p>";
@@ -114,6 +119,49 @@ function renderShop(externalUserData = null) {
   });
 
   attachBuyListeners();
+}
+
+/**
+ * Calculates and displays the top summary stats using Resistance Model
+ */
+async function populateSummaryBar(data) {
+    if (!data) return;
+    
+    // FETCH REAL DATA using the shared logic (Wealth / Index * 1350)
+    const { rate, globalSupply, volatilityIndex: adminIndex } = await getLiveMarketRate();
+
+    // CALCULATE USER SPECIFIC WEALTH
+    const balance = data.balance || 0;
+    const bps = data.bpsBalance || 0;
+    const retirement = data.retirementSavings || 0;
+    
+    // Net Worth synced with the Resistance dynamic rate
+    const netWorth = balance + retirement + (bps * rate);
+
+    const totalWealthEl = document.getElementById("stat-total-wealth");
+    const balanceEl = document.getElementById("stat-balance");
+    const bpsEl = document.getElementById("stat-bps");
+    const bpsRateHeader = document.getElementById("bps-rate-display");
+
+    if (totalWealthEl) totalWealthEl.textContent = `$${netWorth.toLocaleString()}`;
+    if (balanceEl) balanceEl.textContent = `$${balance.toLocaleString()}`;
+    if (bpsEl) bpsEl.textContent = `${bps.toLocaleString()} BPS`;
+    if (bpsRateHeader) bpsRateHeader.textContent = `$${rate.toLocaleString()}`;
+
+    // Update market status badge based on RESISTANCE levels (Admin Index)
+    const marketStatusLabel = document.getElementById("market-status-badge");
+    if (marketStatusLabel) {
+        if (adminIndex > 45000000) {
+            marketStatusLabel.textContent = "HEAVY RESISTANCE";
+            marketStatusLabel.style.color = "#e74c3c";
+        } else if (adminIndex < 25000000) {
+            marketStatusLabel.textContent = "OPEN MARKET";
+            marketStatusLabel.style.color = "#2ecc71";
+        } else {
+            marketStatusLabel.textContent = "STABLE";
+            marketStatusLabel.style.color = "#3498db";
+        }
+    }
 }
 
 function attachBuyListeners() {
@@ -190,7 +238,7 @@ async function buyItem(itemId, btnElement) {
         return resetBtn(btnElement);
     }
 
-    // --- UPDATE OBJECT ---
+    // --- UPDATE USER OBJECT ---
     const updates = {
       balance: increment(-totalCost),
       bpsBalance: increment(plan.bpsPerPurchase),
@@ -201,7 +249,16 @@ async function buyItem(itemId, btnElement) {
         updates.shopOrderCount = 0;
     }
 
-    await updateDoc(userRef, updates);
+    // --- UPDATE GLOBAL ECONOMY STATS ---
+    const shopItemUpdate = {
+        purchaseCount: increment(1)
+    };
+
+    // Run updates
+    await Promise.all([
+        updateDoc(userRef, updates),
+        updateDoc(itemRef, shopItemUpdate) 
+    ]);
 
     const logMsg = isFree ? `FREE CLAIM: ${itemData.name}` : `Bought ${itemData.name}: $${basePrice.toLocaleString()} + $${taxAmount.toLocaleString()} tax`;
     await logHistory(user.uid, logMsg, "purchase");
@@ -215,7 +272,7 @@ async function buyItem(itemId, btnElement) {
       isFree: isFree 
     });
 
-    // --- SLACK NOTIFICATION (username + timestamp) ---
+    // --- SLACK NOTIFICATION ---
     const buyerName = userData.displayName || userData.username || 'Unknown user';
     const timestamp = new Date().toLocaleString();
     sendSlackMessage(
@@ -224,7 +281,8 @@ async function buyItem(itemId, btnElement) {
     
     alert(isFree ? `🎁 Enjoy your free item!` : `Purchased ${itemData.name}! \nTotal paid: $${totalCost.toLocaleString()}`);
     
-    // Refresh local cache and UI
+    // DATA ENGINEERING FIX: updates object already contains the delta via increment,
+    // so we update the local balance correctly for the UI render.
     localUserData = { ...userData, ...updates, balance: (Number(userData.balance) - totalCost) };
     renderShop();
 
@@ -246,10 +304,11 @@ auth.onAuthStateChanged((user) => {
     if (user) loadShopItems(); 
 });
 
+// Periodic refresh to keep BPS rates and Status Labels live in the Shop UI
 setInterval(() => {
   if (localUserData) {
     renderShop(); 
   }
-}, 10000);
+}, 15000); 
 
 export { loadShopItems, renderShop };
