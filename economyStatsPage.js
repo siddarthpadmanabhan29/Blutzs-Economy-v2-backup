@@ -5,7 +5,7 @@ import { doc, getDoc, collection, getDocs, query, orderBy, limit } from "https:/
 import { getLiveMarketRate } from "./economyUtils.js";
 import { getMarketHistory } from "./economyLogger.js";
 
-let currentBpsMarketRate = 200; // Updated default to match new floor
+let currentBpsMarketRate = 200; 
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) return window.close();
@@ -20,15 +20,12 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
-        // Fetch real-time Resistance Model data
         const econData = await getLiveMarketRate();
         currentBpsMarketRate = econData.rate;
 
-        // UPDATED: Now monitors Resistance Levels
         updateStressMeter(econData.volatilityIndex);
         populateSummaryBar(userData, econData);
 
-        // Fetch history (last 7 days)
         const historyDocs = await getMarketHistory(7);
 
         await Promise.all([
@@ -45,27 +42,29 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-/**
- * UPDATED: Stress Meter reflects Admin Index range ($14M to $54M)
- */
+// --- HELPER: GET DYNAMIC DATE LABEL ---
+function getTodayLabel() {
+    const now = new Date();
+    // Returns MM/DD format (e.g., 03/04)
+    return `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}`;
+}
+
 function updateStressMeter(adminIndex) {
     const stressFill = document.getElementById("market-stress-fill");
     if (!stressFill) return;
 
-    // Scale percentage based on operational range ($14M to $54M)
     let percentage = ((adminIndex - 14000000) / 40000000) * 100;
     if (percentage > 100) percentage = 100;
     if (percentage < 0) percentage = 0;
 
     stressFill.style.width = `${percentage}%`;
 
-    // Updated colors to match Restricted/Optimal logic
     if (adminIndex > 45000000) {
-        stressFill.style.background = "#e74c3c"; // Restricted (Red)
+        stressFill.style.background = "#e74c3c"; 
     } else if (adminIndex < 25000000) {
-        stressFill.style.background = "#2ecc71"; // Optimal (Green)
+        stressFill.style.background = "#2ecc71"; 
     } else {
-        stressFill.style.background = "#3498db"; // Stable (Blue)
+        stressFill.style.background = "#3498db"; 
     }
 }
 
@@ -117,13 +116,13 @@ async function initSpendingDNAChart(uid) {
 }
 
 /**
- * UPDATED: Chart supports $200 floor with visible room at the bottom.
+ * FIXED: Dynamic todayLabel ensures the chart marches forward chronologically.
  */
 async function initBpsChart(currentRate, historyDocs) {
     let labels = historyDocs.map(d => d.date.split('-').slice(1).join('/'));
     let dataPoints = historyDocs.map(d => d.bpsRate);
 
-    const todayLabel = "03/03";
+    const todayLabel = getTodayLabel(); // FIXED: No longer hardcoded
     if (labels.length > 0 && labels[labels.length - 1] === todayLabel) {
         dataPoints[dataPoints.length - 1] = currentRate;
     } else {
@@ -149,8 +148,8 @@ async function initBpsChart(currentRate, historyDocs) {
         options: { 
             scales: { 
                 y: { 
-                    min: 100, // Room below the $200 floor
-                    max: 2600, // Room above the $2500 ceiling
+                    min: 100, 
+                    max: 2600, 
                     ticks: { color: '#555' }, 
                     grid: { color: 'rgba(255,255,255,0.05)' } 
                 },
@@ -162,13 +161,13 @@ async function initBpsChart(currentRate, historyDocs) {
 }
 
 /**
- * UPDATED: Sync labels with "Optimal" and "Restricted" terminology.
+ * FIXED: Dynamic todayLabel ensures the chart matches the Resistance dial.
  */
 async function initResistanceChart(adminIndex, historyDocs) {
     let labels = historyDocs.map(d => d.date.split('-').slice(1).join('/'));
     let dataPoints = historyDocs.map(d => d.volatilityIndex || 34000000);
 
-    const todayLabel = "03/03";
+    const todayLabel = getTodayLabel(); // FIXED: No longer hardcoded
     if (labels.length > 0 && labels[labels.length - 1] === todayLabel) {
         dataPoints[dataPoints.length - 1] = adminIndex;
     } else {
@@ -176,17 +175,16 @@ async function initResistanceChart(adminIndex, historyDocs) {
         dataPoints.push(adminIndex);
     }
 
-    // Professional Terminology Sync
     let healthStatus = "Stable";
     let healthColor = "#3498db";
     let marketTip = "Resistance is balanced. BPS value is stable.";
 
     if (adminIndex > 45000000) {
-        healthStatus = "Restricted"; // High Resistance
+        healthStatus = "Restricted"; 
         healthColor = "#e74c3c";
         marketTip = "Market friction is high. BPS growth is suppressed.";
     } else if (adminIndex < 25000000) {
-        healthStatus = "Optimal"; // Low Resistance
+        healthStatus = "Optimal"; 
         healthColor = "#2ecc71";
         marketTip = "Market conditions are optimal! BPS value is approaching the ceiling.";
     }
