@@ -20,9 +20,11 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
+        // Fetch real-time Resistance Model data
         const econData = await getLiveMarketRate();
         currentBpsMarketRate = econData.rate;
 
+        // Visual Synchronization
         updateStressMeter(econData.volatilityIndex);
         populateSummaryBar(userData, econData);
 
@@ -30,7 +32,7 @@ onAuthStateChanged(auth, async (user) => {
 
         await Promise.all([
             initSpendingDNAChart(user.uid),
-            initResistanceChart(econData.volatilityIndex, historyDocs), 
+            initWealthChart(econData.globalSupply, historyDocs), // REPLACED Resistance with Wealth
             initBpsChart(econData.rate, historyDocs),
             initTrendingItems() 
         ]);
@@ -45,10 +47,12 @@ onAuthStateChanged(auth, async (user) => {
 // --- HELPER: GET DYNAMIC DATE LABEL ---
 function getTodayLabel() {
     const now = new Date();
-    // Returns MM/DD format (e.g., 03/04)
     return `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}`;
 }
 
+/**
+ * Monitors Admin Resistance Index ($14M to $54M)
+ */
 function updateStressMeter(adminIndex) {
     const stressFill = document.getElementById("market-stress-fill");
     if (!stressFill) return;
@@ -60,11 +64,11 @@ function updateStressMeter(adminIndex) {
     stressFill.style.width = `${percentage}%`;
 
     if (adminIndex > 45000000) {
-        stressFill.style.background = "#e74c3c"; 
+        stressFill.style.background = "#e74c3c"; // Restricted
     } else if (adminIndex < 25000000) {
-        stressFill.style.background = "#2ecc71"; 
+        stressFill.style.background = "#2ecc71"; // Optimal
     } else {
-        stressFill.style.background = "#3498db"; 
+        stressFill.style.background = "#3498db"; // Stable
     }
 }
 
@@ -116,13 +120,13 @@ async function initSpendingDNAChart(uid) {
 }
 
 /**
- * FIXED: Dynamic todayLabel ensures the chart marches forward chronologically.
+ * FIXED: BPS Performance Chart
  */
 async function initBpsChart(currentRate, historyDocs) {
     let labels = historyDocs.map(d => d.date.split('-').slice(1).join('/'));
     let dataPoints = historyDocs.map(d => d.bpsRate);
 
-    const todayLabel = getTodayLabel(); // FIXED: No longer hardcoded
+    const todayLabel = getTodayLabel();
     if (labels.length > 0 && labels[labels.length - 1] === todayLabel) {
         dataPoints[dataPoints.length - 1] = currentRate;
     } else {
@@ -147,12 +151,7 @@ async function initBpsChart(currentRate, historyDocs) {
         },
         options: { 
             scales: { 
-                y: { 
-                    min: 100, 
-                    max: 2600, 
-                    ticks: { color: '#555' }, 
-                    grid: { color: 'rgba(255,255,255,0.05)' } 
-                },
+                y: { min: 100, max: 2600, ticks: { color: '#555' }, grid: { color: 'rgba(255,255,255,0.05)' } },
                 x: { ticks: { color: '#555' }, grid: { display: false } }
             },
             plugins: { legend: { display: false } }
@@ -161,44 +160,21 @@ async function initBpsChart(currentRate, historyDocs) {
 }
 
 /**
- * FIXED: Dynamic todayLabel ensures the chart matches the Resistance dial.
+ * NEW: Tracks Global Liquidity (Total Cash + Savings) over time.
+ * Replaces the static Resistance chart for better user engagement.
  */
-async function initResistanceChart(adminIndex, historyDocs) {
+async function initWealthChart(currentWealth, historyDocs) {
     let labels = historyDocs.map(d => d.date.split('-').slice(1).join('/'));
-    let dataPoints = historyDocs.map(d => d.volatilityIndex || 34000000);
+    
+    // Pull 'liquidity' (globalSupply) from history logs
+    let dataPoints = historyDocs.map(d => d.liquidity || 30000000); 
 
-    const todayLabel = getTodayLabel(); // FIXED: No longer hardcoded
+    const todayLabel = getTodayLabel();
     if (labels.length > 0 && labels[labels.length - 1] === todayLabel) {
-        dataPoints[dataPoints.length - 1] = adminIndex;
+        dataPoints[dataPoints.length - 1] = currentWealth;
     } else {
         labels.push(todayLabel);
-        dataPoints.push(adminIndex);
-    }
-
-    let healthStatus = "Stable";
-    let healthColor = "#3498db";
-    let marketTip = "Resistance is balanced. BPS value is stable.";
-
-    if (adminIndex > 45000000) {
-        healthStatus = "Restricted"; 
-        healthColor = "#e74c3c";
-        marketTip = "Market friction is high. BPS growth is suppressed.";
-    } else if (adminIndex < 25000000) {
-        healthStatus = "Optimal"; 
-        healthColor = "#2ecc71";
-        marketTip = "Market conditions are optimal! BPS value is approaching the ceiling.";
-    }
-
-    const healthEl = document.getElementById("market-health-status");
-    const healthDot = document.getElementById("market-health-dot");
-    const tipContainer = document.getElementById("market-tip-container");
-    const tipText = document.getElementById("market-tip-text");
-
-    if (healthEl) { healthEl.textContent = healthStatus; healthEl.style.color = healthColor; }
-    if (healthDot) { healthDot.style.backgroundColor = healthColor; }
-    if (tipContainer && tipText) {
-        tipContainer.style.display = "flex";
-        tipText.textContent = marketTip;
+        dataPoints.push(currentWealth);
     }
 
     const chartEl = document.getElementById('inflationChart');
@@ -208,24 +184,35 @@ async function initResistanceChart(adminIndex, historyDocs) {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Market Resistance',
+                    label: 'Global Liquidity',
                     data: dataPoints,
-                    borderColor: healthColor,
-                    backgroundColor: `${healthColor}22`,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
                     fill: true,
-                    tension: 0.3
+                    tension: 0.3,
+                    pointRadius: 4
                 }]
             },
             options: { 
                 plugins: { legend: { display: false } },
                 scales: { 
                     y: { 
-                        ticks: { callback: (v) => `$${(v/1000000).toFixed(0)}M` },
+                        ticks: { 
+                            color: '#555',
+                            callback: (v) => `$${(v/1000000).toFixed(1)}M` 
+                        },
                         grid: { color: 'rgba(255,255,255,0.05)' }
-                    } 
+                    },
+                    x: { ticks: { color: '#555' }, grid: { display: false } }
                 }
             }
         });
+    }
+
+    // Keep the "Tip" logic to help explain the Wealth/BPS relationship
+    const tipText = document.getElementById("market-tip-text");
+    if (tipText) {
+        tipText.textContent = "Global wealth directly influences BPS value. As liquidity rises, BPS growth potential increases.";
     }
 }
 
