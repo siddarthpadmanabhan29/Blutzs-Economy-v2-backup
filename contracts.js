@@ -99,24 +99,34 @@ function renderActiveContract(docId, data, userData) {
     div.style.cssText = "padding: 20px; border-radius: 12px; margin-bottom: 15px; background: var(--card-bg, #1a1a1a); border: 1px solid var(--border-color, #333); color: var(--text-color, #fff);";
 
     const terms = data.terms || {};
-    const seasonsRemaining = terms.seasons || 0;
-    const initialSeasons = terms.initialSeasons || seasonsRemaining || 1;
+    const seasonsRemaining = Number(terms.seasons) || 0;
+    const initialSeasons = Number(terms.initialSeasons) || seasonsRemaining || 1;
     const gPay = terms.guaranteedPay || 0;
     const bPay = terms.nonGuaranteedPay || 0;
     const sBonus = data.signingBonus || 0;
     
-    // Tracked values with safety defaults to prevent NaN
     const paidGuaranteed = Number(data.paidGuaranteed) || 0;
     const paidBonuses = Number(data.paidBonuses) || 0;
     const seasonPaidG = Number(data.seasonPaidG) || 0;
     const seasonPaidB = Number(data.seasonPaidB) || 0;
 
     const totalWorth = ((gPay + bPay) * initialSeasons) + sBonus;
+    
+    // Total Progress Calculation
     const totalProgress = Math.min(100, Math.max(0, Math.round(((initialSeasons - seasonsRemaining) / initialSeasons) * 100)));
     
-    const currentSeasonNum = Math.floor(initialSeasons - seasonsRemaining) + 1;
-    const currentSeasonTimePassed = 1 - (seasonsRemaining % 1 || (seasonsRemaining > 0 ? 0 : 1));
-    const seasonProgressPercent = Math.round(currentSeasonTimePassed * 100);
+    // Seasonal Progress Logic
+    const completedSeasons = initialSeasons - seasonsRemaining;
+    const currentSeasonNum = Math.max(1, Math.ceil(completedSeasons + 0.001));
+    
+    // Fix: Calculate progress within the current season block (0 to 1)
+    const currentSeasonProgressRaw = completedSeasons % 1;
+    let seasonProgressPercent = Math.round(currentSeasonProgressRaw * 100);
+
+    // If seasonal payments exist but modulo is 0, bar should be 100% or based on payment ratio
+    if (seasonProgressPercent === 0 && (seasonPaidG > 0 || seasonPaidB > 0)) {
+        if (currentSeasonProgressRaw < 0.01 && completedSeasons > 0.1) seasonProgressPercent = 100;
+    }
 
     let statusBadge = '';
     if (data.tradeStatus === 'looking') {
@@ -165,7 +175,7 @@ function renderActiveContract(docId, data, userData) {
         <div style="border-top:1px solid var(--border-color, #333); padding-top:15px; margin-bottom:15px;">
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                 <span style="font-size:0.6rem; font-weight:800; color:#2ecc71; text-transform:uppercase;">Season ${currentSeasonNum} Progress</span>
-                <span style="font-size:0.65rem; color:#2ecc71; font-weight:900;">${(seasonsRemaining % 1 || 1).toFixed(2)} LEFT</span>
+                <span style="font-size:0.65rem; color:#2ecc71; font-weight:900;">${(seasonsRemaining % 1 || (seasonsRemaining > 0 ? 1 : 0)).toFixed(2)} LEFT</span>
             </div>
             <div style="width:100%; height:8px; background: var(--input-bg, #222); border-radius:4px; overflow:hidden; margin-bottom:10px;">
                 <div style="width:${seasonProgressPercent}%; height:100%; background:#2ecc71; transition: width 1s;"></div>
@@ -318,10 +328,9 @@ window.adminActionContract = async (docId, action) => {
             const oldSeasons = Number(data.terms?.seasons) || 0;
             const newSeasons = Math.max(0, oldSeasons - (1/6));
             
-            // Season crossing logic
-            const seasonJustFinished = Math.floor(oldSeasons) > Math.floor(newSeasons) && newSeasons > 0.01;
+            // Fixed Season crossing logic: Use ceil to detect when we drop below a whole number boundary (e.g., from 1.0 to 0.83)
+            const seasonJustFinished = Math.ceil(oldSeasons) > Math.ceil(newSeasons) && newSeasons > 0.01;
 
-            // SYNCED TRACKER UPDATE
             const contractUpdates = { 
                 "terms.seasons": newSeasons,
                 paidGuaranteed: (Number(data.paidGuaranteed) || 0) + gAmount,
@@ -347,7 +356,18 @@ window.adminActionContract = async (docId, action) => {
             } else {
                 await updateDoc(contractRef, contractUpdates);
                 await updateDoc(userRef, { balance: currentBal + gAmount + bAmount });
-                await logHistory(data.playerUID, `💰 Payout: $${(gAmount + bAmount).toLocaleString()}`, "transfer-in");
+                
+                // Enhanced descriptive payout log
+                let logMsg = "💰 Payout: ";
+                if (gAmount > 0 && bAmount > 0) {
+                    logMsg += `$${gAmount.toLocaleString()} Base Salary + $${bAmount.toLocaleString()} Bonus`;
+                } else if (gAmount > 0) {
+                    logMsg += `$${gAmount.toLocaleString()} Base Salary`;
+                } else {
+                    logMsg += `$${bAmount.toLocaleString()} Performance Bonus`;
+                }
+                
+                await logHistory(data.playerUID, logMsg, "transfer-in");
             }
 
             if (gInput) gInput.value = ""; 
