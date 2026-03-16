@@ -31,6 +31,10 @@ import { getLiveMarketRate } from "./economyUtils.js";
 // NEW: Import the economy logger to archive daily snapshots for real charts
 import { logDailyEconomySnapshot } from "./economyLogger.js";
 
+// --- LOTTERY IMPORTS ---
+import { initLotteryUI } from "./lottery.js";
+import { listenForAdminLottery } from "./admin.js";
+
 /* =========================================================
     QUOTA PROTECTION: LISTENER MANAGER
 ========================================================= */
@@ -148,6 +152,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!listenersInitialized) {
       listenForContractOffers(user.uid);
       listenForAdminRoster(); 
+      initLotteryUI(); // Initialize Lottery listeners and Grid
       listenersInitialized = true;
   }
 
@@ -249,7 +254,7 @@ function renderUnifiedHistory() {
     const filtered = cachedHistory.filter(entry => {
       const entryDate = new Date(entry.timestamp);
       const entryMsg = entry.message.toLowerCase();
-      const matchesSearch = entryMsg.includes(searchTerm);
+      const matchesSearch = entryMsg.includes(searchTerm);
       const logTime = entryDate.getTime();
       return matchesSearch && logTime >= filterStartTime && logTime <= filterEndTime;
     });
@@ -575,7 +580,7 @@ searchFilterInput?.addEventListener("input", renderUnifiedHistory);
 clearFiltersBtn?.addEventListener("click", () => {
     dateFilterInput.value = getESTDate(-1);
     endDateFilterInput.value = getESTDate(0);
-   searchFilterInput.value = "";
+   searchFilterInput.value = "";
     renderUnifiedHistory();
 });
 
@@ -593,7 +598,11 @@ themeToggleBtn?.addEventListener("click", async () => {
 
 takeLoanBtn?.addEventListener("click", () => takeOutLoan(parseInt(loanAmountSelect.value)));
 repayLoanBtn?.addEventListener("click", () => repayLoan());
-openAdminBtn?.addEventListener("click", () => { dashboard.classList.add("hidden"); adminPanel.classList.remove("hidden"); });
+openAdminBtn?.addEventListener("click", () => { 
+    dashboard.classList.add("hidden"); 
+    adminPanel.classList.remove("hidden"); 
+    listenForAdminLottery(); // Start lottery pool listener for Admin side
+});
 backToDashboardBtn?.addEventListener("click", () => { adminPanel.classList.add("hidden"); dashboard.classList.remove("hidden"); });
 logoutBtn?.addEventListener("click", async () => { if (unsubUser) unsubUser(); if (unsubHistory) unsubHistory(); await signOut(auth); });
 

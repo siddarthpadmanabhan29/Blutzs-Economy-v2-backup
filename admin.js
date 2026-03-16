@@ -3,7 +3,7 @@ console.log("admin.js loaded");
 
 import { db, auth, secondaryAuth } from "./firebaseConfig.js";
 import { 
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot, deleteDoc, runTransaction, increment 
+    collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, onSnapshot, deleteDoc, runTransaction, increment, writeBatch 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { showScreen, createOrUpdateUserDoc } from "./auth.js"; 
@@ -50,6 +50,23 @@ const adminCurrentVolatility = document.getElementById("admin-current-volatility
 const newVolatilityInput = document.getElementById("new-volatility-input");
 const updateVolatilityBtn = document.getElementById("update-volatility-btn");
 
+// --- INCENTIVE BUILDER ELEMENTS ---
+const incentiveBuilderList = document.getElementById("incentive-builder-list");
+const newIncentiveLabel = document.getElementById("new-incentive-label");
+const newIncentiveAmount = document.getElementById("new-incentive-amount");
+const addIncentiveBtn = document.getElementById("add-incentive-btn");
+
+// --- LOTTERY ADMIN ELEMENTS ---
+const adminLotteryPoolDisplay = document.getElementById("admin-lottery-pool");
+const adminLotteryBurnDisplay = document.getElementById("admin-lottery-burn"); 
+const adminLottoOverride = document.getElementById("admin-lotto-override");
+const triggerLottoBtn = document.getElementById("admin-trigger-lotto-btn");
+const adminLottoDate = document.getElementById("admin-lotto-date");
+const setLottoTimeBtn = document.getElementById("admin-set-lotto-time");
+const adminLiveTicketsList = document.getElementById("admin-live-tickets-list");
+
+let pendingIncentives = [];
+
 // UI FIX: Ensure the input box is wide and tall enough to see the full numeric values clearly
 if (newVolatilityInput) {
     newVolatilityInput.style.display = "block"; 
@@ -79,6 +96,8 @@ let adminEscrowListener = null;
 let adminCosmeticsCache = null; 
 let activeAdminListener = null;
 let economyListener = null;
+let lotteryPoolListener = null;
+let activeTicketsListener = null;
 
 let lookupTimeout = null;
 
@@ -90,6 +109,40 @@ export async function checkAdminAccess() {
   const userSnap = await getDoc(userRef);
   return userSnap.exists() && userSnap.data().isAdmin === true;
 }
+
+/* =========================================================
+    INCENTIVE BUILDER LOGIC
+========================================================= */
+if (addIncentiveBtn) {
+    addIncentiveBtn.addEventListener("click", () => {
+        const label = newIncentiveLabel.value.trim();
+        const amount = parseFloat(newIncentiveAmount.value);
+
+        if (!label || isNaN(amount) || amount <= 0) return alert("Enter valid label and amount.");
+
+        const id = "inc_" + Date.now();
+        pendingIncentives.push({ id, label, amount, status: 'available' });
+        renderPendingIncentives();
+
+        newIncentiveLabel.value = "";
+        newIncentiveAmount.value = "";
+    });
+}
+
+function renderPendingIncentives() {
+    if (!incentiveBuilderList) return;
+    incentiveBuilderList.innerHTML = pendingIncentives.map((inc, index) => `
+        <div style="display:flex; justify-content:space-between; background:rgba(255,255,255,0.05); padding:8px; border-radius:4px; font-size:0.75rem;">
+            <span>${inc.label} ($${inc.amount.toLocaleString()})</span>
+            <button onclick="removePendingIncentive(${index})" style="color:#e74c3c; background:none; border:none; cursor:pointer; font-weight:bold;">X</button>
+        </div>
+    `).join('');
+}
+
+window.removePendingIncentive = (index) => {
+    pendingIncentives.splice(index, 1);
+    renderPendingIncentives();
+};
 
 /* =========================================================
     CENTRAL BANK CONTROLS: RESISTANCE ENGINE (SYNCED)
@@ -161,6 +214,175 @@ async function updateGlobalEconomy() {
 }
 
 if (updateVolatilityBtn) updateVolatilityBtn.addEventListener("click", updateGlobalEconomy);
+
+/* =========================================================
+    LOTTERY MANAGEMENT LOGIC (UPGRADED: OVERRIDE, BURN, NAMES, TIMER, REGISTRY)
+========================================================= */
+export function listenForAdminLottery() {
+    if (!adminLotteryPoolDisplay) return;
+    if (lotteryPoolListener) lotteryPoolListener();
+
+    lotteryPoolListener = onSnapshot(doc(db, "lottery", "status"), (snap) => {
+        if (snap.exists()) {
+            const data = snap.data();
+            const pool = data.currentPool || 0;
+            const totalBurned = data.totalEconomyBurned || 0;
+            
+            adminLotteryPoolDisplay.textContent = `$${pool.toLocaleString()}`;
+            if (adminLotteryBurnDisplay) {
+                adminLotteryBurnDisplay.textContent = `$${totalBurned.toLocaleString()}`;
+            }
+        }
+    });
+}
+
+// NEW: Live Ticket Registry Listener
+export function listenToGlobalTickets() {
+    if (!adminLiveTicketsList) return;
+    if (activeTicketsListener) activeTicketsListener();
+
+    activeTicketsListener = onSnapshot(collection(db, "lottery_tickets"), async (snapshot) => {
+        if (snapshot.empty) {
+            adminLiveTicketsList.innerHTML = `<p style="color: gray; font-size: 0.75rem; font-style: italic; text-align: center;">No tickets in the system...</p>`;
+            return;
+        }
+        adminLiveTicketsList.innerHTML = "";
+        
+        const ticketPromises = snapshot.docs.map(async (tDoc) => {
+            const ticket = tDoc.data();
+            const userSnap = await getDoc(doc(db, "users", ticket.playerUID));
+            const username = userSnap.exists() ? userSnap.data().username : "Unknown";
+            return { username, numbers: ticket.numbers.join(" - ") };
+        });
+
+        const tickets = await Promise.all(ticketPromises);
+        tickets.forEach(t => {
+            const div = document.createElement("div");
+            div.style.cssText = "display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 4px; border-left: 3px solid #f1c40f; font-size: 0.8rem;";
+            div.innerHTML = `<span><strong>${t.username}</strong></span><span style="font-family: monospace; color: #f1c40f;">${t.numbers}</span>`;
+            adminLiveTicketsList.appendChild(div);
+        });
+    });
+}
+
+if (setLottoTimeBtn) {
+    setLottoTimeBtn.onclick = async () => {
+        const selectedTime = adminLottoDate.value;
+        if (!selectedTime) return alert("Please select a date and time.");
+        try {
+            const poolRef = doc(db, "lottery", "status");
+            await updateDoc(poolRef, { nextDrawTime: new Date(selectedTime).toISOString() });
+            alert("⏰ Draw timer updated!");
+            sendSlackMessage(`📅 *Lottery Scheduled:* The next draw has been set for *${new Date(selectedTime).toLocaleString()}*! Get your tickets now.`);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to set timer.");
+        }
+    };
+}
+
+async function triggerLotteryDraw() {
+    let winningNumbers = [];
+
+    // 1. CHECK FOR MANUAL OVERRIDE
+    if (adminLottoOverride && adminLottoOverride.value.trim() !== "") {
+        const parts = adminLottoOverride.value.split(',').map(n => parseInt(n.trim()));
+        const valid = parts.length === 4 && parts.every(n => n >= 1 && n <= 20) && new Set(parts).size === 4;
+        
+        if (!valid) return alert("❌ Invalid Override! Enter 4 unique numbers between 1 and 20 (e.g. 1, 5, 10, 15).");
+        winningNumbers = parts.sort((a, b) => a - b);
+    } else {
+        // FALLBACK: Generate random winners
+        while (winningNumbers.length < 4) {
+            let num = Math.floor(Math.random() * 20) + 1;
+            if (!winningNumbers.includes(num)) winningNumbers.push(num);
+        }
+        winningNumbers.sort((a, b) => a - b);
+    }
+
+    if (!confirm(`Trigger Draw with numbers: ${winningNumbers.join(', ')}? This clears all tickets!`)) return;
+
+    try {
+        const poolRef = doc(db, "lottery", "status");
+        const poolSnap = await getDoc(poolRef);
+        const currentPool = poolSnap.data().currentPool || 0;
+        
+        const ticketsSnap = await getDocs(collection(db, "lottery_tickets"));
+        let winnerUIDs = [];
+
+        // 2. Identify Winners
+        ticketsSnap.forEach(tDoc => {
+            const ticket = tDoc.data();
+            if (JSON.stringify(ticket.numbers) === JSON.stringify(winningNumbers)) {
+                winnerUIDs.push(ticket.playerUID);
+            }
+        });
+
+        // 3. Process Results
+        if (winnerUIDs.length > 0) {
+            const rawShare = Math.floor(currentPool / winnerUIDs.length);
+            const taxAmount = Math.floor(rawShare * 0.10); 
+            const finalPayout = rawShare - taxAmount;
+            let winnerNames = [];
+
+            for (const uid of winnerUIDs) {
+                const userRef = doc(db, "users", uid);
+                const userSnap = await getDoc(userRef);
+                const name = userSnap.exists() ? userSnap.data().username : "Unknown";
+                winnerNames.push(name);
+
+                await updateDoc(userRef, { balance: increment(finalPayout) });
+                await logHistory(uid, `🎊 LOTTERY WIN! Won $${finalPayout.toLocaleString()} (After 10% Tax)`, "transfer-in");
+            }
+            
+            const totalTaxBurned = taxAmount * winnerUIDs.length;
+            const namesString = winnerNames.join(", ");
+
+            await updateDoc(poolRef, { 
+                currentPool: 10000, 
+                lastWinningNumbers: winningNumbers,
+                lastWinnerCount: winnerUIDs.length,
+                lastWinners: winnerNames, 
+                totalEconomyBurned: increment(totalTaxBurned),
+                lastDrawDate: new Date().toISOString(),
+                nextDrawTime: null // Clear timer after draw
+            });
+
+            sendSlackMessage(
+                `🎊 *LOTTERY JACKPOT HIT!*\n` +
+                `🏆 *Winners:* ${namesString}\n` +
+                `💰 *Prize:* $${rawShare.toLocaleString()} each\n` +
+                `🔢 *Numbers:* ${winningNumbers.join(', ')}\n` +
+                `🏛️ *10% Winner Tax Burned:* $${totalTaxBurned.toLocaleString()}`
+            );
+            alert(`🎊 Draw complete! Winners: ${namesString}`);
+        } else {
+            await updateDoc(poolRef, { 
+                lastWinningNumbers: winningNumbers,
+                lastWinnerCount: 0,
+                lastWinners: [],
+                lastDrawDate: new Date().toISOString(),
+                nextDrawTime: null // Clear timer after draw
+            });
+
+            sendSlackMessage(`💀 *Lottery Result:* No winners. Jackpot rolls over to *$${currentPool.toLocaleString()}*.\n🔢 *Numbers:* ${winningNumbers.join(', ')}`);
+            alert(`💀 No winners. Pot rolls over.`);
+        }
+
+        // 4. Clear all tickets for next round
+        const batch = writeBatch(db);
+        ticketsSnap.forEach(tDoc => batch.delete(tDoc.ref));
+        await batch.commit();
+
+        if (adminLottoOverride) adminLottoOverride.value = ""; 
+
+    } catch (err) {
+        console.error("Lottery Draw Error:", err);
+        alert("Failed to complete draw.");
+    }
+}
+
+if (triggerLottoBtn) triggerLottoBtn.addEventListener("click", triggerLotteryDraw);
 
 // ---------- Add Shop Item ----------
 async function addShopItem() {
@@ -320,9 +542,9 @@ async function grantTrialMembership() {
 
         const timestamp = new Date().toLocaleString();
         sendSlackMessage(
-            `🎁 *Admin Grant:* Free Trial issued to *${targetUsername}*.\n` +
-            `🔹 *Plan:* ${planKey.toUpperCase()}\n` +
-            `⏳ *Duration:* ${duration} ${unit}\n` +
+            `🎁 *Admin Grant:* Free Trial issued to *${targetUsername}*.\n` + 
+            `🔹 *Plan:* ${planKey.toUpperCase()}\n` + 
+            `⏳ *Duration:* ${duration} ${unit}\n` + 
             `🕒 *Time:* ${timestamp}`
         );
 
@@ -738,12 +960,16 @@ if (openAdminBtn) openAdminBtn.addEventListener("click", () => {
     loadRenewalRequests(); 
     listenForAdminRoster(); 
     listenToAllEscrow();
-    listenToEconomyStats(); // NEW: Economy Listener
+    listenToEconomyStats(); 
+    listenForAdminLottery();
+    listenToGlobalTickets(); // NEW: Added listener
 });
 
 if (adminPanel && !adminPanel.classList.contains("hidden")) { 
     loadRenewalRequests(); 
     listenForAdminRoster();
     listenToAllEscrow(); 
-    listenToEconomyStats(); // NEW: Economy Listener
+    listenToEconomyStats(); 
+    listenForAdminLottery();
+    listenToGlobalTickets(); // NEW: Added listener
 }

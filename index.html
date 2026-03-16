@@ -82,6 +82,31 @@
     }
     .plan-perks li { margin-bottom: 5px; display: flex; align-items: flex-start; gap: 5px; }
 
+    /* Lottery Styling */
+    .lotto-num-btn {
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      color: white;
+      border: 1px solid #444;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+    .lotto-num-btn:hover { background: rgba(255,255,255,0.1); border-color: #f1c40f; }
+    .lotto-num-btn.selected {
+      background: #f1c40f !important;
+      color: black !important;
+      border-color: #f1c40f !important;
+      transform: scale(1.05);
+      box-shadow: 0 0 10px rgba(241, 196, 15, 0.4);
+    }
+    .result-ball {
+      width: 35px; height: 35px; background: #333; border: 2px solid #f1c40f; 
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 800; color: #f1c40f; font-size: 0.9rem;
+    }
+
     /* Contract Notification Bar Animation */
     @keyframes pulse-red {
       0% { opacity: 1; transform: scale(1); }
@@ -352,6 +377,64 @@
         </div>
       </section>
 
+      <section class="section-card" style="border: 2px solid #f1c40f;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="color: #f1c40f; margin: 0;">🎰 Blutz Mega Lottery</h3>
+            <div style="text-align: right;">
+                <span style="font-size: 0.6rem; color: #888; display: block; text-transform: uppercase;">Current Jackpot</span>
+                <strong id="lottery-jackpot-display" style="font-size: 1.4rem; color: #2ecc71;">$0</strong>
+            </div>
+        </div>
+
+        <div id="lotto-timer-container" class="hidden" style="text-align: center; margin: 10px 0; padding: 8px; background: rgba(243, 156, 18, 0.1); border-radius: 8px; border: 1px solid #f39c12;">
+            <span style="font-size: 0.6rem; color: #f39c12; display: block; text-transform: uppercase; font-weight: 800;">Next Draw In</span>
+            <strong id="lotto-countdown" style="font-family: monospace; font-size: 1.2rem; color: #eee;">00:00:00:00</strong>
+        </div>
+
+        <p style="font-size: 0.8rem; color: #aaa; margin: 10px 0;">Pick 4 numbers (1-20). Match ALL to win! <br><strong>Cost: $2,500 per ticket</strong></p>
+
+        <div style="background: rgba(231, 76, 60, 0.1); border: 1px solid rgba(231, 76, 60, 0.3); padding: 8px; border-radius: 6px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.1rem;">🏛️</span>
+            <div style="font-size: 0.65rem; color: #e74c3c; line-height: 1.2; font-weight: bold; text-transform: uppercase;">
+                Jackpot Cap: $150,000 <br>
+                Note: 10% Transaction Tax applied to all winnings (Burned).
+            </div>
+        </div>
+
+        <div id="lottery-number-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 15px 0;"></div>
+
+        <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #333;">
+            <span class="contract-label">Your Selection</span>
+            <div id="selected-numbers-display" style="font-size: 1.1rem; font-weight: bold; color: #f1c40f; min-height: 24px;">None Selected</div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 5px;">
+            <span style="font-size: 0.7rem; color: #888; font-weight: bold; text-transform: uppercase;">Purchase Limit</span>
+            <strong id="lotto-quota-display" style="font-size: 0.85rem; color: #3498db;">-- / --</strong>
+        </div>
+
+        <button id="buy-lotto-btn" class="btn-primary" style="width: 100%; background: #f1c40f; color: black; font-weight: 900;" disabled>PURCHASE TICKET ($2,500)</button>
+        <p id="lotto-status-msg" style="text-align: center; font-size: 0.75rem; margin-top: 10px; color: #888;"></p>
+
+        <div id="lottery-results-area" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #444;">
+          <span class="contract-label" style="color: #888;">LAST DRAW RESULTS</span>
+          <div style="display: flex; justify-content: center; gap: 10px; margin: 10px 0;">
+              <div class="result-ball" id="ball-0">-</div>
+              <div class="result-ball" id="ball-1">-</div>
+              <div class="result-ball" id="ball-2">-</div>
+              <div class="result-ball" id="ball-3">-</div>
+          </div>
+          <p id="lotto-winner-msg" style="text-align: center; font-size: 0.75rem; color: #2ecc71; font-weight: bold; margin: 0;"></p>
+        </div>
+
+        <div id="my-active-tickets-container" style="margin-top: 15px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+          <span class="contract-label" style="color: #3498db; font-size: 0.6rem;">YOUR CURRENT ENTRIES</span>
+          <div id="active-tickets-list" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+              <p style="color: gray; font-size: 0.7rem; font-style: italic; text-align: center;">No tickets bought for this draw yet.</p>
+          </div>
+        </div>
+      </section>
+
       <section class="section-card" style="border: 2px solid #8e44ad;">
         <h3 style="color: #8e44ad;">🟣 BPS Token Shop</h3>
         <p>Spend your tokens on coupons!</p>
@@ -472,7 +555,7 @@
             <select id="loan-amount-select">
             <option value="50000" title="Requires Fair Status (0-499 Credit Score)">$50,000 (Fair+)</option>
             <option value="100000" title="Requires Good Status (500-649 Credit Score)">$100,000 (Good+)</option>
-            <option value="500000" title="Requires Elite Status (650-749 Credit Score)">$500,000 (Elite+)</option>
+            <option value="500000" title="Requires Elite Status (650-749 Credit Score)">$50,000 (Elite+)</option>
             <option value="1000000" title="Requires Elite Status (750-850 Credit Score)">$1,000,000 (Elite+)</option>
           </select>
             <button id="take-loan-btn" class="btn-primary">Take Loan</button>
@@ -555,13 +638,52 @@
     <button id="back-to-dashboard" class="btn-secondary" type="button">Back</button>
 
     <div class="admin-section" style="border: 2px solid #f1c40f; margin-top: 20px; padding: 15px;">
+        <h3 style="color: #f1c40f;">🎰 Lottery Management</h3>
+        <p style="font-size: 0.85em; color: gray;">Pick winners and reset the tickets.</p>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+            <div class="contract-inner-box">
+                <span class="contract-label">Current Prize Pool</span>
+                <strong id="admin-lottery-pool" style="font-size: 1.1rem; color: #2ecc71;">$0</strong>
+            </div>
+            <div class="contract-inner-box" style="border-color: #e74c3c;">
+                <span class="contract-label" style="color: #e74c3c;">Total Economy Burned</span>
+                <strong id="admin-lottery-burn" style="font-size: 1.1rem; color: #e74c3c;">$0</strong>
+            </div>
+        </div>
+
+        <div class="input-wrapper" style="margin-bottom: 15px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px solid #333;">
+            <label class="contract-label">Schedule Next Draw</label>
+            <div style="display: flex; gap: 8px;">
+                <input id="admin-lotto-date" type="datetime-local" style="flex: 2; background: #111; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px;">
+                <button id="admin-set-lotto-time" class="btn-primary" style="flex: 1; font-size: 0.7rem; background: #3498db; border: none;">Set Timer</button>
+            </div>
+        </div>
+
+        <div class="input-wrapper" style="margin-bottom: 15px; display: flex; flex-direction: column; gap: 4px;">
+          <label class="contract-label">Manual Draw Override (Optional)</label>
+          <input id="admin-lotto-override" type="text" placeholder="e.g. 1, 5, 10, 15" 
+                 style="width: 100%; background: #111; border: 1px solid #444; color: #f1c40f; padding: 10px; border-radius: 8px;">
+          <p style="font-size: 0.6rem; color: #888;">Leave empty for random numbers. Format: 1, 2, 3, 4</p>
+        </div>
+
+        <div class="admin-section" style="margin-bottom: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px solid #444;">
+          <span class="contract-label" style="color: #f1c40f;">Live Ticket Registry</span>
+          <div id="admin-live-tickets-list" style="margin-top: 10px; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px;">
+              <p style="color: gray; font-size: 0.75rem; font-style: italic; text-align: center;">No tickets in the system...</p>
+          </div>
+        </div>
+
+        <button id="admin-trigger-lotto-btn" class="btn-primary" style="width: 100%; background: #f1c40f; color: black; font-weight: 900;">TRIGGER DRAW & DISTRIBUTE PRIZES</button>
+    </div>
+
+    <div class="admin-section" style="border: 2px solid #f1c40f; margin-top: 20px; padding: 15px;">
       <h3 style="color: #f1c40f;">🏛️ Central Bank Controls</h3>
       <p style="font-size: 0.85em; color: gray;">Market Resistance Baseline: <strong id="admin-current-volatility">$34.0M</strong></p>
       <div style="display: flex; gap: 10px; margin-top: 10px;">
           <input type="number" id="new-volatility-input" placeholder="New Resistance (e.g. 54000000)" class="admin-input-adaptive" style="flex: 1; padding: 8px; border-radius: 8px;">
           <button id="update-volatility-btn" class="btn-primary" style="background-color: #f1c40f; color: black; border: none;">Synchronize Resistance</button>
       </div>
-      <p style="font-size: 0.65rem; color: #888; margin-top: 8px;">LOW RESISTANCE ($14M Index = Higher BPS) | HIGH RESISTANCE ($54M Index = Lower BPS)</p>
     </div>
 
     <h3>Add Shop Item</h3>
@@ -636,19 +758,6 @@
     </div>
 </div>
 
-    <div id="admin-request-actions" style="margin-top: 15px; border-top: 1px solid var(--contract-border); padding-top: 15px;">
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <div class="contract-inner-box" style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; gap: 8px;">
-          </div>
-        </div>
-        <div class="contract-inner-box" style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; gap: 8px;">
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="admin-section" style="border: 2px solid #e74c3c; margin-top: 20px; padding: 15px;">
       <h3 style="color: #e74c3c;">🚨 Escrow Oversight (Admin Only)</h3>
       <p style="font-size: 0.8rem; color: gray; margin-bottom: 10px;">Void transfers to refund senders or force release them.</p>
@@ -708,11 +817,7 @@
       <button id="admin-offer-contract-btn" class="btn-primary" style="width: 100%;" disabled>Send Official Offer</button>
 
       <h4 style="margin-top: 25px; border-bottom: 1px solid #eee; padding-bottom: 8px;">Active League Roster</h4>
-      <p style="font-size: 0.75rem; color: #666; margin-bottom: 10px;">
-        Manage players and payout installments (6 per season).
-      </p>
-      <div id="admin-active-contracts-list">
-      </div>
+      <div id="admin-active-contracts-list"></div>
     </div>
 
     <h3>Renewal Requests</h3>
@@ -735,12 +840,12 @@
   <script type="module" src="bpsConverter.js"></script>
   <script type="module" src="estats.js"></script>
   <script type="module" src="admin.js"></script>
+  <script type="module" src="lottery.js"></script>
   <script>
-    // Global helper for the Locked State scroll button
     window.scrollToPlans = function() {
       const el = document.getElementById('membership-plans-anchor');
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
   </script>
-  </body>
+</body>
 </html>
