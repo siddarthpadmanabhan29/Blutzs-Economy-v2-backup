@@ -7,10 +7,20 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { updateBalanceDisplay } from "./main.js";
 import { logHistory } from "./historyManager.js";
+import { sendSlackMessage } from "./slackNotifier.js";
 
 // --- Import Hub Sub-Modules ---
 import { initRequests } from "./requests.js";
 import { initEscrow } from "./escrow.js";
+
+// ---------- Slack Mention Mapping ----------
+const SLACK_MENTIONS = {
+    "5gvX9n4QYthJre5bvXgSLR3vyB32": "<@U0AAPTL191Q>", // BigArj99
+    "FzN6WhykCNTQ0XVYQNeShpkHVos1": "<@U0ABJ6Y9NSU>", // TennisMaster 29
+    "JjWCEwZ03nhDj8bb5XwU0ca80qI3": "<@U0AALFBHSCD>"  // Anu728
+};
+
+const getMention = (uid, defaultName) => SLACK_MENTIONS[uid] || defaultName;
 
 // ---------- Elements ----------
 const transferToInput = document.getElementById("transfer-to");
@@ -97,12 +107,14 @@ async function handleTransfer() {
 
     const senderRef = doc(db, "users", user.uid);
     const recipientRef = doc(db, "users", recipientUid);
+    let senderName = "";
 
     await runTransaction(db, async (transaction) => {
       const senderSnap = await transaction.get(senderRef);
       if (!senderSnap.exists()) throw new Error("Sender data missing.");
       
       const senderData = senderSnap.data();
+      senderName = senderData.username;
 
       // Transaction Validation
       if (senderData.balance < amount) throw new Error("Insufficient Cash.");
@@ -133,11 +145,23 @@ async function handleTransfer() {
       }
     });
 
+    // --- SLACK NOTIFICATION FOR SENDING ---
+    const senderMention = getMention(user.uid, senderName);
+    const recipientMention = getMention(recipientUid, recipientUsername);
+    
+    let slackMsg = "";
+    if (isProtected) {
+        slackMsg = `🔒 *Escrow Initiated:* ${senderMention} sent *$${amount.toLocaleString()}* to ${recipientMention}. (Funds locked for 2h)`;
+    } else {
+        slackMsg = `💸 *Money Sent:* ${senderMention} sent *$${amount.toLocaleString()}* directly to ${recipientMention}.`;
+    }
+    sendSlackMessage(slackMsg);
+
     const protectionNote = isProtected ? " (Protected - 5 BPS Fee Applied)" : "";
     
     // Log history separately to ensure transfer succeeds even if logs fail
     logHistory(user.uid, `Sent $${amount.toLocaleString()} to ${recipientUsername}${protectionNote}`, "transfer-out");
-    logHistory(recipientUid, `Received $${amount.toLocaleString()} from ${toUsername}`, "transfer-in");
+    logHistory(recipientUid, `Received $${amount.toLocaleString()} from ${senderName}`, "transfer-in");
 
     showMessage(isProtected ? "Protected transfer sent to Escrow!" : "Transfer successful!", "success");
     clearInputs();
@@ -193,6 +217,11 @@ async function handleRequest() {
       status: "unpaid",
       timestamp: serverTimestamp()
     });
+
+    // --- SLACK NOTIFICATION FOR REQUEST ---
+    const requesterMention = getMention(user.uid, realUsername);
+    const targetMention = getMention(targetUid, targetName);
+    sendSlackMessage(`📩 *Payment Request:* ${requesterMention} is requesting *$${amount.toLocaleString()}* from ${targetMention}.`);
 
     showMessage(`Request for $${amount.toLocaleString()} sent to ${targetName}`, "success");
     clearInputs();
