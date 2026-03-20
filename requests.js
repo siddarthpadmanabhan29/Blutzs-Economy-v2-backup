@@ -3,14 +3,24 @@ console.log("requests.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-    collection, query, where, onSnapshot, doc, runTransaction, serverTimestamp, deleteDoc 
+    collection, query, where, onSnapshot, doc, getDoc, runTransaction, serverTimestamp, deleteDoc 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 import { updateBalanceDisplay } from "./main.js";
+import { sendSlackMessage } from "./slackNotifier.js";
 
 // --- UI Elements ---
 const requestsList = document.getElementById("incoming-requests-list");
 const requestCountBadge = document.getElementById("request-count-badge");
+
+// ---------- Slack Mention Mapping ----------
+const SLACK_MENTIONS = {
+    "5gvX9n4QYthJre5bvXgSLR3vyB32": "<@U0AAPTL191Q>", // BigArj99
+    "FzN6WhykCNTQ0XVYQNeShpkHVos1": "<@U0ABJ6Y9NSU>", // TennisMaster 29
+    "JjWCEwZ03nhDj8bb5XwU0ca80qI3": "<@U0AALFBHSCD>"  // Anu728
+};
+
+const getMention = (uid, defaultName) => SLACK_MENTIONS[uid] || defaultName;
 
 /**
  * Exported initialization function to be called from transfer.js
@@ -77,6 +87,9 @@ function renderRequestItem(requestId, data) {
                 </button>
                 <button class="decline-req-btn" 
                     data-id="${requestId}" 
+                    data-from="${data.requesterUid}" 
+                    data-name="${data.requesterName}"
+                    data-amount="${data.amount}"
                     style="background:#444; color:#bbb; border:none; padding:6px 10px; border-radius:6px; cursor:pointer;">
                     Decline
                 </button>
@@ -101,6 +114,10 @@ async function payRequest(requestId, amount, requesterUid, requesterName) {
     const requestDocRef = doc(db, "requests", requestId);
 
     try {
+        // Fetch current user's profile for Slack name accuracy
+        const payerSnapFetch = await getDoc(payerRef);
+        const payerName = payerSnapFetch.exists() ? payerSnapFetch.data().username : "Someone";
+
         await runTransaction(db, async (transaction) => {
             const payerSnap = await transaction.get(payerRef);
             const requesterSnap = await transaction.get(requesterRef);
@@ -118,8 +135,12 @@ async function payRequest(requestId, amount, requesterUid, requesterName) {
             transaction.delete(requestDocRef);
         });
 
+        // --- Slack Notification ---
+        const payerMention = getMention(user.uid, payerName);
+        const requesterMention = getMention(requesterUid, requesterName);
+        sendSlackMessage(`✅ *Request Paid:* ${payerMention} paid the *$${amount.toLocaleString()}* requested by ${requesterMention}.`);
+
         // Log History
-        const payerName = auth.currentUser.displayName || "Someone"; // Fallback if name not in auth
         await Promise.all([
             logHistory(user.uid, `Paid Invoice: $${amount.toLocaleString()} to ${requesterName}`, "transfer-out"),
             logHistory(requesterUid, `Invoice Paid: $${amount.toLocaleString()} from ${payerName}`, "transfer-in")
@@ -136,10 +157,25 @@ async function payRequest(requestId, amount, requesterUid, requesterName) {
 /**
  * LOGIC: Decline Request
  */
-async function declineRequest(requestId) {
+async function declineRequest(requestId, requesterUid, requesterName, amount) {
+    const user = auth.currentUser;
+    if (!user) return;
+
     if (!confirm("Are you sure you want to decline this request?")) return;
+
     try {
+        // Fetch current user's profile for Slack name accuracy
+        const payerRef = doc(db, "users", user.uid);
+        const payerSnapFetch = await getDoc(payerRef);
+        const payerName = payerSnapFetch.exists() ? payerSnapFetch.data().username : "Someone";
+
         await deleteDoc(doc(db, "requests", requestId));
+
+        // --- Slack Notification ---
+        const payerMention = getMention(user.uid, payerName);
+        const requesterMention = getMention(requesterUid, requesterName);
+        sendSlackMessage(`❌ *Request Denied:* ${payerMention} declined the request for *$${amount.toLocaleString()}* from ${requesterMention}.`);
+
     } catch (err) {
         console.error("Failed to decline:", err);
     }
@@ -152,6 +188,7 @@ document.addEventListener("click", (e) => {
         payRequest(id, parseFloat(amount), from, name);
     }
     if (e.target.classList.contains("decline-req-btn")) {
-        declineRequest(e.target.dataset.id);
+        const { id, from, name, amount } = e.target.dataset;
+        declineRequest(id, from, name, parseFloat(amount));
     }
 });

@@ -105,20 +105,20 @@ async function handleTransfer() {
 
     if (recipientUid === user.uid) throw new Error("You cannot send money to yourself.");
 
+    // Explicitly fetch sender data to ensure we have the username for Slack/History
     const senderRef = doc(db, "users", user.uid);
+    const senderSnap = await getDoc(senderRef);
+    if (!senderSnap.exists()) throw new Error("Sender data missing.");
+    const senderName = senderSnap.data().username;
+
     const recipientRef = doc(db, "users", recipientUid);
-    let senderName = "";
 
     await runTransaction(db, async (transaction) => {
-      const senderSnap = await transaction.get(senderRef);
-      if (!senderSnap.exists()) throw new Error("Sender data missing.");
+      const freshSenderSnap = await transaction.get(senderRef);
       
-      const senderData = senderSnap.data();
-      senderName = senderData.username;
-
       // Transaction Validation
-      if (senderData.balance < amount) throw new Error("Insufficient Cash.");
-      if (isProtected && (senderData.bpsBalance || 0) < BPS_FEE) {
+      if (freshSenderSnap.data().balance < amount) throw new Error("Insufficient Cash.");
+      if (isProtected && (freshSenderSnap.data().bpsBalance || 0) < BPS_FEE) {
         throw new Error(`Insufficient BPS. Protection costs ${BPS_FEE} BPS.`);
       }
 
@@ -126,7 +126,7 @@ async function handleTransfer() {
         const pendingRef = doc(collection(db, "pending_transfers"));
         transaction.set(pendingRef, {
           from: user.uid,
-          fromName: senderData.username, 
+          fromName: senderName, 
           to: recipientUid,
           toName: recipientUsername,    
           amount: amount,
@@ -203,8 +203,7 @@ async function handleRequest() {
 
     if (targetUid === user.uid) throw new Error("You cannot request money from yourself.");
 
-    // Optimized: Get sender name from already existing user state if possible
-    // Here we get fresh data once to be sure
+    // Fetch sender name from doc to ensure Slack mention accuracy
     const senderSnap = await getDoc(doc(db, "users", user.uid));
     const realUsername = senderSnap.data().username;
 
