@@ -1,4 +1,4 @@
-// ---------- admin.js (UPGRADED: Escrow Oversight & Central Bank) ----------
+// ---------- admin.js (UPGRADED: Escrow Oversight, Central Bank, Fines & Appeals) ----------
 console.log("admin.js loaded");
 
 import { db, auth, secondaryAuth } from "./firebaseConfig.js";
@@ -65,6 +65,15 @@ const adminLottoDate = document.getElementById("admin-lotto-date");
 const setLottoTimeBtn = document.getElementById("admin-set-lotto-time");
 const adminLiveTicketsList = document.getElementById("admin-live-tickets-list");
 
+// --- FINE & APPEAL ADMIN ELEMENTS ---
+const adminFineUsername = document.getElementById("admin-fine-username");
+const adminFineAmount = document.getElementById("admin-fine-amount");
+const adminFineReason = document.getElementById("admin-fine-reason");
+const adminFineDue = document.getElementById("admin-fine-due");
+const adminFineInfo = document.getElementById("admin-fine-info");
+const issueFineBtn = document.getElementById("admin-issue-fine-btn");
+const adminAppealsList = document.getElementById("admin-appeals-list");
+
 let pendingIncentives = [];
 
 // UI FIX: Ensure the input box is wide and tall enough to see the full numeric values clearly
@@ -98,6 +107,8 @@ let activeAdminListener = null;
 let economyListener = null;
 let lotteryPoolListener = null;
 let activeTicketsListener = null;
+let fineLookupListener = null;
+let appealsListener = null;
 
 let lookupTimeout = null;
 
@@ -384,6 +395,112 @@ async function triggerLotteryDraw() {
 
 if (triggerLottoBtn) triggerLottoBtn.addEventListener("click", triggerLotteryDraw);
 
+/* =========================================================
+    JUDICIAL FINES & APPEALS LOGIC
+========================================================= */
+async function issueJudicialFine() {
+    const username = adminFineUsername.value.trim().toLowerCase();
+    const amount = parseFloat(adminFineAmount.value);
+    const reason = adminFineReason.value.trim();
+    const dueDate = adminFineDue.value;
+
+    if (!username || isNaN(amount) || amount <= 0 || !reason || !dueDate) {
+        return alert("⚠️ Please fill in all fine details (Username, Amount, Reason, Due Date).");
+    }
+
+    if (!confirm(`Issue a judicial fine of $${amount.toLocaleString()} to ${username}? This will LOCK their account.`)) return;
+
+    try {
+        const q = query(collection(db, "users"), where("username", "==", username));
+        const snap = await getDocs(q);
+        if (snap.empty) return alert("❌ User not found.");
+
+        const userDoc = snap.docs[0];
+        const userRef = doc(db, "users", userDoc.id);
+
+        await updateDoc(userRef, {
+            activeFine: {
+                amount: amount,
+                reason: reason,
+                dueDate: new Date(dueDate).toISOString(),
+                lastInterestDate: new Date().toISOString(),
+                appealPending: false
+            }
+        });
+
+        await logHistory(userDoc.id, `🚨 JUDICIAL FINE ISSUED: $${amount.toLocaleString()} for "${reason}"`, "admin");
+
+        const timestamp = new Date().toLocaleString();
+        sendSlackMessage(
+            `⚖️ *CBA FINE:* CBA has fined *${username}*.\n` + 
+            `💰 *Amount:* $${amount.toLocaleString()}\n` +
+            `📝 *Reason:* ${reason}\n` +
+            `📅 *Due Date:* ${new Date(dueDate).toLocaleDateString()}\n` +
+            `⚠️ *Status:* Account LOCKED until payment.`
+        );
+
+        alert(`✅ Fine issued to ${username}. Account locked.`);
+        adminFineUsername.value = ""; adminFineAmount.value = ""; adminFineReason.value = ""; adminFineDue.value = ""; adminFineInfo.textContent = "N/A";
+    } catch (err) {
+        console.error("Fine issue failed:", err);
+        alert("Failed to issue fine.");
+    }
+}
+
+if (issueFineBtn) issueFineBtn.addEventListener("click", issueJudicialFine);
+
+export function listenForAppeals() {
+    if (!adminAppealsList) return;
+    if (appealsListener) appealsListener();
+
+    // Query all users who have an activeFine with appealPending: true
+    const q = query(collection(db, "users"), where("activeFine.appealPending", "==", true));
+
+    appealsListener = onSnapshot(q, (snapshot) => {
+        adminAppealsList.innerHTML = "";
+        if (snapshot.empty) {
+            adminAppealsList.innerHTML = `<p style="color: gray; font-style: italic; text-align: center;">No active appeals.</p>`;
+            return;
+        }
+
+        snapshot.forEach((userDoc) => {
+            const userData = userDoc.data();
+            const fine = userData.activeFine;
+            const div = document.createElement("div");
+            div.style = "background: rgba(52, 152, 219, 0.05); border: 1px solid #3498db; padding: 12px; margin-bottom: 10px; border-radius: 8px;";
+            div.innerHTML = `
+                <div style="font-size: 0.85rem; margin-bottom: 8px;">
+                    <strong>User:</strong> ${userData.username}<br>
+                    <strong>Fine:</strong> $${fine.amount.toLocaleString()} (${fine.reason})<br>
+                    <strong>Appeal Reason:</strong> <span style="color: #3498db;">"${fine.appealReason || 'No reason provided'}"</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="handleAppeal('${userDoc.id}', 'grant')" style="flex: 1; background: #2ecc71; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold;">GRANT (WAIVE FINE)</button>
+                    <button onclick="handleAppeal('${userDoc.id}', 'deny')" style="flex: 1; background: #e74c3c; color: white; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-weight: bold;">DENY APPEAL</button>
+                </div>
+            `;
+            adminAppealsList.appendChild(div);
+        });
+    });
+}
+
+window.handleAppeal = async (userId, decision) => {
+    const userRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) return;
+    const username = userSnap.data().username;
+
+    if (decision === 'grant') {
+        await updateDoc(userRef, { activeFine: null });
+        sendSlackMessage(`👨‍⚖️ *APPEAL GRANTED:* Admin has waived the fine for *${username}*. Account unlocked.`);
+        alert("Fine waived.");
+    } else {
+        await updateDoc(userRef, { "activeFine.appealPending": false });
+        sendSlackMessage(`👨‍⚖️ *APPEAL DENIED:* Admin has rejected the appeal from *${username}*. The fine remains.`);
+        alert("Appeal denied.");
+    }
+};
+
 // ---------- Add Shop Item ----------
 async function addShopItem() {
   const name = newItemName.value.trim();
@@ -411,6 +528,7 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
   if (type === "cosmetic" && cosmeticsUserListener) { cosmeticsUserListener(); cosmeticsUserListener = null; }
   if (type === "contract" && contractLookupListener) { contractLookupListener(); contractLookupListener = null; }
   if (type === "membership" && membershipLookupListener) { membershipLookupListener(); membershipLookupListener = null; }
+  if (type === "fine" && fineLookupListener) { fineLookupListener(); fineLookupListener = null; }
 
   if (!usernameInput) {
     infoEl.textContent = "N/A";
@@ -462,6 +580,10 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
             const isTrial = data.trialExpiration ? " (ACTIVE TRIAL)" : "";
             infoEl.textContent = `Target: ${displayName} | Plan: ${tier.toUpperCase()}${isTrial}`;
             infoEl.style.color = "#2ecc71";
+        } else if (type === "fine") {
+            const fineData = data.activeFine ? `$${data.activeFine.amount.toLocaleString()}` : "None";
+            infoEl.textContent = `Target: ${displayName} | Fine: ${fineData}`;
+            infoEl.style.color = data.activeFine ? "#e74c3c" : "#2ecc71";
         }
       });
 
@@ -471,6 +593,7 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
       else if (type === "cosmetic") cosmeticsUserListener = unsubscribe;
       else if (type === "contract") contractLookupListener = unsubscribe;
       else if (type === "membership") membershipLookupListener = unsubscribe;
+      else if (type === "fine") fineLookupListener = unsubscribe;
     }
   });
 }
@@ -478,6 +601,7 @@ async function handleUserLookup(inputEl, infoEl, btnEl, type) {
 adminGiveUsername?.addEventListener("input", () => handleUserLookup(adminGiveUsername, adminUserInfo, adminGiveBtn, "money"));
 adminGiveBpsUsername?.addEventListener("input", () => handleUserLookup(adminGiveBpsUsername, adminBpsUserInfo, adminGiveBpsBtn, "bps"));
 adminTrialUsername?.addEventListener("input", () => handleUserLookup(adminTrialUsername, adminTrialUserInfo, adminGrantTrialBtn, "membership"));
+adminFineUsername?.addEventListener("input", () => handleUserLookup(adminFineUsername, adminFineInfo, issueFineBtn, "fine"));
 
 // ---------- Execute Give Functions ----------
 async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
@@ -963,6 +1087,7 @@ if (openAdminBtn) openAdminBtn.addEventListener("click", () => {
     listenToEconomyStats(); 
     listenForAdminLottery();
     listenToGlobalTickets(); // NEW: Added listener
+    listenForAppeals();
 });
 
 if (adminPanel && !adminPanel.classList.contains("hidden")) { 
@@ -972,4 +1097,5 @@ if (adminPanel && !adminPanel.classList.contains("hidden")) {
     listenToEconomyStats(); 
     listenForAdminLottery();
     listenToGlobalTickets(); // NEW: Added listener
+    listenForAppeals();
 }

@@ -244,6 +244,25 @@
   </style>
 </head>
 <body>
+  <!-- FINE LOCKDOWN OVERLAY -->
+  <div id="fine-lockdown-overlay" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;">
+    <h1 style="color: #e74c3c; font-size: 3rem; margin-bottom: 10px;">🚨 ACCOUNT LOCKED</h1>
+    <p style="color: #eee; font-size: 1.2rem; max-width: 500px;">Your dashboard has been paused due to an outstanding fine. You must clear this debt or appeal it to resume activity.</p>
+    
+    <div style="background: #1a1a1a; border: 2px solid #e74c3c; padding: 30px; border-radius: 15px; margin: 20px 0; min-width: 300px;">
+        <span style="color: #888; text-transform: uppercase; font-size: 0.6rem; font-weight: bold;">Amount Owed</span>
+        <h2 id="lockdown-fine-amount" style="color: #e74c3c; font-size: 2.5rem; margin: 10px 0;">$0</h2>
+        <p id="lockdown-fine-reason" style="color: #aaa; font-style: italic; font-size: 0.9rem;"></p>
+        <div id="lockdown-due-date" style="color: #f1c40f; font-weight: bold; margin-top: 10px; font-size: 0.8rem;"></div>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 10px;">
+      <button id="pay-fine-btn" class="btn-primary" style="background: #2ecc71; padding: 15px 30px; font-size: 1.1rem; border: none; font-weight: bold; cursor: pointer; border-radius: 8px;">PAY FINE NOW</button>
+      <button id="appeal-fine-btn" class="btn-secondary" style="background: #3498db; padding: 15px 30px; font-size: 1.1rem; border: none; font-weight: bold; cursor: pointer; border-radius: 8px; color: white;">APPEAL FINE</button>
+    </div>
+    <p id="appeal-status-msg" style="margin-top: 15px; color: #3498db; font-weight: bold;" class="hidden">Appeal Pending Review...</p>
+  </div>
+
   <div id="login-screen" class="screen">
     <div id="login-form">
       <h1>Blutz Economy</h1>
@@ -468,7 +487,7 @@
         <div id="inventory-items">Loading...</div>
       </section>
 
-      <section class="section-card">
+      <section class="section-card" style="border: 2px solid #3498db;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
           <h3 style="margin:0;">💸 Transfer Hub</h3>
           <div id="protection-badge-ui" style="font-size: 0.65rem; background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 6px; font-weight: bold;">
@@ -677,6 +696,35 @@
         <button id="admin-trigger-lotto-btn" class="btn-primary" style="width: 100%; background: #f1c40f; color: black; font-weight: 900;">TRIGGER DRAW & DISTRIBUTE PRIZES</button>
     </div>
 
+    <!-- MAIN JUDICIAL FINES BOX -->
+    <div class="admin-section" style="border: 2px solid #e74c3c; margin-top: 20px; padding: 15px;">
+        <h3 style="color: #e74c3c;">⚖️ Judicial Fines & Lockdown</h3>
+        <p style="font-size: 0.85em; color: gray; margin-bottom: 10px;">Issue a fine to lock a user's dashboard until paid.</p>
+        
+        <input id="admin-fine-username" placeholder="Target Username" autocomplete="off" class="admin-input-adaptive" style="margin-bottom: 8px; width: 100%; padding: 8px; border-radius: 6px;">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+            <input id="admin-fine-amount" type="number" placeholder="Fine Amount" class="admin-input-adaptive" style="padding: 8px; border-radius: 6px;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+                <label class="contract-label">Due Date</label>
+                <input id="admin-fine-due" type="date" class="admin-input-adaptive" style="padding: 8px; border-radius: 6px;">
+            </div>
+        </div>
+        
+        <input id="admin-fine-reason" type="text" placeholder="Reason (e.g. Conduct Violation)" class="admin-input-adaptive" style="width: 100%; padding: 8px; border-radius: 6px; margin-bottom: 10px;">
+        
+        <p><strong>User:</strong> <span id="admin-fine-info" style="color: gray;">N/A</span></p>
+        <button id="admin-issue-fine-btn" class="btn-danger" style="width: 100%; font-weight: bold;">ISSUE FINE & LOCK ACCOUNT</button>
+    </div>
+
+    <div class="admin-section" style="border: 2px solid #3498db; margin-top: 20px; padding: 15px;">
+      <h3 style="color: #3498db;">⚖️ Judicial Appeals</h3>
+      <p style="font-size: 0.85em; color: gray;">Review user requests to waive fines.</p>
+      <div id="admin-appeals-list">
+          <p style="color: gray; font-style: italic; text-align: center;">No active appeals.</p>
+      </div>
+    </div>
+
     <div class="admin-section" style="border: 2px solid #f1c40f; margin-top: 20px; padding: 15px;">
       <h3 style="color: #f1c40f;">🏛️ Central Bank Controls</h3>
       <p style="font-size: 0.85em; color: gray;">Market Resistance Baseline: <strong id="admin-current-volatility">$34.0M</strong></p>
@@ -841,6 +889,7 @@
   <script type="module" src="estats.js"></script>
   <script type="module" src="admin.js"></script>
   <script type="module" src="lottery.js"></script>
+  <script type="module" src="fines.js"></script>
   <script>
     window.scrollToPlans = function() {
       const el = document.getElementById('membership-plans-anchor');
