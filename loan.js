@@ -19,6 +19,7 @@ export function getCreditStatus(score) {
  * applyInterest
  * Logic: 5% interest charged every 24 hours.
  * Penalty: -150 Credit Score if monthly deadline is missed.
+ * Insurance: Blutzs Package B provides a 1-day grace period.
  */
 export async function applyInterest(uid, userData) {
     if (!userData.activeLoan || userData.activeLoan <= 0) return;
@@ -26,6 +27,13 @@ export async function applyInterest(uid, userData) {
     const now = new Date();
     const lastInterestDate = userData.lastInterestApplied ? new Date(userData.lastInterestApplied) : new Date(userData.loanStartDate);
     const deadline = new Date(userData.loanDeadline);
+
+    // --- INSURANCE LOGIC: Blutzs Package B (1 Day Grace Period) ---
+    const hasGracePeriod = userData.insurance?.activePackages?.includes("blutzs_b");
+    const effectiveDeadline = new Date(deadline);
+    if (hasGracePeriod) {
+        effectiveDeadline.setDate(effectiveDeadline.getDate() + 1);
+    }
 
     const diffInMs = now - lastInterestDate;
     const msInDay = 24 * 60 * 60 * 1000;
@@ -42,7 +50,7 @@ export async function applyInterest(uid, userData) {
         console.log(`System: Applied ${daysElapsed} days of interest.`);
     }
 
-    if (now > deadline && !userData.isEconomyPaused) {
+    if (now > effectiveDeadline && !userData.isEconomyPaused) {
         const currentScore = userData.creditScore || 600;
         await updateDoc(doc(db, "users", uid), { 
             isEconomyPaused: true,
@@ -147,10 +155,19 @@ export async function repayLoan() {
     const loanStart = new Date(data.loanStartDate);
     const deadline = new Date(data.loanDeadline);
     
+    // --- INSURANCE LOGIC: Blutzs Package B (Grace Period Reward Protection) ---
+    const hasGracePeriod = data.insurance?.activePackages?.includes("blutzs_b");
+    const effectiveDeadline = new Date(deadline);
+    if (hasGracePeriod) {
+        effectiveDeadline.setDate(effectiveDeadline.getDate() + 1);
+    }
+
     // 1. Calculate holding time (Velocity Check)
     const msHeld = now - loanStart;
     const hoursHeld = msHeld / (1000 * 60 * 60);
-    const isOnTime = now <= deadline;
+    
+    // Check against effective deadline (includes grace period if insured)
+    const isOnTime = now <= effectiveDeadline;
 
     // 2. Determine Reward (0 if held < 1 hour to prevent farming)
     let reward = 0;
@@ -173,7 +190,11 @@ export async function repayLoan() {
         if (hoursHeld < 1) {
             alert("Loan repaid, but no credit boost was earned because the loan was held for less than 1 hour.");
         } else {
-            alert(isOnTime ? `Loan fully repaid on time! Credit score +${reward}.` : `Loan repaid late. Score +${reward}.`);
+            let feedback = isOnTime ? `Loan fully repaid on time! Credit score +${reward}.` : `Loan repaid late. Score +${reward}.`;
+            if (hasGracePeriod && now > deadline && now <= effectiveDeadline) {
+                feedback = `🛡️ Insurance Grace Period Applied! Loan counted as On-Time. Credit score +${reward}.`;
+            }
+            alert(feedback);
         }
     } catch (error) {
         console.error("Repayment Error:", error);

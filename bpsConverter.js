@@ -100,6 +100,14 @@ export async function renderBpsConverter(userData) {
             if (activeTimerEl) activeTimerEl.classList.add("hidden");
         }
     }
+
+    // --- INSURANCE UI UPDATE ---
+    const msgEl = document.getElementById("bps-converter-message");
+    if (msgEl && userData.insurance?.activePackages?.includes("darkblue_b")) {
+        msgEl.innerHTML = `<span style="color: #3498db; font-size: 0.75rem;">💎 Dark Blue Insurance: 0% Conversion Tax Applied</span>`;
+    } else if (msgEl) {
+        msgEl.innerHTML = `<span style="color: #888; font-size: 0.75rem;">Standard 20% Transaction Tax applies.</span>`;
+    }
 }
 
 /**
@@ -135,6 +143,7 @@ async function resetWeeklyLimit() {
 /**
  * Handle Conversion Action
  * UPDATED: Uses the synced rate from the UI to save Quota and ensure accuracy.
+ * UPDATED: Added Insurance Tax Waiver Logic (Dark Blue Package B)
  */
 async function handleConversion() {
     const input = document.getElementById("bps-convert-amount");
@@ -143,12 +152,17 @@ async function handleConversion() {
     const amount = parseInt(input.value);
     if (!amount || amount <= 0) return alert("Please enter a valid amount.");
     
-    // DATA ENGINEERING OPTIMIZATION: Pull the live rate that was already rendered
-    // to ensure transaction price matches the screen perfectly without a new DB read.
+    // Pull the live rate that was already rendered
     const rateEl = document.getElementById("dynamic-bps-rate");
     const liveRate = parseInt(rateEl.textContent.replace(/[$,]/g, '')) || 500;
     
-    const cashValue = amount * liveRate;
+    const rawValue = amount * liveRate;
+
+    // --- INSURANCE LOGIC: DARK BLUE PACKAGE B ---
+    const hasTaxWaiver = currentData.insurance?.activePackages?.includes("darkblue_b");
+    const taxRate = hasTaxWaiver ? 0 : 0.2; // 20% Standard Tax
+    const taxAmount = Math.floor(rawValue * taxRate);
+    const cashValue = rawValue - taxAmount;
     
     const tier = currentData.membershipLevel || "standard";
     const planConfig = PLANS[tier];
@@ -161,7 +175,11 @@ async function handleConversion() {
         return alert(`Limit reached. You can only convert ${weeklyLimit - convertedThisWeek} more BPS this week.`);
     }
 
-    if (!confirm(`Confirm: Convert ${amount} BPS into $${cashValue.toLocaleString()}?\n(Synced Market Rate: $${liveRate.toLocaleString()} / BPS)`)) return;
+    let confirmMsg = `Confirm: Convert ${amount} BPS into $${cashValue.toLocaleString()}?\n(Market Rate: $${liveRate.toLocaleString()}/BPS)`;
+    if (taxAmount > 0) confirmMsg += `\nIncludes 20% Economy Tax: -$${taxAmount.toLocaleString()}`;
+    else confirmMsg += `\n🛡️ Tax Waived by Dark Blue Insurance!`;
+
+    if (!confirm(confirmMsg)) return;
 
     try {
         const userRef = doc(db, "users", auth.currentUser.uid);
@@ -176,12 +194,19 @@ async function handleConversion() {
         }
 
         await updateDoc(userRef, updates);
-        await logHistory(auth.currentUser.uid, `Exchanged ${amount} BPS for $${cashValue.toLocaleString()} at $${liveRate.toLocaleString()}/BPS`, "transfer-in");
+        
+        let historyMsg = `Exchanged ${amount} BPS for $${cashValue.toLocaleString()}`;
+        if (taxAmount > 0) historyMsg += ` (After $${taxAmount.toLocaleString()} Tax)`;
+        else historyMsg += ` (0% Insured Tax)`;
+
+        await logHistory(auth.currentUser.uid, historyMsg, "transfer-in");
         
         // Slack notification
         const username = currentData.username || "Unknown User";
         const timestamp = new Date().toLocaleString();
-        const slackMsg = `💱 *BPS Conversion:* ${username} exchanged ${amount} BPS for *$${cashValue.toLocaleString()}*.\n*Market Rate:* $${liveRate.toLocaleString()}\n*Tier:* ${tier.toUpperCase()}\n*Time:* ${timestamp}`;
+        const slackMsg = `💱 *BPS Conversion:* ${username} exchanged ${amount} BPS for *$${cashValue.toLocaleString()}*.\n` +
+                         `*Tax Paid:* $${taxAmount.toLocaleString()} ${hasTaxWaiver ? '(INSURED)' : ''}\n` +
+                         `*Market Rate:* $${liveRate.toLocaleString()}\n*Tier:* ${tier.toUpperCase()}`;
         sendSlackMessage(slackMsg);
 
         alert(`✅ Success! Added $${cashValue.toLocaleString()} to your balance.`);

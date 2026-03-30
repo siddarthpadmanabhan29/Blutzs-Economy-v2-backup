@@ -1,4 +1,4 @@
-// ---------- bpsShop.js (QUOTA OPTIMIZED) ----------
+// ---------- bpsShop.js (QUOTA OPTIMIZED + INSURANCE INTEGRATED) ----------
 console.log("bpsShop.js loaded");
 import { db, auth } from "./firebaseConfig.js";
 import { 
@@ -10,6 +10,17 @@ const bpsContainer = document.getElementById("bps-shop-items");
 // We store data locally to avoid constant database pings
 let currentUserData = null;
 let currentBpsItems = [];
+
+/**
+ * HELPER: Calculates the effective cost based on Insurance Package C (Cross Go)
+ */
+function getEffectiveCost(baseCost) {
+  const hasInsuranceDiscount = currentUserData?.insurance?.activePackages?.includes("crossgo_c");
+  if (hasInsuranceDiscount) {
+    return Math.floor(baseCost * 0.9); // 10% Discount
+  }
+  return baseCost;
+}
 
 async function loadBpsShop() {
   const user = auth.currentUser;
@@ -52,6 +63,7 @@ function renderBpsShop(externalUserData = null) {
   }
 
   const userBPS = Number(currentUserData?.bpsBalance || 0);
+  const hasInsuranceDiscount = currentUserData?.insurance?.activePackages?.includes("crossgo_c");
   
   // --- Check Expiration (Local Calculation) ---
   const now = new Date();
@@ -59,7 +71,8 @@ function renderBpsShop(externalUserData = null) {
   const isExpired = expirationDate && expirationDate < now;
 
   currentBpsItems.forEach(item => {
-    const affordable = userBPS >= item.cost;
+    const finalCost = getEffectiveCost(item.cost);
+    const affordable = userBPS >= finalCost;
     const isDisabled = !affordable || isExpired;
 
     let btnText = affordable ? "Buy with BPS" : "Need Tokens";
@@ -69,9 +82,14 @@ function renderBpsShop(externalUserData = null) {
     div.classList.add("shop-item", "bps-item");
     if(isDisabled) div.style.opacity = "0.7"; 
 
+    // Visual indicator if insurance is saving them money
+    const priceHTML = hasInsuranceDiscount 
+      ? `<p style="color: #8e44ad; font-weight:bold;"><span style="text-decoration: line-through; color: gray; font-size: 0.8em; margin-right: 5px;">${item.cost}</span> ${finalCost} BPS <span style="font-size: 0.6rem; background: #2ecc71; color: white; padding: 2px 4px; border-radius: 4px;">🛡️ 10% OFF</span></p>`
+      : `<p style="color: #8e44ad; font-weight:bold;">${item.cost} BPS</p>`;
+
     div.innerHTML = `
       <h4>${item.name}</h4>
-      <p style="color: #8e44ad; font-weight:bold;">${item.cost} BPS</p>
+      ${priceHTML}
       <button class="btn-primary buy-bps-btn" data-id="${item.id}" ${isDisabled ? "disabled" : ""}>
         ${btnText}
       </button>
@@ -106,6 +124,10 @@ async function buyBpsItem(itemId, btnElement) {
     const userData = userSnap.data();
     const itemData = itemSnap.data();
 
+    // Re-check insurance locally using the fresh snap
+    const hasInsuranceDiscount = userData?.insurance?.activePackages?.includes("crossgo_c");
+    const finalCost = hasInsuranceDiscount ? Math.floor(itemData.cost * 0.9) : itemData.cost;
+
     const now = new Date();
     const expirationDate = userData.expirationDate ? new Date(userData.expirationDate) : null;
     if (expirationDate && expirationDate < now) {
@@ -113,17 +135,20 @@ async function buyBpsItem(itemId, btnElement) {
         return resetBtn(btnElement);
     }
 
-    // BPS SHOP CLEANUP: Coupons always cost BPS now as free perks were removed
-    if(userData.bpsBalance < itemData.cost) {
+    if(userData.bpsBalance < finalCost) {
         alert("Not enough BPS Tokens!");
         return resetBtn(btnElement);
     }
 
-    const newBpsBalance = userData.bpsBalance - itemData.cost;
+    const newBpsBalance = userData.bpsBalance - finalCost;
 
     await updateDoc(userRef, {
       bpsBalance: newBpsBalance,
-      history: arrayUnion({ message: `Bought ${itemData.name}`, type: "purchase", timestamp: new Date().toISOString() })
+      history: arrayUnion({ 
+        message: `Bought ${itemData.name} ${hasInsuranceDiscount ? '(Insurance Applied)' : ''}`, 
+        type: "purchase", 
+        timestamp: new Date().toISOString() 
+      })
     });
 
     await addDoc(inventoryRef, {
@@ -132,7 +157,7 @@ async function buyBpsItem(itemId, btnElement) {
       discountValue: itemData.value, 
       value: 0, 
       acquiredAt: new Date().toISOString(),
-      isFree: false // Coupons are never free items via membership perks
+      isFree: false 
     });
 
     alert(`Bought ${itemData.name}! Check your inventory.`);

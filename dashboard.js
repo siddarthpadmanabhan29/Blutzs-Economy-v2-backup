@@ -38,6 +38,9 @@ import { listenForAdminLottery } from "./admin.js";
 // --- FINE SYSTEM IMPORT ---
 import { initFineSystem } from "./fines.js";
 
+// --- INSURANCE SYSTEM IMPORT ---
+import { initInsurance } from "./insurance.js";
+
 /* =========================================================
     QUOTA PROTECTION: LISTENER MANAGER
 ========================================================= */
@@ -212,6 +215,9 @@ onAuthStateChanged(auth, async (user) => {
     if (typeof renderStatsTeaser === "function") renderStatsTeaser(currentDashboardData);
 
     if (typeof renderUserContract === "function") renderUserContract(user.uid, currentDashboardData);
+
+    // NEW: Handle Insurance Hub Sync & Modular Logic
+    if (typeof initInsurance === "function") initInsurance(currentDashboardData);
 
   }, (error) => {
     if (statusDot) {

@@ -1471,3 +1471,22 @@ input:checked + .slider:before {
     font-weight: bold;
     color: #2ecc71 !important;
 }
+
+/* Active styles */
+.package-option.active-policy {
+    border: 2px solid #2ecc71 !important;
+    background: rgba(46, 204, 113, 0.1);
+}
+
+/* Pending addition styles */
+.package-option.pending-add {
+    border: 2px dashed #3498db !important;
+}
+
+/* Pending removal styles */
+.package-option.pending-remove {
+    opacity: 0.5;
+    filter: grayscale(1);
+    text-decoration: line-through;
+    border: 2px solid #e74c3c !important;
+}

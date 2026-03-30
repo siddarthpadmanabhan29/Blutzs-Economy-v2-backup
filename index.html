@@ -241,6 +241,29 @@
       color: #2980b9;
       text-decoration: underline;
     }
+
+    /* Insurance UI Styling */
+    .package-option {
+      width: 100%;
+      text-align: left;
+      background: rgba(0,0,0,0.1);
+      color: inherit;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: 0.2s;
+      display: flex;
+      flex-direction: column;
+    }
+    .package-option:hover { border-color: #3498db; }
+    .package-option.selected {
+      background: rgba(52, 152, 219, 0.1);
+      border-color: #3498db;
+    }
+    .package-info h5 { margin: 0; font-size: 0.85rem; }
+    .package-info p { margin: 2px 0 0 0; font-size: 0.7rem; color: #888; }
   </style>
 </head>
 <body>
@@ -487,6 +510,87 @@
         <div id="inventory-items">Loading...</div>
       </section>
 
+      <!-- STANDALONE INSURANCE SECTION (HYBRID MODULAR) -->
+      <section id="insurance-hub-section" class="section-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h3 style="margin:0; color: #3498db;">🛡️ Insurance Department</h3>
+          <div style="font-size: 0.6rem; background: rgba(52, 152, 219, 0.1); color: #3498db; padding: 4px 8px; border-radius: 6px; font-weight: bold; text-transform: uppercase;">Modular Coverage</div>
+        </div>
+
+        <div id="insurance-billing-status" class="billing-status-box" style="margin-bottom: 15px;"></div>
+
+        <div class="plans-container" style="align-items: stretch;">
+          <!-- BLUTZS CARD -->
+          <div class="plan-card" style="border-color: #e74c3c; flex: 1;">
+            <h4 style="color: #e74c3c;">🛡️ Blutzs Financial</h4>
+            <p style="font-size: 0.65rem; color: #888; margin-top: -5px; font-weight: bold;">LEGAL & DEBT PROTECTION</p>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
+              <button class="package-option" data-pkg="blutzs_a">
+                <div class="package-info"><h5>Lawyer A</h5><p>50% Judicial Fine Coverage</p></div>
+              </button>
+              <button class="package-option" data-pkg="blutzs_b">
+                <div class="package-info"><h5>Shield B</h5><p>24h Loan Grace Period</p></div>
+              </button>
+              <button class="package-option" data-pkg="blutzs_c">
+                <div class="package-info"><h5>Guard C</h5><p>$50k Contract Cut Payout</p></div>
+              </button>
+            </div>
+            <p style="font-size: 0.6rem; color: #888; margin-top: 10px;">Select all 3 for <strong>$105k</strong> total</p>
+          </div>
+
+          <!-- DARK BLUE CARD -->
+          <div class="plan-card" style="border-color: #3498db; flex: 1;">
+            <h4 style="color: #3498db;">💎 Dark Blue</h4>
+            <p style="font-size: 0.65rem; color: #888; margin-top: -5px; font-weight: bold;">MARKET & GROWTH</p>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
+              <button class="package-option" data-pkg="darkblue_a">
+                <div class="package-info"><h5>Lock A</h5><p>Freeze Membership Prices</p></div>
+              </button>
+              <button class="package-option" data-pkg="darkblue_b">
+                <div class="package-info"><h5>Tax B</h5><p>0% BPS Exchange Tax</p></div>
+              </button>
+              <button class="package-option" data-pkg="darkblue_c">
+                <div class="package-info"><h5>Weekly C</h5><p>+5 BPS Every Monday</p></div>
+              </button>
+            </div>
+            <p style="font-size: 0.6rem; color: #888; margin-top: 10px;">Select all 3 for <strong>$105k</strong> total</p>
+          </div>
+
+          <!-- CROSS GO CARD -->
+          <div class="plan-card" style="border-color: #2ecc71; flex: 1;">
+            <h4 style="color: #2ecc71;">🚀 Cross Go</h4>
+            <p style="font-size: 0.65rem; color: #888; margin-top: -5px; font-weight: bold;">UTILITY & REFUNDS</p>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
+              <button class="package-option" data-pkg="crossgo_a">
+                <div class="package-info"><h5>Yield A</h5><p>+2% Savings Int. (<$325k)</p></div>
+              </button>
+              <button class="package-option" data-pkg="crossgo_b">
+                <div class="package-info"><h5>Theft B</h5><p>Refund on Deleted Items</p></div>
+              </button>
+              <button class="package-option" data-pkg="crossgo_c">
+                <div class="package-info"><h5>Coupon C</h5><p>10% BPS Shop Discount</p></div>
+              </button>
+            </div>
+            <p style="font-size: 0.6rem; color: #888; margin-top: 10px;">Select all 3 for <strong>$105k</strong> total</p>
+          </div>
+        </div>
+
+        <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; margin-top: 15px; border: 1px solid #333;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h4 style="margin: 0; color: #f1c40f; font-size: 0.9rem;">Calculated Premium</h4>
+              <p style="margin: 0; font-size: 0.65rem; color: #888;">Paid every 30 days</p>
+              <p style="font-size: 0.6rem; color: #f1c40f; font-weight: bold; margin-top: 5px;">Pick all 9 for a flat $290k rate!</p>
+            </div>
+            <h3 id="insurance-total-cost" style="margin: 0; font-size: 1.5rem; color: #fff;">$0</h3>
+          </div>
+          
+          <button id="confirm-insurance-payment-btn" class="btn-primary hidden" style="width: 100%; margin-top: 15px; background: #2ecc71; font-weight: 800;">ACTIVATE & PAY FIRST MONTH</button>
+          <button id="update-insurance-btn" class="btn-primary hidden" style="width: 100%; margin-top: 15px; background: #3498db; font-weight: 800;">REGISTER POLICY UPDATES</button>
+          <button id="cancel-insurance-btn" class="btn-danger hidden" style="width: 100%; margin-top: 8px; font-size: 0.7rem; opacity: 0.8;">Cancel All Insurance</button>
+        </div>
+      </section>
+
       <section class="section-card" style="border: 2px solid #3498db;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
           <h3 style="margin:0;">💸 Transfer Hub</h3>
@@ -715,6 +819,7 @@
         
         <p><strong>User:</strong> <span id="admin-fine-info" style="color: gray;">N/A</span></p>
         <button id="admin-issue-fine-btn" class="btn-danger" style="width: 100%; font-weight: bold;">ISSUE FINE & LOCK ACCOUNT</button>
+        
     </div>
 
     <div class="admin-section" style="border: 2px solid #3498db; margin-top: 20px; padding: 15px;">
@@ -890,6 +995,7 @@
   <script type="module" src="admin.js"></script>
   <script type="module" src="lottery.js"></script>
   <script type="module" src="fines.js"></script>
+  <script type="module" src="insurance.js"></script>
   <script>
     window.scrollToPlans = function() {
       const el = document.getElementById('membership-plans-anchor');

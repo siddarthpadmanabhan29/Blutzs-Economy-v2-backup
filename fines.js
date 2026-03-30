@@ -52,8 +52,13 @@ export function initFineSystem() {
                 // --- SHOW LOCKDOWN OVERLAY ---
                 if (overlay) {
                     overlay.classList.remove("hidden");
-                    amountDisplay.textContent = `$${fine.amount.toLocaleString()}`;
-                    reasonDisplay.textContent = `Reason: ${fine.reason}`;
+                    
+                    // --- INSURANCE LOGIC: Blutzs Package A (50% Coverage) ---
+                    const hasFineInsurance = data.insurance?.activePackages?.includes("blutzs_a");
+                    const displayAmount = hasFineInsurance ? fine.amount / 2 : fine.amount;
+                    
+                    amountDisplay.textContent = `$${displayAmount.toLocaleString()}`;
+                    reasonDisplay.innerHTML = `Reason: ${fine.reason}${hasFineInsurance ? '<br><span style="color: #2ecc71; font-size: 0.7rem; font-weight: bold;">🛡️ 50% COVERED BY BLUTZS INSURANCE</span>' : ''}`;
                     
                     if (now > dueDate) {
                         dueDisplay.textContent = "⚠️ OVERDUE - DOUBLING DAILY";
@@ -85,20 +90,25 @@ export function initFineSystem() {
                 const userRef = doc(db, "users", user.uid);
                 const userSnap = await getDoc(userRef);
                 const userData = userSnap.data();
-                const fineAmount = userData.activeFine.amount;
+                
+                if (!userData.activeFine) return;
 
-                if (userData.balance < fineAmount) {
-                    return alert("❌ Insufficient Cash! You must have enough to pay the full fine to unlock your dashboard.");
+                // --- INSURANCE CALCULATION FOR PAYMENT ---
+                const hasFineInsurance = userData.insurance?.activePackages?.includes("blutzs_a");
+                const finalFineAmount = hasFineInsurance ? userData.activeFine.amount / 2 : userData.activeFine.amount;
+
+                if (userData.balance < finalFineAmount) {
+                    return alert(`❌ Insufficient Cash! You need $${finalFineAmount.toLocaleString()} to unlock your dashboard.`);
                 }
 
-                if (confirm(`Pay $${fineAmount.toLocaleString()} to clear your debt and unlock your dashboard?`)) {
+                if (confirm(`Pay $${finalFineAmount.toLocaleString()} to clear your debt and unlock your dashboard?`)) {
                     try {
                         await updateDoc(userRef, {
-                            balance: increment(-fineAmount),
+                            balance: increment(-finalFineAmount),
                             activeFine: null // Delete the fine
                         });
                         
-                        sendSlackMessage(`🔓 *DEBT CLEARED:* ${getMention(user.uid, userData.username)} has paid their fine of *$${fineAmount.toLocaleString()}* and regained access.`);
+                        sendSlackMessage(`🔓 *DEBT CLEARED:* ${getMention(user.uid, userData.username)} has paid their fine of *$${finalFineAmount.toLocaleString()}* (Insured: ${hasFineInsurance}) and regained access.`);
                         alert("✅ Fine paid! Dashboard unlocked.");
                     } catch (err) {
                         console.error("Payment failed:", err);

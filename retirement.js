@@ -1,4 +1,4 @@
-// ---------- retirement.js (CATCH-UP + LIFETIME TRACKER) ----------
+// ---------- retirement.js (CATCH-UP + LIFETIME TRACKER + INSURANCE BOOST) ----------
 console.log("retirement.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -31,7 +31,16 @@ function renderSavings(userData) {
     // Membership Data
     const tier = userData.membershipLevel || 'standard';
     const plan = PLANS[tier];
-    const interestRatePercent = (plan.interest * 100).toFixed(0);
+    
+    // --- INSURANCE LOGIC: Cross Go Package A (+2% Boost if Balance <= $325k) ---
+    let activeInterestRate = plan.interest;
+    const hasInterestBoost = userData.insurance?.activePackages?.includes("crossgo_a") && (userData.balance <= 325000);
+    
+    if (hasInterestBoost) {
+        activeInterestRate += 0.02;
+    }
+
+    const interestRatePercent = (activeInterestRate * 100).toFixed(0);
     
     const savings = Number(userData.retirementSavings || 0);
     const totalEarned = Number(userData.totalInterestEarned || 0); // New Field
@@ -48,13 +57,13 @@ function renderSavings(userData) {
         totalEarnedEl.textContent = totalEarned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     
-    const calculatedInterest = savings * plan.interest;
-    interestEl.innerHTML = `Next Interest (${interestRatePercent}%): $${calculatedInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const calculatedInterest = savings * activeInterestRate;
+    interestEl.innerHTML = `Next Interest (${interestRatePercent}%): $${calculatedInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${hasInterestBoost ? '<span style="color: #2ecc71; font-size: 0.7rem; margin-left: 5px;">🚀 INSURED BOOST</span>' : ''}`;
     
     daysEl.textContent = diffDays;
 
     // Update Visual Chart
-    renderGrowthChart(savings, plan.interest);
+    renderGrowthChart(savings, activeInterestRate);
 
     if (retirementBusy) {
         toggleInputs(true);
@@ -76,7 +85,7 @@ function renderSavings(userData) {
     }
     
     // NEW: Trigger Catch-up check instead of standard check
-    applyInterestCatchUp(userData);
+    applyInterestCatchUp(userData, activeInterestRate);
 }
 
 function toggleInputs(disabled) {
@@ -232,7 +241,7 @@ withdrawBtn?.addEventListener("click", async () => {
 /* =========================================================
     NEW LOGIC: Catch-up Compound Interest & Lifetime Tracker
 ========================================================= */
-async function applyInterestCatchUp(userData) {
+async function applyInterestCatchUp(userData, activeRate) {
     if (!userData?.retirementSavings || userData.retirementSavings <= 0) return;
 
     // Use current time if lastInterestApplied is missing
@@ -243,12 +252,10 @@ async function applyInterestCatchUp(userData) {
     const monthsDiff = (now.getFullYear() - lastApplied.getFullYear()) * 12 + (now.getMonth() - lastApplied.getMonth());
 
     if (monthsDiff > 0) {
-        const tier = userData.membershipLevel || 'standard';
-        const rate = PLANS[tier].interest;
         const currentSavings = userData.retirementSavings;
 
         // Compound Formula: A = P(1 + r)^n
-        const newSavings = currentSavings * Math.pow((1 + rate), monthsDiff);
+        const newSavings = currentSavings * Math.pow((1 + activeRate), monthsDiff);
         const amountEarned = newSavings - currentSavings;
         const newLifetimeEarned = (userData.totalInterestEarned || 0) + amountEarned;
 
@@ -261,9 +268,10 @@ async function applyInterestCatchUp(userData) {
                 lastInterestApplied: now.toISOString()
             });
 
+            const rateDisplay = (activeRate * 100).toFixed(0);
             await logHistory(
                 auth.currentUser.uid, 
-                `Retirement Catch-up (${monthsDiff} mo): +$${amountEarned.toLocaleString(undefined, {maximumFractionDigits:2})}`, 
+                `Retirement Catch-up (${monthsDiff} mo @ ${rateDisplay}%): +$${amountEarned.toLocaleString(undefined, {maximumFractionDigits:2})}`, 
                 "usage"
             );
         } catch (err) {

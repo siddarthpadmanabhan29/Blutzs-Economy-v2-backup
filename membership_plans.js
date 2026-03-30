@@ -1,4 +1,4 @@
-// ---------- membership_plans.js (Updated for Complete Slack Notifications + BPS Converter) ----------
+// ---------- membership_plans.js (Updated for Complete Slack Notifications + BPS Converter + Insurance Price Lock) ----------
 import { db } from "./firebaseConfig.js";
 import { 
     doc, updateDoc, increment, getDoc 
@@ -88,6 +88,7 @@ export function isNextItemFree(type, userData) {
 
 /**
  * BILLING & TRIAL CHECK: Processes monthly fees using Calendar Month logic.
+ * UPDATED: Includes Insurance "Price Lock" (darkblue_a) logic.
  */
 export async function checkMembershipBilling(userId, userData) {
     const tier = userData.membershipLevel || 'standard';
@@ -100,7 +101,8 @@ export async function checkMembershipBilling(userId, userData) {
             await updateDoc(doc(db, "users", userId), {
                 membershipLevel: "standard",
                 trialExpiration: null, 
-                shopOrderCount: 0
+                shopOrderCount: 0,
+                membershipLockedPrice: null
             });
             alert("Your Admin-granted Free Trial has expired. Reverting to Standard tier.");
 
@@ -122,7 +124,20 @@ export async function checkMembershipBilling(userId, userData) {
     if (lastPaidStr) nextDueDate.setMonth(nextDueDate.getMonth() + 1);
 
     if (now >= nextDueDate) {
-        const cost = PLANS[tier].price;
+        // --- INSURANCE: PRICE LOCK LOGIC (darkblue_a) ---
+        let cost = PLANS[tier].price;
+        const hasPriceLock = userData.insurance?.activePackages?.includes("darkblue_a");
+        let usedPriceLock = false;
+
+        // If user has Price Lock insurance AND a locked price is saved in their profile
+        if (hasPriceLock && userData.membershipLockedPrice) {
+            // Only use the lock if the current system price is HIGHER than what they locked in
+            if (cost > userData.membershipLockedPrice) {
+                cost = userData.membershipLockedPrice;
+                usedPriceLock = true;
+            }
+        }
+
         const username = userData.displayName || userData.username || 'Unknown user';
         const timestamp = new Date().toLocaleString();
 
@@ -131,15 +146,30 @@ export async function checkMembershipBilling(userId, userData) {
         }
 
         if ((userData.balance || 0) >= cost) {
-            await updateDoc(doc(db, "users", userId), {
+            const updatePayload = {
                 balance: increment(-cost),
                 membershipLastPaid: now.toISOString()
-            });
-            sendSlackMessage(`💳 *Membership Renewal:* ${username} renewed their ${tier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+            };
+
+            // If the user has Price Lock but no price is locked yet, lock current price for the next cycle
+            if (hasPriceLock && !userData.membershipLockedPrice) {
+                updatePayload.membershipLockedPrice = PLANS[tier].price;
+            }
+
+            // If they just USED their price lock, we clear it so it charges the current market price NEXT month
+            if (usedPriceLock) {
+                updatePayload.membershipLockedPrice = null; 
+            }
+
+            await updateDoc(doc(db, "users", userId), updatePayload);
+            
+            const lockAlert = usedPriceLock ? " (Insurance Price Lock Applied 🛡️)" : "";
+            sendSlackMessage(`💳 *Membership Renewal:* ${username} renewed their ${tier.toUpperCase()} membership for $${cost.toLocaleString()}${lockAlert}.\n*Time:* ${timestamp}`);
         } else {
             await updateDoc(doc(db, "users", userId), {
                 membershipLevel: "standard",
-                shopOrderCount: 0
+                shopOrderCount: 0,
+                membershipLockedPrice: null
             });
             alert("Membership cancelled due to insufficient funds. Reverting to Standard.");
             sendSlackMessage(`⚠️ *Membership Cancelled:* ${username} could not renew ${tier.toUpperCase()} membership due to insufficient funds. Downgraded to Standard.\n*Time:* ${timestamp}`);
@@ -175,7 +205,7 @@ export async function purchaseMembership(userId, newTier, userData, oldTier = nu
     } 
     else if (PLANS[newTier].price > PLANS[currentTier].price) {
         // UPGRADE
-        sendSlackMessage(`🟢 *Membership Upgrade:* ${username} upgraded from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()} for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+        sendSlackMessage(`🟢 *Membership Upgrade:* ${username} upgraded from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()} for$${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
     } 
     else if (PLANS[newTier].price < PLANS[currentTier].price) {
         // DOWNGRADE
@@ -183,14 +213,21 @@ export async function purchaseMembership(userId, newTier, userData, oldTier = nu
     } 
     else {
         // RE-PURCHASE SAME TIER
-        sendSlackMessage(`💳 *Membership Update:* ${username} refreshed their ${newTier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+        sendSlackMessage(`💳 *Membership Update:* ${username} refreshed their ${newTier.toUpperCase()} membership for$${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+    }
+
+    const updatePayload = {
+        membershipLevel: newTier,
+        membershipLastPaid: new Date().toISOString()
+    };
+
+    // If they have Price Lock insurance, lock in the price of the plan they JUST bought
+    if (userData.insurance?.activePackages?.includes("darkblue_a")) {
+        updatePayload.membershipLockedPrice = plan.price;
     }
 
     // DB update handled here for consistency
-    await updateDoc(doc(db, "users", userId), {
-        membershipLevel: newTier,
-        membershipLastPaid: new Date().toISOString()
-    });
+    await updateDoc(doc(db, "users", userId), updatePayload);
 }
 
 /**
@@ -201,7 +238,8 @@ export async function cancelMembership(userId, userData, previousTier = null) {
     
     await updateDoc(doc(db, "users", userId), {
         membershipLevel: "standard",
-        shopOrderCount: 0
+        shopOrderCount: 0,
+        membershipLockedPrice: null // Clear lock if they manually cancel
     });
 
     const username = userData.displayName || userData.username || 'Unknown user';
