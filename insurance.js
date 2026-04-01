@@ -1,3 +1,4 @@
+// ---------- insurance.js (ULTRA-MODERN REDESIGN + SLACK RESTORED) ----------
 import { db, auth } from "./firebaseConfig.js";
 import { 
     doc, updateDoc, increment, runTransaction 
@@ -12,10 +13,6 @@ const PRICING = {
     TOTAL_COUNT: 9
 };
 
-/**
- * Maps UI dataset keys to the logic keys used in other files (like contracts.js)
- * Ensure your HTML button data-pkg matches these keys or update them here.
- */
 const POLICY_MAP = {
     "blutzs_c": "contract_guard", 
     "darkblue_c": "darkblue_c", 
@@ -43,20 +40,83 @@ export function initInsurance(userData) {
     };
 
     const refreshUI = () => {
+        let activeCount = 0;
+        let pendingAddCount = 0;
+        let pendingRemoveCount = 0;
+
         pkgButtons.forEach(btn => {
             const pkg = btn.dataset.pkg;
+            const mappedPkg = POLICY_MAP[pkg] || pkg;
+            
+            const isActiveInDB = activePkgs.has(mappedPkg);
+            const isStagedInUI = stagingPackages.has(pkg);
+
+            // Clean Slate
             btn.classList.remove("selected", "active-policy", "pending-add", "pending-remove");
-            if (stagingPackages.has(pkg)) btn.classList.add("selected");
-            if (activePkgs.has(pkg)) {
-                btn.classList.add("active-policy");
-                if (!stagingPackages.has(pkg)) btn.classList.add("pending-remove");
-            } else if (stagingPackages.has(pkg)) {
-                btn.classList.add("pending-add");
+            
+            if (isActiveInDB && isStagedInUI) {
+                // STATE: ACTIVE & MAINTAINED (Glow Blue)
+                activeCount++;
+                btn.style.cssText = `
+                    border: 2px solid #3498db;
+                    background: rgba(52, 152, 219, 0.12);
+                    box-shadow: 0 0 12px rgba(52, 152, 219, 0.2);
+                    opacity: 1;
+                    filter: none;
+                    text-decoration: none;
+                `;
+                btn.classList.add("active-policy", "selected");
+            } else if (isActiveInDB && !isStagedInUI) {
+                // STATE: MARKED FOR REMOVAL (Red Ghost)
+                pendingRemoveCount++;
+                btn.style.cssText = `
+                    border: 2px dashed #e74c3c;
+                    background: rgba(231, 76, 60, 0.05);
+                    opacity: 0.5;
+                    filter: grayscale(1);
+                    text-decoration: line-through;
+                    color: #e74c3c;
+                `;
+                btn.classList.add("active-policy", "pending-remove");
+            } else if (!isActiveInDB && isStagedInUI) {
+                // STATE: NEWLY SELECTED (Pulse Green)
+                pendingAddCount++;
+                btn.style.cssText = `
+                    border: 2px solid #2ecc71;
+                    background: rgba(46, 204, 113, 0.12);
+                    box-shadow: 0 0 15px rgba(46, 204, 113, 0.25);
+                    opacity: 1;
+                    filter: none;
+                    text-decoration: none;
+                `;
+                btn.classList.add("selected", "pending-add");
+            } else {
+                // STATE: INACTIVE
+                btn.style.cssText = `
+                    border: 1px solid rgba(255,255,255,0.05);
+                    background: rgba(255,255,255,0.02);
+                    opacity: 0.7;
+                    filter: none;
+                    text-decoration: none;
+                    color: inherit;
+                `;
             }
         });
 
         const total = calculateTotal(stagingPackages.size);
-        if (totalDisplay) totalDisplay.textContent = `$${total.toLocaleString()}`;
+        if (totalDisplay) {
+            totalDisplay.textContent = `$${total.toLocaleString()}`;
+            totalDisplay.style.color = stagingPackages.size > 0 ? "#fff" : "#444";
+        }
+
+        // HUD Status Badges
+        const badgesHTML = `
+            <div style="display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 12px; font-weight: 900; font-family: sans-serif; font-size: 0.6rem; letter-spacing: 1px;">
+                <span style="background: #3498db; color: #fff; padding: 3px 10px; border-radius: 4px; box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);">ACTIVE [${activeCount}]</span>
+                ${pendingAddCount > 0 ? `<span style="background: #2ecc71; color: #fff; padding: 3px 10px; border-radius: 4px; box-shadow: 0 2px 8px rgba(46, 204, 113, 0.3);">+${pendingAddCount} NEW</span>` : ''}
+                ${pendingRemoveCount > 0 ? `<span style="background: #e74c3c; color: #fff; padding: 3px 10px; border-radius: 4px; box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);">-${pendingRemoveCount} DROP</span>` : ''}
+            </div>
+        `;
 
         const hasActiveCoverage = activePkgs.size > 0;
         const hasNextBillDate = !!userData.insurance?.nextBillingDate;
@@ -66,23 +126,33 @@ export function initInsurance(userData) {
         updateBtn?.classList.add("hidden");
         cancelBtn?.classList.add("hidden");
 
+        const statusStyle = "padding: 12px 15px; border-radius: 10px; font-size: 0.75rem; line-height: 1.4;";
+
         if (!hasActiveCoverage && !hasNextBillDate) {
             confirmBtn?.classList.remove("hidden");
-            billingStatus.innerHTML = `🛡️ <strong>No Policy</strong><br>New policies start immediately upon payment.`;
+            billingStatus.innerHTML = `${badgesHTML} <div style="${statusStyle} background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); color: #888;">
+                <strong>NO COVERAGE</strong><br>Establish a policy to secure your assets.
+            </div>`;
         } else if (isCancelling) {
             confirmBtn?.classList.remove("hidden");
             const date = new Date(userData.insurance.nextBillingDate).toLocaleDateString();
-            billingStatus.innerHTML = `🛡️ <span style="color: #e74c3c;"><strong>Cancellation Scheduled</strong></span><br>Ends: <strong>${date}</strong>`;
+            billingStatus.innerHTML = `${badgesHTML} <div style="${statusStyle} background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; color: #e74c3c;">
+                <strong>TERMINATION SCHEDULED</strong><br>Coverage ends: ${date}
+            </div>`;
         } else if (hasPendingInDB) {
             updateBtn?.classList.remove("hidden");
             cancelBtn?.classList.remove("hidden");
             const date = new Date(userData.insurance.nextBillingDate).toLocaleDateString();
-            billingStatus.innerHTML = `🛡️ <strong>Update Queued</strong><br>Changes apply: <strong>${date}</strong>`;
+            billingStatus.innerHTML = `${badgesHTML} <div style="${statusStyle} background: rgba(241, 196, 15, 0.1); border: 1px solid #f1c40f; color: #f1c40f;">
+                <strong>AMENDMENT QUEUED</strong><br>Applies on: ${date}
+            </div>`;
         } else {
             updateBtn?.classList.remove("hidden");
             cancelBtn?.classList.remove("hidden");
             const date = new Date(userData.insurance.nextBillingDate).toLocaleDateString();
-            billingStatus.innerHTML = `🛡️ <strong>Policy Active</strong><br>Next Bill: <strong>${date}</strong>`;
+            billingStatus.innerHTML = `${badgesHTML} <div style="${statusStyle} background: rgba(52, 152, 219, 0.1); border: 1px solid #3498db; color: #3498db;">
+                <strong>PROTECTION ACTIVE</strong><br>Billing Date: ${date}
+            </div>`;
         }
 
         const currentRegistry = JSON.stringify(initialList.sort());
@@ -101,7 +171,7 @@ export function initInsurance(userData) {
     const handleInitialActivation = async () => {
         const total = calculateTotal(stagingPackages.size);
         if (stagingPackages.size === 0) return alert("Select at least one policy.");
-        if (!confirm(`Activate Insurance for $${total.toLocaleString()}?`)) return;
+        if (!confirm(`Confirm activation for $${total.toLocaleString()}?`)) return;
 
         const userRef = doc(db, "users", auth.currentUser.uid);
         try {
@@ -113,7 +183,6 @@ export function initInsurance(userData) {
                 const nextBill = new Date();
                 nextBill.setMonth(nextBill.getMonth() + 1);
 
-                // Map UI keys to logic keys (e.g. blutzs_c -> contract_guard)
                 const finalPackages = Array.from(stagingPackages).map(p => POLICY_MAP[p] || p);
 
                 transaction.update(userRef, {
@@ -123,12 +192,11 @@ export function initInsurance(userData) {
                     "insurance.nextBillingDate": nextBill.toISOString(),
                     "insurance.pendingPackages": null,
                     "insurance.pendingPremium": null,
-                    // Redundant check for files looking at activePolicies array
                     "activePolicies": finalPackages 
                 });
             });
             
-            sendSlackMessage(`🛡️ *New Insurance Policy:* ${userData.username} activated ${stagingPackages.size} policies for $${total.toLocaleString()}.`);
+            sendSlackMessage(`🛡️ *New Insurance Policy:* ${userData.username} activated ${stagingPackages.size} modules for $${total.toLocaleString()}.`);
             await logHistory(auth.currentUser.uid, `Insurance Activated: -$${total.toLocaleString()}`, "membership");
             location.reload();
         } catch (e) { alert(e); }
@@ -137,7 +205,7 @@ export function initInsurance(userData) {
     const handleScheduleUpdate = async () => {
         const total = calculateTotal(stagingPackages.size);
         if (stagingPackages.size === 0) return alert("Use Cancel button.");
-        if (!confirm(`Schedule update for next month?`)) return;
+        if (!confirm(`Schedule this plan for next month?`)) return;
 
         try {
             const finalPackages = Array.from(stagingPackages).map(p => POLICY_MAP[p] || p);
@@ -145,9 +213,8 @@ export function initInsurance(userData) {
                 "insurance.pendingPackages": finalPackages,
                 "insurance.pendingPremium": total
             });
-            
-            sendSlackMessage(`⚙️ *Insurance Update Scheduled:* ${userData.username} changed their plan for next month (New Total: $${total.toLocaleString()}).`);
-            alert("Update scheduled!");
+            sendSlackMessage(`⚙️ *Insurance Update Scheduled:* ${userData.username} modified their plan for next cycle (Projected Premium: $${total.toLocaleString()}).`);
+            alert("Plan successfully scheduled!");
             location.reload();
         } catch (e) { alert(e.message); }
     };
@@ -157,14 +224,13 @@ export function initInsurance(userData) {
 
     if (cancelBtn) {
         cancelBtn.onclick = async () => {
-            if (!confirm("Cancel all insurance at end of cycle?")) return;
+            if (!confirm("Stop all coverage at the end of the current cycle?")) return;
             try {
                 await updateDoc(doc(db, "users", auth.currentUser.uid), {
                     "insurance.pendingPackages": [],
                     "insurance.pendingPremium": 0
                 });
-                
-                sendSlackMessage(`🚫 *Insurance Cancellation:* ${userData.username} has scheduled their insurance to stop at the end of the current cycle.`);
+                sendSlackMessage(`🚫 *Insurance Cancellation:* ${userData.username} has scheduled all coverage to terminate at the end of the current cycle.`);
                 location.reload();
             } catch (e) { console.error(e); }
         };
@@ -195,8 +261,7 @@ async function processInsuranceCycle(uid, userData) {
                     "insurance.monthlyPremium": 0,
                     "insurance.nextBillingDate": null
                 });
-                
-                sendSlackMessage(`❌ *Insurance Lapsed:* ${userData.username}'s coverage has officially ended.`);
+                sendSlackMessage(`❌ *Insurance Lapsed:* ${userData.username}'s coverage has expired or was terminated due to insufficient funds.`);
                 return;
             }
 
@@ -212,8 +277,7 @@ async function processInsuranceCycle(uid, userData) {
                 "insurance.pendingPremium": null,
                 "insurance.nextBillingDate": nextCycle.toISOString()
             });
-
-            sendSlackMessage(`♻️ *Insurance Renewed:* ${userData.username} paid $${premium.toLocaleString()} for another month.`);
+            sendSlackMessage(`♻️ *Insurance Renewed:* ${userData.username} paid $${premium.toLocaleString()} for the upcoming cycle.`);
             await logHistory(uid, `Insurance Renewed: -$${premium.toLocaleString()}`, "membership");
         } catch (e) { console.error(e); }
     }
@@ -232,3 +296,5 @@ async function checkMondayAllowance(uid, userData) {
         });
     } catch (e) { console.error(e); }
 }
+
+export { processInsuranceCycle, checkMondayAllowance };
