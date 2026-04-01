@@ -1,4 +1,4 @@
-// ---------- cosmetics.js (QUOTA OPTIMIZED) ----------
+// ---------- cosmetics.js (QUOTA OPTIMIZED + SYSTEM UI INTEGRATED) ----------
 console.log("cosmetics.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -9,7 +9,8 @@ import {
 
 // ---------- Elements ----------
 const cosmeticsShopEl = document.getElementById("cosmetics-shop-items");
-const dashboardNavbar = document.getElementById("dashboard-navbar");
+const dashboardNavbar = document.querySelector(".top-stats-bar"); // Updated to new sidebar header ID
+const sidebarEl = document.querySelector(".sidebar"); // Reference to sidebar for total theme sync
 
 // ---------- CACHE COSMETICS ----------
 let cosmeticsCache = null;
@@ -45,15 +46,19 @@ applySavedTheme();
 async function applyCosmeticsFromFirestore(userData, cosmeticsMap) {
   if (!userData) return;
 
-  // 1. Handle Navbar
-  let navbarColor = "#3498db"; // default
+  // 1. Handle Top Bar (Navbar)
+  let navbarColor = ""; // default to CSS variable
   if (userData.navbarColor && cosmeticsMap) {
     const isValid = Object.values(cosmeticsMap).some(item => 
       item.type === "navbarColor" && item.color === userData.navbarColor && userData.cosmeticsOwned?.[item.id]
     );
     if (isValid) navbarColor = userData.navbarColor;
   }
-  if (dashboardNavbar) dashboardNavbar.style.backgroundColor = navbarColor;
+  
+  if (dashboardNavbar) {
+    dashboardNavbar.style.backgroundColor = navbarColor || "var(--card-bg)";
+    dashboardNavbar.style.borderColor = navbarColor ? "rgba(255,255,255,0.1)" : "var(--contract-border)";
+  }
 
   // 2. Handle Background Color
   if (userData.equippedBackground) {
@@ -89,9 +94,14 @@ async function loadCosmetics(userData = null) {
   const canAccess = !localUserData.renewalPending && expirationDate && expirationDate > now;
 
   if (!canAccess) {
-    cosmeticsShopEl.innerHTML = "<p class='text-muted'>Access denied: Expired or Pending.</p>";
+    cosmeticsShopEl.innerHTML = "<p style='color:gray; font-style:italic; text-align:center; padding:20px;'>Market Locked: Check ID Status.</p>";
     return;
   }
+
+  // Set grid styling for the container
+  cosmeticsShopEl.style.display = "grid";
+  cosmeticsShopEl.style.gridTemplateColumns = "repeat(auto-fill, minmax(180px, 1fr))";
+  cosmeticsShopEl.style.gap = "20px";
 
   cosmeticsShopEl.innerHTML = "";
 
@@ -105,27 +115,56 @@ async function loadCosmetics(userData = null) {
 
     const div = document.createElement("div");
     div.className = `cosmetic-item ${owned ? "owned" : ""} ${equipped ? "equipped" : ""}`;
-    div.dataset.id = docId;
+    
+    // --- IMPROVED STYLING WITH INTERACTIVE HOVER ---
+    const itemColor = item.color || '#3498db';
+    div.style.cssText = `
+        background: var(--card-bg);
+        border: 1px solid ${equipped ? itemColor : 'var(--contract-border)'};
+        padding: 20px;
+        border-radius: 14px;
+        text-align: center;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+        cursor: default;
+        box-shadow: ${equipped ? `0 0 15px ${itemColor}33` : 'none'};
+    `;
+
+    // JavaScript Hover Listeners for Dynamic Effects
+    div.onmouseenter = () => {
+        div.style.transform = "translateY(-5px)";
+        div.style.borderColor = itemColor;
+        div.style.boxShadow = `0 10px 20px ${itemColor}22`;
+    };
+    div.onmouseleave = () => {
+        div.style.transform = "translateY(0)";
+        div.style.borderColor = equipped ? itemColor : 'var(--contract-border)';
+        div.style.boxShadow = equipped ? `0 0 15px ${itemColor}33` : 'none';
+    };
 
     let actionHTML = "";
     if (!owned) {
-      actionHTML = `<button class="btn-primary buy-cosmetic" data-id="${docId}">Buy</button>`;
+      actionHTML = `<button class="buy-cosmetic" data-id="${docId}" style="width:100%; padding:10px; border-radius:8px; border:none; background:#3498db; color:white; font-weight:800; cursor:pointer; text-transform:uppercase; font-size:0.75rem; transition:0.2s;">Buy</button>`;
     } else if (item.feature || item.type === "navbarColor" || item.type === "backgroundColor") {
-      // Button text changes based on equipped status
-      actionHTML = `<button class="btn-secondary cosmetic-feature" data-id="${docId}">${equipped ? 'Remove' : 'Apply'}</button>`;
-      if (equipped) {
-        actionHTML += `<div class="equipped-badge" style="margin-top:5px; background:#2ecc71; color:white; border-radius:4px; font-size:0.75rem;">Applied</div>`;
-      }
+      actionHTML = `
+        <button class="cosmetic-feature" data-id="${docId}" style="width:100%; padding:10px; border-radius:8px; border:none; background:${equipped ? '#e74c3c' : '#2ecc71'}; color:white; font-weight:800; cursor:pointer; text-transform:uppercase; font-size:0.75rem; transition:0.2s;">
+            ${equipped ? 'Remove' : 'Apply'}
+        </button>`;
     }
 
     div.innerHTML = `
-      <div class="shop-item-image" style="background:${item.color || '#151525'};">
-        ${item.img ? `<img src="${item.img}" alt="${item.name}">` : ""}
+      <div class="shop-item-image" style="width:60px; height:60px; border-radius:50%; margin: 0 auto 15px auto; background:${itemColor}; border: 4px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition:0.3s;">
+        ${item.img ? `<img src="${item.img}" alt="${item.name}" style="width:100%; height:100%; border-radius:50%; object-fit: cover;">` : ""}
       </div>
       <div class="shop-item-info">
-        <h4>${item.name}</h4>
-        <p>${item.description || ""}</p>
-        <div class="cosmetic-price">$${Number(item.price).toLocaleString()}</div>
+        <h4 style="margin:0; font-size: 0.95rem; font-weight:700; color:#fff;">${item.name}</h4>
+        <div class="cosmetic-price" style="font-weight: 800; font-size: 0.85rem; margin: 8px 0; color: ${owned ? '#95a5a6' : '#2ecc71'};">
+            ${owned ? 'OWNED' : `$${Number(item.price).toLocaleString()}`}
+        </div>
         ${actionHTML}
       </div>
     `;
@@ -166,7 +205,7 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
       loadCosmetics(localUserData);
 
       await addDoc(collection(db, "users", user.uid, "history_logs"), {
-        message: `Purchased ${item.name} for $${item.price}`,
+        message: `Purchased Cosmetic: ${item.name}`,
         type: "purchase",
         timestamp: new Date().toISOString()
       });
@@ -184,7 +223,7 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
 
     const userRef = doc(db, "users", user.uid);
 
-    // 1. Dark mode toggle (Special case: Toggle)
+    // 1. Dark mode toggle
     if (featureId === "darkMode") {
       const isDark = document.body.classList.contains("dark-mode");
       const newMode = !isDark ? "dark" : "light";
@@ -209,11 +248,9 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
       const colorToSet = isCurrentlyEquipped ? "" : itemData.color;
 
       if (colorToSet === "") {
-        console.log("Removing background color");
         document.body.style.backgroundColor = "";
         document.body.classList.remove("custom-bg-active");
       } else {
-        console.log("Applying custom background:", colorToSet);
         document.body.style.setProperty('background-color', colorToSet, 'important');
         document.body.classList.add("custom-bg-active");
       }
@@ -222,11 +259,10 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
       await updateDoc(userRef, { equippedBackground: colorToSet });
     }
 
-    // Refresh the UI to update "Applied/Remove" buttons
     loadCosmetics(localUserData);
   }
 });
 
 auth.onAuthStateChanged(user => { if (user) loadCosmetics(); });
 
-export { loadCosmetics };  
+export { loadCosmetics };

@@ -12,6 +12,16 @@ const PRICING = {
     TOTAL_COUNT: 9
 };
 
+/**
+ * Maps UI dataset keys to the logic keys used in other files (like contracts.js)
+ * Ensure your HTML button data-pkg matches these keys or update them here.
+ */
+const POLICY_MAP = {
+    "blutzs_c": "contract_guard", 
+    "darkblue_c": "darkblue_c", 
+    "crossgo_b": "crossgo_b"
+};
+
 export function initInsurance(userData) {
     const pkgButtons = document.querySelectorAll(".package-option");
     const updateBtn = document.getElementById("update-insurance-btn");
@@ -46,7 +56,7 @@ export function initInsurance(userData) {
         });
 
         const total = calculateTotal(stagingPackages.size);
-        totalDisplay.textContent = `$${total.toLocaleString()}`;
+        if (totalDisplay) totalDisplay.textContent = `$${total.toLocaleString()}`;
 
         const hasActiveCoverage = activePkgs.size > 0;
         const hasNextBillDate = !!userData.insurance?.nextBillingDate;
@@ -103,19 +113,22 @@ export function initInsurance(userData) {
                 const nextBill = new Date();
                 nextBill.setMonth(nextBill.getMonth() + 1);
 
+                // Map UI keys to logic keys (e.g. blutzs_c -> contract_guard)
+                const finalPackages = Array.from(stagingPackages).map(p => POLICY_MAP[p] || p);
+
                 transaction.update(userRef, {
                     balance: increment(-total),
-                    "insurance.activePackages": Array.from(stagingPackages),
+                    "insurance.activePackages": finalPackages,
                     "insurance.monthlyPremium": total,
                     "insurance.nextBillingDate": nextBill.toISOString(),
                     "insurance.pendingPackages": null,
-                    "insurance.pendingPremium": null
+                    "insurance.pendingPremium": null,
+                    // Redundant check for files looking at activePolicies array
+                    "activePolicies": finalPackages 
                 });
             });
             
-            // SLACK: Immediate notification for new activation
             sendSlackMessage(`🛡️ *New Insurance Policy:* ${userData.username} activated ${stagingPackages.size} policies for $${total.toLocaleString()}.`);
-            
             await logHistory(auth.currentUser.uid, `Insurance Activated: -$${total.toLocaleString()}`, "membership");
             location.reload();
         } catch (e) { alert(e); }
@@ -127,14 +140,13 @@ export function initInsurance(userData) {
         if (!confirm(`Schedule update for next month?`)) return;
 
         try {
+            const finalPackages = Array.from(stagingPackages).map(p => POLICY_MAP[p] || p);
             await updateDoc(doc(db, "users", auth.currentUser.uid), {
-                "insurance.pendingPackages": Array.from(stagingPackages),
+                "insurance.pendingPackages": finalPackages,
                 "insurance.pendingPremium": total
             });
             
-            // OPTIONAL SLACK: Notification for scheduled updates
             sendSlackMessage(`⚙️ *Insurance Update Scheduled:* ${userData.username} changed their plan for next month (New Total: $${total.toLocaleString()}).`);
-            
             alert("Update scheduled!");
             location.reload();
         } catch (e) { alert(e.message); }
@@ -152,9 +164,7 @@ export function initInsurance(userData) {
                     "insurance.pendingPremium": 0
                 });
                 
-                // FIXED: Now sends Slack message IMMEDIATELY when they click cancel
                 sendSlackMessage(`🚫 *Insurance Cancellation:* ${userData.username} has scheduled their insurance to stop at the end of the current cycle.`);
-                
                 location.reload();
             } catch (e) { console.error(e); }
         };
@@ -179,6 +189,7 @@ async function processInsuranceCycle(uid, userData) {
             if (!nextPackages || nextPackages.length === 0 || (userData.balance || 0) < premium) {
                 await updateDoc(userRef, {
                     "insurance.activePackages": [],
+                    "activePolicies": [],
                     "insurance.pendingPackages": null,
                     "insurance.pendingPremium": null,
                     "insurance.monthlyPremium": 0,
@@ -195,6 +206,7 @@ async function processInsuranceCycle(uid, userData) {
             await updateDoc(userRef, {
                 balance: increment(-premium),
                 "insurance.activePackages": nextPackages,
+                "activePolicies": nextPackages,
                 "insurance.monthlyPremium": premium,
                 "insurance.pendingPackages": null,
                 "insurance.pendingPremium": null,

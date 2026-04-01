@@ -1,6 +1,6 @@
 import { db, auth } from "./firebaseConfig.js";
 import { 
-    collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, getDoc, addDoc 
+    collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, getDoc, addDoc, increment
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 
@@ -78,7 +78,7 @@ function renderOffer(docId, data) {
                 <span class="contract-label" style="color: var(--text-muted, #888);">PER SEASON</span>
                 <strong style="color:#2ecc71;">$${seasonBase.toLocaleString()}</strong>
                 <div style="font-size: 0.85rem; color: var(--text-color, #fff); font-weight: 800; margin-top: 6px; background: rgba(0,0,0,0.1); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color, #333); text-align: center;">
-                    $${gPay.toLocaleString()} G. + $${bPay.toLocaleString()} B.
+                    $${gPay.toLocaleString()} G. +$${bPay.toLocaleString()} B.
                 </div>
             </div>
         </div>
@@ -112,18 +112,14 @@ function renderActiveContract(docId, data, userData) {
 
     const totalWorth = ((gPay + bPay) * initialSeasons) + sBonus;
     
-    // Total Progress Calculation
     const totalProgress = Math.min(100, Math.max(0, Math.round(((initialSeasons - seasonsRemaining) / initialSeasons) * 100)));
     
-    // Seasonal Progress Logic
     const completedSeasons = initialSeasons - seasonsRemaining;
     const currentSeasonNum = Math.max(1, Math.ceil(completedSeasons + 0.001));
     
-    // Fix: Calculate progress within the current season block (0 to 1)
     const currentSeasonProgressRaw = completedSeasons % 1;
     let seasonProgressPercent = Math.round(currentSeasonProgressRaw * 100);
 
-    // If seasonal payments exist but modulo is 0, bar should be 100% or based on payment ratio
     if (seasonProgressPercent === 0 && (seasonPaidG > 0 || seasonPaidB > 0)) {
         if (currentSeasonProgressRaw < 0.01 && completedSeasons > 0.1) seasonProgressPercent = 100;
     }
@@ -167,8 +163,8 @@ function renderActiveContract(docId, data, userData) {
                 <div style="width:${totalProgress}%; height:100%; background:#3498db; transition: width 1s;"></div>
             </div>
             <div style="display:flex; flex-direction:column; gap:5px; font-size:0.8rem;">
-                 <div style="display:flex; justify-content:space-between;"><span>🛡️ Guaranteed Received:</span><strong>$${paidGuaranteed.toLocaleString()} / $${(gPay * initialSeasons).toLocaleString()}</strong></div>
-                 <div style="display:flex; justify-content:space-between;"><span>🏀 Bonuses Received:</span><strong>$${paidBonuses.toLocaleString()} / $${(bPay * initialSeasons).toLocaleString()}</strong></div>
+                 <div style="display:flex; justify-content:space-between;"><span>🛡️ Guaranteed Received:</span><strong>$${paidGuaranteed.toLocaleString()} /$${(gPay * initialSeasons).toLocaleString()}</strong></div>
+                 <div style="display:flex; justify-content:space-between;"><span>🏀 Bonuses Received:</span><strong>$${paidBonuses.toLocaleString()} /$${(bPay * initialSeasons).toLocaleString()}</strong></div>
             </div>
         </div>
 
@@ -181,8 +177,8 @@ function renderActiveContract(docId, data, userData) {
                 <div style="width:${seasonProgressPercent}%; height:100%; background:#2ecc71; transition: width 1s;"></div>
             </div>
             <div style="display:flex; flex-direction:column; gap:5px; font-size:0.8rem;">
-                 <div style="display:flex; justify-content:space-between;"><span>🛡️ Season Base Received:</span><strong>$${seasonPaidG.toLocaleString()} / $${gPay.toLocaleString()}</strong></div>
-                 <div style="display:flex; justify-content:space-between;"><span>🏀 Season Bonus Received:</span><strong>$${seasonPaidB.toLocaleString()} / $${bPay.toLocaleString()}</strong></div>
+                 <div style="display:flex; justify-content:space-between;"><span>🛡️ Season Base Received:</span><strong>$${seasonPaidG.toLocaleString()} /$${gPay.toLocaleString()}</strong></div>
+                 <div style="display:flex; justify-content:space-between;"><span>🏀 Season Bonus Received:</span><strong>$${seasonPaidB.toLocaleString()} /$${bPay.toLocaleString()}</strong></div>
             </div>
         </div>
 
@@ -271,7 +267,7 @@ export function listenForAdminRoster() {
                 <div style="background: var(--input-bg, rgba(0,0,0,0.3)); padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-color, transparent);">
                     <div style="font-size: 0.6rem; color: #888; margin-bottom: 10px; display: flex; justify-content: space-between;">
                         <span>Target G: $${cycleTargetG.toLocaleString()}</span>
-                        <span>Target B: $${cycleTargetB.toLocaleString()}</span>
+                        <span>Target B:$${cycleTargetB.toLocaleString()}</span>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
                         <input type="number" id="pay-g-${docId}" placeholder="Pay G ($)" style="background: #111; border:1px solid #444; color: white; padding:8px; border-radius:6px; font-size: 0.75rem;">
@@ -304,7 +300,7 @@ export function listenForAdminRoster() {
 }
 
 /**
- * ADMIN ACTION LOGIC - SYNCED UPDATES
+ * ADMIN ACTION LOGIC - SYNCED UPDATES (INSURANCE SUPPORT ADDED)
  */
 window.adminActionContract = async (docId, action) => {
     const contractRef = doc(db, "contracts", docId);
@@ -328,7 +324,6 @@ window.adminActionContract = async (docId, action) => {
             const oldSeasons = Number(data.terms?.seasons) || 0;
             const newSeasons = Math.max(0, oldSeasons - (1/6));
             
-            // Fixed Season crossing logic: Use ceil to detect when we drop below a whole number boundary (e.g., from 1.0 to 0.83)
             const seasonJustFinished = Math.ceil(oldSeasons) > Math.ceil(newSeasons) && newSeasons > 0.01;
 
             const contractUpdates = { 
@@ -357,10 +352,9 @@ window.adminActionContract = async (docId, action) => {
                 await updateDoc(contractRef, contractUpdates);
                 await updateDoc(userRef, { balance: currentBal + gAmount + bAmount });
                 
-                // Enhanced descriptive payout log
                 let logMsg = "💰 Payout: ";
                 if (gAmount > 0 && bAmount > 0) {
-                    logMsg += `$${gAmount.toLocaleString()} Base Salary + $${bAmount.toLocaleString()} Bonus`;
+                    logMsg += `$${gAmount.toLocaleString()} Base Salary +$${bAmount.toLocaleString()} Bonus`;
                 } else if (gAmount > 0) {
                     logMsg += `$${gAmount.toLocaleString()} Base Salary`;
                 } else {
@@ -372,18 +366,40 @@ window.adminActionContract = async (docId, action) => {
 
             if (gInput) gInput.value = ""; 
             if (bInput) bInput.value = "";
-        } else if (action === "cut") {
-            if (!confirm(`Are you sure you want to CUT ${data.playerName}?`)) return;
+        } 
+        
+        // --- UPDATED CUT/VOID LOGIC WITH INSURANCE CHECK ---
+        else if (action === "cut" || action === "unethicalVoid") {
+            const isCut = action === "cut";
+            const confirmMsg = isCut ? `Are you sure you want to CUT ${data.playerName}?` : `VOID contract for ${data.playerName}?`;
+            if (!confirm(confirmMsg)) return;
+
+            const userSnap = await getDoc(userRef);
+            const userData = userSnap.data() || {};
+            const userBal = Number(userData.balance) || 0;
+            
+            // Check for insurance in the correct path shown in DB: insurance.activePackages
+            const policies = userData.insurance?.activePackages || [];
+
+            // Match exact ID from DB: "blutzs_c"
+            if (policies.includes("blutzs_c")) {
+                const seasonsRemaining = Number(data.terms?.seasons) || 0;
+                const yearlyBase = (Number(data.terms?.guaranteedPay) || 0) + (Number(data.terms?.nonGuaranteedPay) || 0);
+                const remainingValue = seasonsRemaining * yearlyBase;
+                const severancePay = remainingValue * 0.50; // 50% payout
+
+                if (severancePay > 0) {
+                    await updateDoc(userRef, { balance: increment(severancePay) });
+                    await logHistory(data.playerUID, `🛡️ Insurance Payout: $${severancePay.toLocaleString()} (Contract Severance)`, "membership");
+                }
+            }
+
             await deleteDoc(contractRef);
             await updateDoc(userRef, { employmentStatus: "Unemployed", tradePending: false, releasePending: false });
-            await logHistory(data.playerUID, `✂️ Contract Terminated.`, "admin");
-            alert("✂️ Terminated.");
-        } else if (action === "unethicalVoid") {
-            if (!confirm(`Are you sure you want to VOID the contract for ${data.playerName}?`)) return;
-            await deleteDoc(contractRef);
-            await updateDoc(userRef, { employmentStatus: "Unemployed", tradePending: false, releasePending: false });
-            await logHistory(data.playerUID, `🚫 Contract Voided.`, "admin");
-            alert("🚫 Voided.");
+            
+            const logMsg = isCut ? `✂️ Contract Terminated.` : `🚫 Contract Voided.`;
+            await logHistory(data.playerUID, logMsg, "admin");
+            alert(logMsg);
         }
     } catch (err) { console.error("Admin Action Error:", err); }
 };

@@ -1,4 +1,4 @@
-// ---------- shop.js (QUOTA OPTIMIZED + REAL-TIME ECONOMY UTILS) ----------
+// ---------- shop.js (QUOTA OPTIMIZED + SYSTEM UI INTEGRATED) ----------
 console.log("shop.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -46,7 +46,7 @@ async function loadShopItems() {
 }
 
 /**
- * Renders the shop UI based on local variables.
+ * Renders the shop UI based on local variables with updated high-fidelity design.
  */
 function renderShop(externalUserData = null) {
   if (!shopItemsContainer) return;
@@ -55,11 +55,11 @@ function renderShop(externalUserData = null) {
   
   shopItemsContainer.innerHTML = "";
 
-  // Update Summary Bar with Real-Time Resistance Math
+  // Update Global Dashboard Stats Bar with Real-Time Resistance Math
   populateSummaryBar(localUserData);
 
   if (currentShopItems.length === 0) {
-    shopItemsContainer.innerHTML = "<p>No items available. Click Refresh to check again.</p>";
+    shopItemsContainer.innerHTML = "<p style='color:gray; font-style:italic; text-align:center; grid-column: 1/-1; padding: 20px;'>No items found in market catalog...</p>";
     return;
   }
 
@@ -85,31 +85,75 @@ function renderShop(externalUserData = null) {
     const totalCost = isFree ? 0 : discountedPrice + taxAmount;
 
     // UI shows ONLY the base price for a clean look, or "FREE" if perk active
-    let priceDisplay = `
-      <div style="font-weight: bold; font-size: 1.1em;">
-        ${isFree ? `<span style="color: #2ecc71;">FREE ITEM! 🎁</span>` : 
-          `${activeDiscount > 0 ? `<span style="text-decoration: line-through; color: gray; font-size: 0.8em;">$${originalCost.toLocaleString()}</span> ` : ""} $${discountedPrice.toLocaleString()}`
-        }
-      </div>
-    `;
+    let priceDisplay = isFree ? `<span style="color: #2ecc71; font-weight: 800;">FREE 🎁</span>` : 
+          `$${discountedPrice.toLocaleString()}`;
 
     const affordable = userBalance >= totalCost;
-    const isDisabled = !affordable || (localUserData?.expirationDate && new Date(localUserData.expirationDate) < new Date());
+    const isExpired = localUserData?.expirationDate && new Date(localUserData.expirationDate) < new Date();
+    const isDisabled = !affordable || isExpired;
 
-    let btnText = isFree ? "Claim Free Item" : (affordable ? "Buy" : "Need Cash 💸");
+    let btnText = isFree ? "Claim" : (affordable ? "Purchase" : "Insufficient");
 
     const itemCard = document.createElement("div");
     itemCard.classList.add("shop-item");
-    if (isDisabled) itemCard.classList.add("unaffordable");
+    
+    // FIXED: Added missing colons (:) and semicolons (;) for position and overflow
+    itemCard.style.cssText = `
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 16px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        text-align: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        position: relative;
+        overflow: hidden;
+    `;
+
+    let discountBadgeHTML = "";
+    if (activeDiscount > 0 && !isFree) {
+        const discountPercent = Math.round(activeDiscount * 100);
+        discountBadgeHTML = `
+            <div style="
+                position: absolute;
+                top: 12px;
+                right: -32px;
+                background: #e67e22;
+                color: white;
+                font-size: 0.6rem;
+                font-weight: 900;
+                padding: 5px 35px;
+                transform: rotate(45deg);
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                z-index: 10;
+                pointer-events: none;
+            ">
+                ${discountPercent}% OFF
+            </div>
+        `;
+    }
+
+    itemCard.onmouseenter = () => { itemCard.style.transform = "translateY(-4px)"; };
+    itemCard.onmouseleave = () => { itemCard.style.transform = "translateY(0)"; };
 
     itemCard.innerHTML = `
-      <div class="shop-item-image">
-        <img src="${item.image || 'https://via.placeholder.com/150?text=Item'}" alt="${item.name}">
+        ${discountBadgeHTML}
+      <div class="shop-item-image" style="width:100%; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.1);">
+        <img src="${item.image || 'https://via.placeholder.com/150?text=Item'}" alt="${item.name}" style="width:100%; height:100%; object-fit:cover;">
       </div>
       <div class="shop-item-info">
-        <h4>${item.name}</h4>
-        <div class="shop-price">${priceDisplay}</div>
-        <button class="btn-primary buy-item-btn" data-id="${item.id}" ${isDisabled ? "disabled" : ""}>
+        <h4 style="margin:0; font-size: 0.9rem;">${item.name}</h4>
+        <div class="shop-price" style="margin: 5px 0;">
+            ${activeDiscount > 0 && !isFree ? `<span style="text-decoration: line-through; color: gray; font-size: 0.7rem; margin-right:5px;">$${originalCost.toLocaleString()}</span>` : ""}
+            <span style="font-weight: 800; color: ${isFree ? '#2ecc71' : 'var(--text-main)'};">${priceDisplay}</span>
+        </div>
+        <button class="buy-item-btn" data-id="${item.id}" ${isDisabled ? "disabled" : ""} 
+            style="width: 100%; padding: 8px; border-radius: 6px; border:none; background: ${isDisabled ? '#444' : '#3498db'}; color:white; font-weight:bold; cursor:${isDisabled ? 'not-allowed' : 'pointer'};">
           ${btnText}
         </button>
       </div>
@@ -122,7 +166,7 @@ function renderShop(externalUserData = null) {
 }
 
 /**
- * Calculates and displays the top summary stats using Resistance Model
+ * Syncs the dashboard's top stats bar with dynamic Resistance math
  */
 async function populateSummaryBar(data) {
     if (!data) return;
@@ -131,25 +175,36 @@ async function populateSummaryBar(data) {
     const { rate, globalSupply, volatilityIndex: adminIndex } = await getLiveMarketRate();
 
     // CALCULATE USER SPECIFIC WEALTH
-    const balance = data.balance || 0;
-    const bps = data.bpsBalance || 0;
-    const retirement = data.retirementSavings || 0;
+    const balance = Number(data.balance || 0);
+    
+    // FIX: Ensure bps is extracted as a number and not an [object Object]
+    let bps = 0;
+    if (data.bpsBalance !== undefined && data.bpsBalance !== null) {
+        if (typeof data.bpsBalance === 'object') {
+            bps = Number(data.bpsBalance.value || data.bpsBalance.amount || 0);
+        } else {
+            bps = Number(data.bpsBalance);
+        }
+    }
+
+    const retirement = Number(data.retirementSavings || 0);
     
     // Net Worth synced with the Resistance dynamic rate
     const netWorth = balance + retirement + (bps * rate);
 
+    // Target Dashboard IDs from index.html
     const totalWealthEl = document.getElementById("stat-total-wealth");
-    const balanceEl = document.getElementById("stat-balance");
-    const bpsEl = document.getElementById("stat-bps");
-    const bpsRateHeader = document.getElementById("bps-rate-display");
+    const balanceEl = document.getElementById("user-balance");
+    const bpsEl = document.getElementById("user-bps");
+    const bpsRateHeader = document.getElementById("dynamic-bps-rate");
 
     if (totalWealthEl) totalWealthEl.textContent = `$${netWorth.toLocaleString()}`;
     if (balanceEl) balanceEl.textContent = `$${balance.toLocaleString()}`;
-    if (bpsEl) bpsEl.textContent = `${bps.toLocaleString()} BPS`;
+    if (bpsEl) bpsEl.textContent = `${bps.toLocaleString()}`;
     if (bpsRateHeader) bpsRateHeader.textContent = `$${rate.toLocaleString()}`;
 
-    // Update market status badge based on RESISTANCE levels (Admin Index)
-    const marketStatusLabel = document.getElementById("market-status-badge");
+    // Update Dashboard Market Status
+    const marketStatusLabel = document.getElementById("volatility-display");
     if (marketStatusLabel) {
         if (adminIndex > 45000000) {
             marketStatusLabel.textContent = "HEAVY RESISTANCE";
@@ -158,7 +213,7 @@ async function populateSummaryBar(data) {
             marketStatusLabel.textContent = "OPEN MARKET";
             marketStatusLabel.style.color = "#2ecc71";
         } else {
-            marketStatusLabel.textContent = "STABLE";
+            marketStatusLabel.textContent = "STABLE MARKET";
             marketStatusLabel.style.color = "#3498db";
         }
     }
@@ -219,7 +274,7 @@ async function buyItem(itemId, btnElement) {
     } else {
         confirmMsg = `Confirm Purchase: ${itemData.name}\n\n` +
                      `Price: $${basePrice.toLocaleString()}\n` +
-                     `Tax (${plan.taxRate * 100}%): $${taxAmount.toLocaleString()}\n` +
+                     `Tax (${plan.taxRate * 100}%):$${taxAmount.toLocaleString()}\n` +
                      `---------------------------\n` +
                      `Total Deduction: $${totalCost.toLocaleString()}\n\n` +
                      `Would you like to proceed?`;
@@ -231,10 +286,10 @@ async function buyItem(itemId, btnElement) {
 
     // Now disable and process
     btnElement.disabled = true;
-    btnElement.textContent = "Processing...";
+    btnElement.textContent = "Wait...";
 
     if (Number(userData.balance || 0) < totalCost) {
-        alert(`Insufficient funds! Total cost is $${totalCost.toLocaleString()}`);
+        alert(`Insufficient funds! Total cost is$${totalCost.toLocaleString()}`);
         return resetBtn(btnElement);
     }
 
@@ -260,7 +315,7 @@ async function buyItem(itemId, btnElement) {
         updateDoc(itemRef, shopItemUpdate) 
     ]);
 
-    const logMsg = isFree ? `FREE CLAIM: ${itemData.name}` : `Bought ${itemData.name}: $${basePrice.toLocaleString()} + $${taxAmount.toLocaleString()} tax`;
+    const logMsg = isFree ? `FREE CLAIM: ${itemData.name}` : `Bought ${itemData.name}: $${basePrice.toLocaleString()} +$${taxAmount.toLocaleString()} tax`;
     await logHistory(user.uid, logMsg, "purchase");
 
     // --- INVENTORY ADDITION ---
@@ -273,17 +328,25 @@ async function buyItem(itemId, btnElement) {
     });
 
     // --- SLACK NOTIFICATION ---
-    const buyerName = userData.displayName || userData.username || 'Unknown user';
-    const timestamp = new Date().toLocaleString();
-    sendSlackMessage(
-      `🛒 *Purchase Alert!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Amount:* $${totalCost.toLocaleString()} \n*Time:* ${timestamp}`
-    );
+    const buyerName = userData.username || 'Unknown user';
+    sendSlackMessage(`🛒 *Purchase:* ${buyerName} bought ${itemData.name} for *$${totalCost.toLocaleString()}*`);
     
-    alert(isFree ? `🎁 Enjoy your free item!` : `Purchased ${itemData.name}! \nTotal paid: $${totalCost.toLocaleString()}`);
+    alert(isFree ? `🎁 Enjoy your free item!` : `Purchased ${itemData.name}!`);
     
-    // DATA ENGINEERING FIX: updates object already contains the delta via increment,
-    // so we update the local balance correctly for the UI render.
-    localUserData = { ...userData, ...updates, balance: (Number(userData.balance) - totalCost) };
+    // Update local context and re-render
+    // FIX: Use numerical calculations for localUserData instead of the Firestore increment objects
+    const newBalance = Number(userData.balance || 0) - totalCost;
+    const newBpsBalance = Number(userData.bpsBalance || 0) + plan.bpsPerPurchase;
+    
+    localUserData = { 
+        ...userData, 
+        balance: newBalance, 
+        bpsBalance: newBpsBalance, 
+        activeDiscount: 0 
+    };
+    
+    if (isFree) localUserData.shopOrderCount = 0;
+    
     renderShop();
 
   } catch (err) {
@@ -296,7 +359,7 @@ async function buyItem(itemId, btnElement) {
 function resetBtn(btn) {
     if(btn) {
         btn.disabled = false;
-        btn.textContent = "Buy";
+        btn.textContent = "Purchase";
     }
 }
 

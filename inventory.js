@@ -1,4 +1,4 @@
-// ---------- inventory.js (QUOTA OPTIMIZED + MEMBERSHIP USAGE TRACKING + SLACK NOTIFICATIONS) ----------
+// ---------- inventory.js (INTEGRATED WITH NEW DASHBOARD UI) ----------
 console.log("inventory.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -8,12 +8,12 @@ import {
 import { updateBalanceDisplay } from "./main.js";
 import { logHistory } from "./historyManager.js";
 import { PLANS } from "./membership_plans.js";
-import { sendSlackMessage } from "./slackNotifier.js"; // <-- NEW
+import { sendSlackMessage } from "./slackNotifier.js";
 
 const inventoryContainer = document.getElementById("inventory-items");
 const inventoryValueEl = document.getElementById("inventory-value");
 
-// QUOTA PROTECTION: Store the unsubscribe function globally to kill duplicate listeners
+// QUOTA PROTECTION: Store the unsubscribe function globally
 let unsubscribeInventory = null;
 
 function loadInventory() {
@@ -33,37 +33,95 @@ function loadInventory() {
       let totalValue = 0;
 
       if (snapshot.empty) {
-        inventoryContainer.innerHTML = "<p>Your inventory is empty.</p>";
-        inventoryValueEl.textContent = "Inventory Value: $0";
+        inventoryContainer.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #888; border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px;">
+                <p style="margin:0; font-style: italic;">Your inventory is empty.</p>
+            </div>`;
+        if (inventoryValueEl) inventoryValueEl.textContent = "Total Value: $0";
         return;
       }
+
+      // Applying Grid Layout for the new UI system
+      inventoryContainer.style.display = "grid";
+      inventoryContainer.style.gridTemplateColumns = "repeat(auto-fill, minmax(160px, 1fr))";
+      inventoryContainer.style.gap = "12px";
 
       snapshot.forEach((itemDoc) => {
         const item = itemDoc.data();
         totalValue += item.value || 0;
 
-        const itemCard = document.createElement("div");
-        itemCard.classList.add("inventory-item");
-        
         const isFreeItem = item.isFree === true;
-
-        if (item.type === 'coupon') {
-            itemCard.classList.add('coupon-item'); 
-            itemCard.style.border = "2px dashed #8e44ad"; 
-        } else if (isFreeItem) {
-            itemCard.style.border = "2px solid #2ecc71"; 
+        const isCoupon = item.type === 'coupon';
+        
+        const itemCard = document.createElement("div");
+        
+        // --- DYNAMIC STYLING BASED ON ITEM TYPE ---
+        let borderStyle = "1px solid rgba(255,255,255,0.08)";
+        let bgStyle = "rgba(255,255,255,0.02)";
+        let accentColor = "rgba(255,255,255,0.2)";
+        
+        if (isCoupon) { 
+            borderStyle = "1px dashed #8e44ad"; 
+            bgStyle = "rgba(142, 68, 173, 0.05)"; 
+            accentColor = "#8e44ad";
+        } else if (isFreeItem) { 
+            borderStyle = "1px solid #2ecc71"; 
+            bgStyle = "rgba(46, 204, 113, 0.03)";
+            accentColor = "#2ecc71";
         }
 
+        itemCard.style.cssText = `
+            background: ${bgStyle};
+            border: ${borderStyle};
+            padding: 15px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        `;
+
+        // Interactive Hover Effects via JS
+        itemCard.onmouseenter = () => {
+            itemCard.style.transform = "translateY(-4px)";
+            itemCard.style.backgroundColor = "rgba(255,255,255,0.05)";
+            itemCard.style.boxShadow = `0 8px 15px rgba(0,0,0,0.2), 0 0 10px ${accentColor}22`;
+            if (isCoupon) itemCard.style.borderColor = "#9b59b6";
+        };
+        itemCard.onmouseleave = () => {
+            itemCard.style.transform = "translateY(0)";
+            itemCard.style.backgroundColor = bgStyle;
+            itemCard.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
+            itemCard.style.borderColor = borderStyle.split(' ')[2] || borderStyle; // Restore original border color
+        };
+
         itemCard.innerHTML = `
-          <strong>${item.name}</strong><br>
-          ${isFreeItem ? `<span style="color: #e74c3c; font-weight: bold;">UNSELLABLE 🎁</span>` : `Value: $${item.value}`}<br>
-          <button class="use-item" data-id="${itemDoc.id}">Use</button>
-          ${!isFreeItem ? `<button class="sell-item" data-id="${itemDoc.id}">Sell</button>` : ''}
+          <div style="margin-bottom: 12px; position: relative; z-index: 2;">
+            <strong style="display: block; font-size: 0.85rem; color: #fff; margin-bottom: 4px; letter-spacing: 0.3px;">${item.name}</strong>
+            ${isFreeItem ? 
+                `<span style="color: #2ecc71; font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; background: rgba(46, 204, 113, 0.1); padding: 2px 6px; border-radius: 4px;">Membership Perk</span>` : 
+                `<span style="color: #2ecc71; font-size: 0.8rem; font-weight: 800; font-family: monospace;">$${(item.value || 0).toLocaleString()}</span>`
+            }
+          </div>
+          <div style="display: flex; gap: 8px; position: relative; z-index: 2;">
+            <button class="use-item btn-primary" data-id="${itemDoc.id}" style="flex: 1; font-size: 0.7rem; padding: 6px 0; font-weight: 800; height: 32px; border-radius: 6px; text-transform: uppercase; cursor: pointer; transition: 0.2s;">Use</button>
+            ${!isFreeItem ? 
+                `<button class="sell-item btn-secondary" data-id="${itemDoc.id}" style="flex: 1; font-size: 0.7rem; padding: 6px 0; background: rgba(231, 76, 60, 0.1); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.2); font-weight: 800; height: 32px; border-radius: 6px; text-transform: uppercase; cursor: pointer; transition: 0.2s;">Sell</button>` : 
+                ''
+            }
+          </div>
+          <!-- Decorative Background element -->
+          <div style="position: absolute; bottom: -10px; right: -10px; width: 40px; height: 40px; background: ${accentColor}; opacity: 0.05; border-radius: 50%;"></div>
         `;
         inventoryContainer.appendChild(itemCard);
       });
 
-      inventoryValueEl.textContent = `Inventory Value: $${totalValue}`;
+      if (inventoryValueEl) {
+          inventoryValueEl.innerHTML = `Total Value: <strong style="color: #2ecc71; margin-left: 5px; font-size: 1.1rem; text-shadow: 0 0 10px rgba(46, 204, 113, 0.2);">$${totalValue.toLocaleString()}</strong>`;
+      }
       attachInventoryListeners();
     }, (error) => {
       console.error("Inventory Error:", error);
@@ -82,14 +140,15 @@ function attachInventoryListeners() {
   });
 }
 
-// ---------- Use Item ----------
+// ---------- Use Item Logic ----------
 async function useItem(itemId, btnElement) {
   const user = auth.currentUser;
   if (!user) return;
 
   if(btnElement) {
     btnElement.disabled = true;
-    btnElement.textContent = "Processing...";
+    btnElement.textContent = "Processing";
+    btnElement.style.opacity = "0.7";
   }
 
   const userRef = doc(db, "users", user.uid);
@@ -99,7 +158,7 @@ async function useItem(itemId, btnElement) {
     const [userSnap, itemSnap] = await Promise.all([getDoc(userRef), getDoc(itemRef)]);
     
     if (!userSnap.exists() || !itemSnap.exists()) {
-      alert("Item not found (already used?)");
+      alert("Item not found.");
       return; 
     }
     
@@ -107,25 +166,17 @@ async function useItem(itemId, btnElement) {
     const itemData = itemSnap.data();
     const tier = userData.membershipLevel || 'standard';
     const plan = PLANS[tier];
-
     const buyerName = userData.displayName || userData.username || 'Unknown user';
-    const timestamp = new Date().toLocaleString();
 
-    // 1. Handle Coupon Logic
     if (itemData.type === "coupon") {
       await updateDoc(userRef, { activeDiscount: itemData.discountValue });
       await logHistory(user.uid, `Activated Coupon: ${itemData.name}`, "usage");
       await deleteDoc(itemRef);
-      alert(`✅ Coupon Activated! You now have ${(itemData.discountValue * 100)}% off.`);
-
-      // --- SLACK NOTIFICATION ---
-      sendSlackMessage(
-        `🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Type:* Coupon \n*Time:* ${timestamp}`
-      );
+      alert(`✅ Coupon Activated!`);
+      sendSlackMessage(`🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Type:* Coupon`);
       return; 
     }
 
-    // 2. Handle Membership Perk Updates (Cashback + Order Counting)
     const updates = {};
     let cashbackMsg = "";
 
@@ -138,7 +189,6 @@ async function useItem(itemId, btnElement) {
                 cashbackMsg = ` (Received $${cashbackAmount.toLocaleString()} Cashback!)`;
             }
         }
-
         if (plan.shopFreeFreq > 0 && itemData.isFree !== true) {
             updates.shopOrderCount = increment(1);
         }
@@ -147,38 +197,40 @@ async function useItem(itemId, btnElement) {
     if (Object.keys(updates).length > 0) {
         await updateDoc(userRef, updates);
         if (updates.balance) {
+            const currentBalance = Number(userData.balance || 0);
             const cashbackVal = Math.floor((itemData.value * 2) * plan.cashback);
-            updateBalanceDisplay(Number(userData.balance) + cashbackVal, "user-balance", "gain");
+            const newTotal = currentBalance + cashbackVal;
+            
+            const formattedBalance = `$${newTotal.toLocaleString()}`;
+            updateBalanceDisplay(formattedBalance, "user-balance", "gain");
         }
     }
 
     await logHistory(user.uid, `Used ${itemData.name}${cashbackMsg}`, "usage");
     await deleteDoc(itemRef);
     alert(`You used ${itemData.name}!${cashbackMsg}`);
-
-    // --- SLACK NOTIFICATION ---
-    sendSlackMessage(
-      `🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Type:* Regular \n*Time:* ${timestamp}`
-    );
+    sendSlackMessage(`🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Type:* Regular`);
 
   } catch(e) {
     console.error(e);
-    alert("Error using item: " + e.message);
+    alert("Error: " + e.message);
     if(btnElement) {
       btnElement.disabled = false;
       btnElement.textContent = "Use";
+      btnElement.style.opacity = "1";
     }
   }
 }
 
-// ---------- Sell Item ----------
+// ---------- Sell Item Logic ----------
 async function sellItem(itemId, btnElement) {
   const user = auth.currentUser;
   if (!user) return;
 
   if(btnElement) {
     btnElement.disabled = true;
-    btnElement.textContent = "Selling...";
+    btnElement.textContent = "Selling";
+    btnElement.style.opacity = "0.7";
   }
 
   const userRef = doc(db, "users", user.uid);
@@ -192,38 +244,34 @@ async function sellItem(itemId, btnElement) {
     const item = itemSnap.data();
 
     if (item.isFree === true) {
-        alert("⛔ Membership 'Free Items' cannot be sold for cash.");
+        alert("⛔ Membership 'Free Items' cannot be sold.");
         if(btnElement) {
             btnElement.disabled = true;
-            btnElement.textContent = "Locked";
+            btnElement.textContent = "🎁";
         }
         return;
     }
 
-    const newBalance = (userData.balance || 0) + (item.value || 0);
-
+    const newBalance = (Number(userData.balance) || 0) + (Number(item.value) || 0);
     await updateDoc(userRef, { balance: newBalance });
     await logHistory(user.uid, `Sold ${item.name} for $${item.value}`, "transfer-in");
     await deleteDoc(itemRef);
-    updateBalanceDisplay(newBalance, "user-balance", "gain");
 
-    // --- SLACK NOTIFICATION ---
+    const formattedBalance = `$${newBalance.toLocaleString()}`;
+    updateBalanceDisplay(formattedBalance, "user-balance", "gain");
+
     const sellerName = userData.displayName || userData.username || 'Unknown user';
-    const timestamp = new Date().toLocaleString();
-    sendSlackMessage(
-      `💰 *Item Sold!* \n*User:* ${sellerName} \n*Item:* ${item.name} \n*Amount:* $${item.value} \n*Time:* ${timestamp}`
-    );
+    sendSlackMessage(`💰 *Item Sold!* \n*User:* ${sellerName} \n*Item:* ${item.name} \n*Amount:* $${item.value}`);
 
   } catch(e) {
-    alert("Error selling item: " + e.message);
+    alert("Error: " + e.message);
     if(btnElement) {
       btnElement.disabled = false;
       btnElement.textContent = "Sell";
+      btnElement.style.opacity = "1";
     }
   }
 }
 
-// Initial Call
 loadInventory();
-
 export { loadInventory };

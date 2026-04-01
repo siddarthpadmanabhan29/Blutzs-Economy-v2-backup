@@ -42,12 +42,6 @@ export async function renderBpsConverter(userData) {
                 <span style="font-size: 2rem; display: block; margin-bottom: 10px;">🔒</span>
                 <p style="color: #d1bce3; font-weight: bold; margin-bottom: 5px;">Feature Locked</p>
                 <p style="font-size: 0.8rem; color: #888; margin-bottom: 15px;">Subscribe to a membership plan to unlock BPS to Cash conversion.</p>
-                <button onclick="scrollToPlans()" 
-                        style="background: #8e44ad; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: 0.3s;"
-                        onmouseover="this.style.transform='scale(1.05)'" 
-                        onmouseout="this.style.transform='scale(1)'">
-                    View Plans
-                </button>
             </div>
         `;
         return;

@@ -1,3 +1,4 @@
+// ---------- lottery.js (SYSTEM UI INTEGRATED) ----------
 import { db, auth } from "./firebaseConfig.js";
 import { 
     doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs, increment, onSnapshot 
@@ -18,29 +19,58 @@ export function initLotteryUI() {
 
     if (!grid) return;
 
-    // 1. Generate 1-20 Grid
+    // 1. Generate 1-20 Grid (Styled for Sidebar Dashboard)
     grid.innerHTML = "";
+    grid.style.display = "grid";
+    grid.style.gridTemplateColumns = "repeat(5, 1fr)";
+    grid.style.gap = "8px";
+    grid.style.margin = "15px 0";
+
     for (let i = 1; i <= 20; i++) {
         const btn = document.createElement("button");
         btn.textContent = i;
-        btn.className = "lotto-num-btn"; 
+        btn.className = "lotto-num-btn";
+        
+        // Inline styling to ensure visual consistency with the new theme
+        btn.style.cssText = `
+            padding: 12px 5px;
+            background: rgba(255,255,255,0.05);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            font-size: 0.9rem;
+        `;
         
         btn.onclick = () => {
             if (selectedNumbers.includes(i)) {
                 selectedNumbers = selectedNumbers.filter(n => n !== i);
-                btn.classList.remove("selected");
+                btn.style.background = "rgba(255,255,255,0.05)";
+                btn.style.color = "white";
+                btn.style.borderColor = "rgba(255,255,255,0.1)";
             } else if (selectedNumbers.length < 4) {
                 selectedNumbers.push(i);
-                btn.classList.add("selected");
+                btn.style.background = "#f1c40f";
+                btn.style.color = "#111";
+                btn.style.borderColor = "#f1c40f";
             }
             
             selectionDisplay.textContent = selectedNumbers.sort((a,b) => a-b).join(" - ") || "None Selected";
             buyBtn.disabled = selectedNumbers.length !== 4;
+            
+            // Highlight button text color for selection
+            if (selectedNumbers.length === 4) {
+                buyBtn.style.opacity = "1";
+            } else {
+                buyBtn.style.opacity = "0.5";
+            }
         };
         grid.appendChild(btn);
     }
 
-    // 2. Listen to Lottery Status (Pool, Winners, Results, and TIMER)
+    // 2. Listen to Lottery Status
     onSnapshot(doc(db, "lottery", "status"), (snap) => {
         if (snap.exists()) {
             const data = snap.data();
@@ -51,7 +81,6 @@ export function initLotteryUI() {
             if (poolEl) {
                 poolEl.textContent = `$${currentPool.toLocaleString()}`;
                 poolEl.style.color = currentPool >= MAX_JACKPOT ? "#e74c3c" : "#2ecc71";
-                if (currentPool >= MAX_JACKPOT) poolEl.textContent += " (MAX)";
             }
 
             // B. Countdown Timer Logic
@@ -68,54 +97,40 @@ export function initLotteryUI() {
                     const diff = target - now;
 
                     if (diff <= 0) {
-                        countdownEl.textContent = "DRAWING SOON...";
+                        countdownEl.textContent = "DRAWING...";
                         countdownEl.style.color = "#e74c3c";
-                        // Prevent last-second buys
                         buyBtn.disabled = true;
                         buyBtn.textContent = "DRAW IN PROGRESS";
                         clearInterval(countdownInterval);
                         return;
                     }
 
-                    const d = Math.floor(diff / (1000 * 60 * 60 * 24));
                     const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                     const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                     const s = Math.floor((diff % (1000 * 60)) / 1000);
 
-                    countdownEl.textContent = `${d}d ${h}h ${m}m ${s}s`;
-                    countdownEl.style.color = "#eee";
+                    countdownEl.textContent = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                     buyBtn.textContent = `PURCHASE TICKET ($${TICKET_PRICE.toLocaleString()})`;
                 };
 
                 updateTimer();
                 countdownInterval = setInterval(updateTimer, 1000);
-            } else if (timerContainer) {
-                timerContainer.classList.add("hidden");
-                if (countdownInterval) clearInterval(countdownInterval);
             }
 
             // C. Results Display
             const winNums = data.lastWinningNumbers || [0, 0, 0, 0];
             winNums.forEach((num, index) => {
                 const ball = document.getElementById(`ball-${index}`);
-                if (ball) ball.textContent = num === 0 ? "-" : num;
-            });
-
-            const msgEl = document.getElementById("lotto-winner-msg");
-            if (msgEl) {
-                if (data.lastWinnerCount > 0) {
-                    const names = data.lastWinners ? data.lastWinners.join(", ") : "Someone";
-                    msgEl.innerHTML = `🎉 Winner(s): <span style="color: #f1c40f; font-weight: 900;">${names}</span> split the pot!`;
-                    msgEl.style.color = "#2ecc71";
-                } else if (winNums[0] !== 0) {
-                    msgEl.textContent = "💀 No winners. Jackpot Rolled Over!";
-                    msgEl.style.color = "#e74c3c";
+                if (ball) {
+                    ball.textContent = num === 0 ? "-" : num;
+                    ball.style.background = num === 0 ? "rgba(0,0,0,0.2)" : "#f1c40f";
+                    ball.style.color = num === 0 ? "#555" : "#111";
                 }
-            }
+            });
         }
     });
 
-    // 3. THE QUOTA & TICKETS LISTENER
+    // 3. THE QUOTA & TICKETS LISTENER (Optimized for Mobile/Sidebar)
     if (auth.currentUser) {
         const userTicketsQ = query(
             collection(db, "lottery_tickets"), 
@@ -133,27 +148,24 @@ export function initLotteryUI() {
             const currentCount = snapshot.size;
 
             if (quotaDisplay) {
-                quotaDisplay.textContent = `${currentCount} / ${maxAllowed}`;
+                quotaDisplay.textContent = `${currentCount} / ${maxAllowed} Used`;
                 quotaDisplay.style.color = currentCount >= maxAllowed ? "#e74c3c" : "#3498db";
             }
 
             if (ticketsList) {
                 if (snapshot.empty) {
-                    ticketsList.innerHTML = `<p style="color: gray; font-size: 0.7rem; font-style: italic; text-align: center;">No tickets bought for this draw yet.</p>`;
+                    ticketsList.innerHTML = `<p style="color: gray; font-size: 0.75rem; font-style: italic; text-align: center; padding: 10px;">No active entries.</p>`;
                 } else {
                     ticketsList.innerHTML = "";
-                    let index = 1;
                     snapshot.forEach(tDoc => {
                         const ticket = tDoc.data();
                         const div = document.createElement("div");
-                        div.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(52, 152, 219, 0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #3498db; margin-bottom: 4px;";
+                        div.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 6px;";
                         div.innerHTML = `
-                            <span style="font-family: monospace; font-weight: bold; color: #eee; font-size: 0.85rem;">
-                                ${ticket.numbers.join(' - ')}
+                            <span style="font-family: monospace; font-weight: 800; color: #f1c40f; letter-spacing: 1px;">
+                                ${ticket.numbers.join(' . ')}
                             </span>
-                            <span style="font-size: 0.5rem; color: #3498db; font-weight: 800; text-transform: uppercase;">
-                                Entry #${index++}
-                            </span>
+                            <span style="font-size: 0.6rem; color: #888; text-transform: uppercase; font-weight: bold;">ACTIVE</span>
                         `;
                         ticketsList.appendChild(div);
                     });
@@ -162,7 +174,7 @@ export function initLotteryUI() {
         });
     }
 
-    // 4. Purchase Logic with DUPLICATE PROTECTION
+    // 4. Purchase Logic
     buyBtn.onclick = async () => {
         const user = auth.currentUser;
         if (!user) return;
@@ -186,49 +198,42 @@ export function initLotteryUI() {
         let isDuplicate = false;
 
         existingSnap.forEach(tDoc => {
-            if (JSON.stringify(tDoc.data().numbers) === selectionStr) {
-                isDuplicate = true;
-            }
+            if (JSON.stringify(tDoc.data().numbers) === selectionStr) isDuplicate = true;
         });
 
-        if (isDuplicate) {
-            return alert(`⚠️ Duplicate Entry! You already have a ticket with: ${currentSelection.join(' - ')}`);
-        }
-
+        if (isDuplicate) return alert(`⚠️ Duplicate Entry! You already have this combination.`);
         if (userData.balance < TICKET_PRICE) return alert("Insufficient funds.");
 
         try {
             buyBtn.disabled = true;
+            buyBtn.textContent = "Processing...";
             
             const poolRef = doc(db, "lottery", "status");
             const poolSnap = await getDoc(poolRef);
             const currentPool = poolSnap.data().currentPool || 0;
 
             let poolIncrement = TICKET_PRICE * 0.70; 
-            if (currentPool >= MAX_JACKPOT) {
-                poolIncrement = 0; 
-            } else if (currentPool + poolIncrement > MAX_JACKPOT) {
-                poolIncrement = MAX_JACKPOT - currentPool; 
-            }
+            if (currentPool >= MAX_JACKPOT) poolIncrement = 0; 
+            else if (currentPool + poolIncrement > MAX_JACKPOT) poolIncrement = MAX_JACKPOT - currentPool; 
 
             await updateDoc(userRef, { balance: increment(-TICKET_PRICE) });
-            
             await addDoc(collection(db, "lottery_tickets"), {
                 playerUID: user.uid,
                 numbers: currentSelection,
                 timestamp: new Date().toISOString()
             });
+            await updateDoc(poolRef, { currentPool: increment(poolIncrement) });
 
-            await updateDoc(poolRef, {
-                currentPool: increment(poolIncrement)
-            });
-
-            await logHistory(user.uid, `🎟️ Bought Lottery Ticket: ${currentSelection.join(', ')}`, "purchase");
+            await logHistory(user.uid, `🎟️ Lottery Entry: ${currentSelection.join(', ')}`, "purchase");
             
             selectedNumbers = [];
             selectionDisplay.textContent = "None Selected";
-            document.querySelectorAll(".lotto-num-btn").forEach(b => b.classList.remove("selected"));
+            document.querySelectorAll(".lotto-num-btn").forEach(b => {
+                b.style.background = "rgba(255,255,255,0.05)";
+                b.style.color = "white";
+            });
             buyBtn.disabled = true;
+            buyBtn.textContent = `PURCHASE TICKET ($${TICKET_PRICE.toLocaleString()})`;
             
         } catch (err) { 
             console.error("Purchase failed:", err);

@@ -28,6 +28,13 @@ export async function applyInterest(uid, userData) {
     const lastInterestDate = userData.lastInterestApplied ? new Date(userData.lastInterestApplied) : new Date(userData.loanStartDate);
     const deadline = new Date(userData.loanDeadline);
 
+    // Update UI elements for due date
+    const dueDateEl = document.getElementById("loan-due-date");
+    if (dueDateEl) {
+        const formattedDeadline = deadline.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+        dueDateEl.textContent = `Due: ${formattedDeadline}`;
+    }
+
     // --- INSURANCE LOGIC: Blutzs Package B (1 Day Grace Period) ---
     const hasGracePeriod = userData.insurance?.activePackages?.includes("blutzs_b");
     const effectiveDeadline = new Date(deadline);
@@ -63,8 +70,6 @@ export async function applyInterest(uid, userData) {
 /**
  * takeOutLoan
  * Tiered borrowing logic. 
- * Includes a precise 24-hour cooldown check with H/M/S feedback.
- * Updated: 30-day fixed window deadline.
  */
 export async function takeOutLoan(amount) {
     const user = auth.currentUser;
@@ -89,11 +94,9 @@ export async function takeOutLoan(amount) {
 
         if (timePassed < cooldownMs) {
             const msLeft = cooldownMs - timePassed;
-            
             const hours = Math.floor(msLeft / (1000 * 60 * 60));
             const minutes = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((msLeft % (1000 * 60)) / 1000);
-
             return alert(`Cooling Period Active: Please wait ${hours}h ${minutes}m ${seconds}s before borrowing again.`);
         }
     }
@@ -106,7 +109,7 @@ export async function takeOutLoan(amount) {
         return alert(`Denied. Your ${status.label} status only allows loans up to $${status.max.toLocaleString()}.`);
     }
 
-    // UPDATED LOGIC: Exactly 30 days from now
+    // 30-day fixed window deadline
     const deadline = new Date();
     deadline.setDate(deadline.getDate() + 30);
 
@@ -121,8 +124,6 @@ export async function takeOutLoan(amount) {
         });
 
         await logHistory(user.uid, `🏦 Took $${amount.toLocaleString()} loan (${status.label} Tier)`, "admin", now.toISOString());
-        
-        // Display formatted due date to user immediately
         const formattedDate = deadline.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
         alert(`Loan approved! Your payment is due on ${formattedDate}. Score dipped (-15) for taking on debt.`);
     } catch (error) {
@@ -133,7 +134,6 @@ export async function takeOutLoan(amount) {
 /**
  * repayLoan
  * Logic: Clears debt and boosts score.
- * Velocity Penalty: No points awarded if loan held for less than 1 hour.
  */
 export async function repayLoan() {
     const user = auth.currentUser;
@@ -162,14 +162,10 @@ export async function repayLoan() {
         effectiveDeadline.setDate(effectiveDeadline.getDate() + 1);
     }
 
-    // 1. Calculate holding time (Velocity Check)
     const msHeld = now - loanStart;
     const hoursHeld = msHeld / (1000 * 60 * 60);
-    
-    // Check against effective deadline (includes grace period if insured)
     const isOnTime = now <= effectiveDeadline;
 
-    // 2. Determine Reward (0 if held < 1 hour to prevent farming)
     let reward = 0;
     if (hoursHeld >= 1) {
         reward = isOnTime ? 30 : 5;

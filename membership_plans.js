@@ -1,13 +1,12 @@
-// ---------- membership_plans.js (Updated for Complete Slack Notifications + BPS Converter + Insurance Price Lock) ----------
+// ---------- membership_plans.js ----------
 import { db } from "./firebaseConfig.js";
 import { 
     doc, updateDoc, increment, getDoc 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { sendSlackMessage } from "./slackNotifier.js"; // <-- Slack integration
+import { sendSlackMessage } from "./slackNotifier.js";
 
 /**
  * SOURCE OF TRUTH: Configuration for all tiers.
- * UPDATED: Removed hardcoded BPS conversion rates to defer to the dynamic Resistance Model.
  */
 export const PLANS = {
     standard: {
@@ -18,7 +17,7 @@ export const PLANS = {
         cashback: 0,
         bpsPerPurchase: 5,
         shopFreeFreq: 0, 
-        bpsConversionLimit: 0, // Cannot use converter
+        bpsConversionLimit: 0,
         badge: "⚪",
         color: "#95a5a6"
     },
@@ -61,7 +60,7 @@ export const PLANS = {
 };
 
 /**
- * UI HELPER: Calculates the next billing date (Same day next month).
+ * UI HELPER: Calculates the next billing date.
  */
 export function getNextBillingDate(userData) {
     if (userData.trialExpiration) return new Date(userData.trialExpiration).toLocaleDateString();
@@ -74,7 +73,7 @@ export function getNextBillingDate(userData) {
 }
 
 /**
- * HELPER: Determines if the next purchase is free based on order count.
+ * HELPER: Determines if the next purchase is free.
  */
 export function isNextItemFree(type, userData) {
     if (type !== 'shop') return false; 
@@ -87,14 +86,12 @@ export function isNextItemFree(type, userData) {
 }
 
 /**
- * BILLING & TRIAL CHECK: Processes monthly fees using Calendar Month logic.
- * UPDATED: Includes Insurance "Price Lock" (darkblue_a) logic.
+ * BILLING & TRIAL CHECK: Processes monthly fees.
  */
 export async function checkMembershipBilling(userId, userData) {
     const tier = userData.membershipLevel || 'standard';
     const now = new Date();
 
-    // --- 1. TRIAL EXPIRATION ---
     if (userData.trialExpiration) {
         const expiration = new Date(userData.trialExpiration);
         if (now > expiration) {
@@ -104,17 +101,14 @@ export async function checkMembershipBilling(userId, userData) {
                 shopOrderCount: 0,
                 membershipLockedPrice: null
             });
-            alert("Your Admin-granted Free Trial has expired. Reverting to Standard tier.");
-
-            const username = userData.displayName || userData.username || 'Unknown user';
-            const timestamp = new Date().toLocaleString();
-            sendSlackMessage(`⏰ *Trial Expired:* ${username}'s free trial has ended. Reverted to Standard.\n*Time:* ${timestamp}`);
+            alert("Your trial has expired. Reverting to Standard tier.");
+            const username = userData.username || 'Unknown user';
+            sendSlackMessage(`⏰ *Trial Expired:* ${username}'s free trial has ended.`);
             return; 
         }
         return; 
     }
 
-    // --- 2. STANDARD BILLING LOGIC ---
     if (tier === 'standard') return;
 
     const lastPaidStr = userData.membershipLastPaid;
@@ -124,25 +118,21 @@ export async function checkMembershipBilling(userId, userData) {
     if (lastPaidStr) nextDueDate.setMonth(nextDueDate.getMonth() + 1);
 
     if (now >= nextDueDate) {
-        // --- INSURANCE: PRICE LOCK LOGIC (darkblue_a) ---
         let cost = PLANS[tier].price;
         const hasPriceLock = userData.insurance?.activePackages?.includes("darkblue_a");
         let usedPriceLock = false;
 
-        // If user has Price Lock insurance AND a locked price is saved in their profile
         if (hasPriceLock && userData.membershipLockedPrice) {
-            // Only use the lock if the current system price is HIGHER than what they locked in
             if (cost > userData.membershipLockedPrice) {
                 cost = userData.membershipLockedPrice;
                 usedPriceLock = true;
             }
         }
 
-        const username = userData.displayName || userData.username || 'Unknown user';
-        const timestamp = new Date().toLocaleString();
+        const username = userData.username || 'Unknown user';
 
         if (isFirstSubscription) {
-            sendSlackMessage(`💥 *New Subscriber:* ${username} subscribed to ${tier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+            sendSlackMessage(`💥 *New Subscriber:* ${username} subscribed to ${tier.toUpperCase()}.`);
         }
 
         if ((userData.balance || 0) >= cost) {
@@ -151,69 +141,53 @@ export async function checkMembershipBilling(userId, userData) {
                 membershipLastPaid: now.toISOString()
             };
 
-            // If the user has Price Lock but no price is locked yet, lock current price for the next cycle
             if (hasPriceLock && !userData.membershipLockedPrice) {
                 updatePayload.membershipLockedPrice = PLANS[tier].price;
             }
 
-            // If they just USED their price lock, we clear it so it charges the current market price NEXT month
             if (usedPriceLock) {
                 updatePayload.membershipLockedPrice = null; 
             }
 
             await updateDoc(doc(db, "users", userId), updatePayload);
-            
-            const lockAlert = usedPriceLock ? " (Insurance Price Lock Applied 🛡️)" : "";
-            sendSlackMessage(`💳 *Membership Renewal:* ${username} renewed their ${tier.toUpperCase()} membership for $${cost.toLocaleString()}${lockAlert}.\n*Time:* ${timestamp}`);
+            const lockAlert = usedPriceLock ? " (Price Lock Active 🛡️)" : "";
+            sendSlackMessage(`💳 *Membership Renewal:* ${username} renewed ${tier.toUpperCase()} for $${cost.toLocaleString()}${lockAlert}.`);
         } else {
             await updateDoc(doc(db, "users", userId), {
                 membershipLevel: "standard",
                 shopOrderCount: 0,
                 membershipLockedPrice: null
             });
-            alert("Membership cancelled due to insufficient funds. Reverting to Standard.");
-            sendSlackMessage(`⚠️ *Membership Cancelled:* ${username} could not renew ${tier.toUpperCase()} membership due to insufficient funds. Downgraded to Standard.\n*Time:* ${timestamp}`);
+            alert("Membership renewal failed (insufficient funds). Reverting to Standard.");
+            sendSlackMessage(`⚠️ *Membership Cancelled:* ${username} failed to renew ${tier.toUpperCase()} tier.`);
         }
     }
 }
 
 /**
- * UI HELPER: Returns the HTML string for the user's badge
+ * UI HELPER: Returns the HTML string for the user's badge.
+ * Optimized for the new Sidebar/Overview interface.
  */
 export function getTierBadge(tier) {
     const plan = PLANS[tier] || PLANS.standard;
-    return `<span class="badge" style="background: ${plan.color}; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; color: white; margin-left: 10px;">
+    return `<span style="background: ${plan.color}; color: white; padding: 2px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; margin-left: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 ${plan.badge} ${plan.label}
             </span>`;
 }
 
 /**
- * SLACK HELPERS: Manual membership purchase / upgrade / downgrade
+ * SLACK HELPERS: Manual purchase actions
  */
 export async function purchaseMembership(userId, newTier, userData, oldTier = null) {
     const currentTier = oldTier || userData.membershipLevel || 'standard';
     const plan = PLANS[newTier];
-    if (!plan) throw new Error("Invalid membership tier");
-
-    const username = userData.displayName || userData.username || 'Unknown user';
-    const timestamp = new Date().toLocaleString();
+    const username = userData.username || 'Unknown user';
     const cost = plan.price;
 
-    // determine message based on tier change logic
     if (currentTier === 'standard') {
-        sendSlackMessage(`💥 *New Subscriber:* ${username} subscribed to ${newTier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
-    } 
-    else if (PLANS[newTier].price > PLANS[currentTier].price) {
-        // UPGRADE
-        sendSlackMessage(`🟢 *Membership Upgrade:* ${username} upgraded from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()} for$${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
-    } 
-    else if (PLANS[newTier].price < PLANS[currentTier].price) {
-        // DOWNGRADE
-        sendSlackMessage(`🟠 *Membership Downgrade:* ${username} moved from ${currentTier.toUpperCase()} down to ${newTier.toUpperCase()} for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
-    } 
-    else {
-        // RE-PURCHASE SAME TIER
-        sendSlackMessage(`💳 *Membership Update:* ${username} refreshed their ${newTier.toUpperCase()} membership for$${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
+        sendSlackMessage(`💥 *New Subscriber:* ${username} joined ${newTier.toUpperCase()}.`);
+    } else {
+        sendSlackMessage(`🟢 *Tier Change:* ${username} moved from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()}.`);
     }
 
     const updatePayload = {
@@ -221,17 +195,15 @@ export async function purchaseMembership(userId, newTier, userData, oldTier = nu
         membershipLastPaid: new Date().toISOString()
     };
 
-    // If they have Price Lock insurance, lock in the price of the plan they JUST bought
     if (userData.insurance?.activePackages?.includes("darkblue_a")) {
         updatePayload.membershipLockedPrice = plan.price;
     }
 
-    // DB update handled here for consistency
     await updateDoc(doc(db, "users", userId), updatePayload);
 }
 
 /**
- * CANCEL MEMBERSHIP (manual)
+ * Manual Cancellation
  */
 export async function cancelMembership(userId, userData, previousTier = null) {
     const tierToReport = previousTier || userData.membershipLevel || 'standard';
@@ -239,13 +211,11 @@ export async function cancelMembership(userId, userData, previousTier = null) {
     await updateDoc(doc(db, "users", userId), {
         membershipLevel: "standard",
         shopOrderCount: 0,
-        membershipLockedPrice: null // Clear lock if they manually cancel
+        membershipLockedPrice: null
     });
 
-    const username = userData.displayName || userData.username || 'Unknown user';
-    const timestamp = new Date().toLocaleString();
-    
+    const username = userData.username || 'Unknown user';
     if (tierToReport !== 'standard') {
-        sendSlackMessage(`🚫 *Membership Cancelled:* ${username} cancelled their ${tierToReport.toUpperCase()} membership. Reverted to Standard.\n*Time:* ${timestamp}`);
+        sendSlackMessage(`🚫 *Membership Cancelled:* ${username} left ${tierToReport.toUpperCase()} tier.`);
     }
 }
