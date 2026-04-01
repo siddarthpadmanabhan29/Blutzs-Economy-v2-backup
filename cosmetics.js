@@ -43,31 +43,68 @@ function applySavedTheme() {
 applySavedTheme();
 
 // ---------- APPLY NAVBAR & BACKGROUND (OWNERSHIP SAFE) ----------
+// ---------- APPLY NAVBAR & BACKGROUND (SOLID BLEND + HIGH VISIBILITY) ----------
+// ---------- APPLY NAVBAR & BACKGROUND (CLEAN HIGH-VISIBILITY) ----------
 async function applyCosmeticsFromFirestore(userData, cosmeticsMap) {
-  if (!userData) return;
+  if (!userData || !dashboardNavbar) return;
 
-  // 1. Handle Top Bar (Navbar)
-  let navbarColor = ""; // default to CSS variable
-  if (userData.navbarColor && cosmeticsMap) {
-    const isValid = Object.values(cosmeticsMap).some(item => 
-      item.type === "navbarColor" && item.color === userData.navbarColor && userData.cosmeticsOwned?.[item.id]
-    );
-    if (isValid) navbarColor = userData.navbarColor;
-  }
-  
-  if (dashboardNavbar) {
-    dashboardNavbar.style.backgroundColor = navbarColor || "var(--card-bg)";
-    dashboardNavbar.style.borderColor = navbarColor ? "rgba(255,255,255,0.1)" : "var(--contract-border)";
-  }
+  if (userData.navbarColor) {
+    const color = userData.navbarColor;
+    
+    // 1. Premium Glass Base (No change here, keeps the blur and glow)
+    dashboardNavbar.style.background = `linear-gradient(to bottom, ${color}CC, ${color}99)`;
+    dashboardNavbar.style.backdropFilter = "blur(12px)";
+    dashboardNavbar.style.borderBottom = `1px solid ${color}`;
+    dashboardNavbar.style.boxShadow = `0 4px 20px ${color}44`;
 
-  // 2. Handle Background Color
-  if (userData.equippedBackground) {
-    document.body.style.setProperty('background-color', userData.equippedBackground, 'important');
-    document.body.classList.add("custom-bg-active");
+    // 2. Remove the Boxes & Reset Stat Containers
+    const statContainers = dashboardNavbar.querySelectorAll('.stat-item, .nav-stat');
+    statContainers.forEach(container => {
+        container.style.background = "transparent"; // REMOVES THE BOXES
+        container.style.border = "none";
+        container.style.padding = "0 15px";
+    });
+
+    // 3. Labels (BALANCE, BPS TOKENS, etc.)
+    const labels = dashboardNavbar.querySelectorAll('small, .stat-label');
+    labels.forEach(l => {
+        l.style.color = "rgba(255, 255, 255, 0.8)";
+        l.style.fontWeight = "800";
+        l.style.textShadow = "0 1px 3px rgba(0,0,0,0.5)"; // Adds "cut-out" depth
+    });
+
+    // 4. Values (The actual numbers)
+    const values = dashboardNavbar.querySelectorAll('span, .stat-value, .bps-value');
+    values.forEach(v => {
+        // Restore Purple for BPS, White for others
+        const isBPS = v.id === "user-bps" || v.classList.contains("bps-value");
+        v.style.color = isBPS ? "#a29bfe" : "#ffffff"; 
+        
+        v.style.fontWeight = "900";
+        // Stronger shadow since the background box is gone
+        v.style.textShadow = "0 2px 8px rgba(0,0,0,0.6), 0 0 10px rgba(0,0,0,0.3)";
+    });
+
   } else {
-    document.body.style.backgroundColor = ""; 
-    document.body.classList.remove("custom-bg-active");
+    // Revert to system default
+    dashboardNavbar.style.background = "var(--card-bg)";
+    dashboardNavbar.style.borderBottom = "1px solid var(--contract-border)";
+    dashboardNavbar.style.boxShadow = "none";
+    
+    // Reset BPS back to standard color if needed
+    const bpsValue = document.getElementById("user-bps");
+    if (bpsValue) bpsValue.style.color = "#a29bfe";
   }
+
+  // Background radial blend (maintains depth)
+  if (userData.equippedBackground) {
+    const bgColor = userData.equippedBackground;
+    // Set a solid background color instead of a gradient
+    document.body.style.setProperty('background', bgColor, 'important');
+} else {
+    // Reset to default if nothing is equipped
+    document.body.style.background = ""; 
+}
 }
 
 // ---------- LOAD COSMETICS ----------
