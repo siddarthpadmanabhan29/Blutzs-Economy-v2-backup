@@ -163,11 +163,10 @@ function renderBpsShop(externalUserData = null) {
         const affordable = userBPS >= finalCost;
         const isGiftCard = item.type === "giftcard";
         
-        // --- FIXED GATING LOGIC ---
-        const isAlwaysUnlocked = (item.name && item.name.includes("10% off")) || 
-                                 item.id === "lotteryLimitBypass" || 
-                                 item.id === "premiumTrial" || 
-                                 item.id === "interestBoost";
+        // --- UPDATED GATING LOGIC ---
+        // Only the basic 10% coupon and the smallest gift card remain unlocked for non-subscribers.
+        // Everything else (Interest, Lottery, Premium, High Coupons) requires the subscription.
+        const isAlwaysUnlocked = (item.name && item.name === "10% off Coupon") || item.id === "10bps_gift";
 
         const isLockedBySub = !isSubscribed && !isAlwaysUnlocked;
         
