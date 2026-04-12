@@ -19,6 +19,28 @@ export function initLotteryUI() {
 
     if (!grid) return;
 
+    // --- BPS STATUS NOTICE ELEMENT ---
+    let bpsNotice = document.getElementById("bps-lotto-notice");
+    if (!bpsNotice) {
+        bpsNotice = document.createElement("div");
+        bpsNotice.id = "bps-lotto-notice";
+        bpsNotice.style.cssText = `
+            display: none;
+            background: rgba(142, 68, 173, 0.15);
+            border: 1px solid #8e44ad;
+            color: #a29bfe;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        `;
+        bpsNotice.innerHTML = `✨ BPS BYPASS ACTIVE: Extra Entry Available!`;
+        grid.parentNode.insertBefore(bpsNotice, grid);
+    }
+
     // 1. Generate 1-20 Grid (Styled for Sidebar Dashboard)
     grid.innerHTML = "";
     grid.style.display = "grid";
@@ -31,7 +53,6 @@ export function initLotteryUI() {
         btn.textContent = i;
         btn.className = "lotto-num-btn";
         
-        // Inline styling to ensure visual consistency with the new theme
         btn.style.cssText = `
             padding: 12px 5px;
             background: rgba(255,255,255,0.05);
@@ -60,7 +81,6 @@ export function initLotteryUI() {
             selectionDisplay.textContent = selectedNumbers.sort((a,b) => a-b).join(" - ") || "None Selected";
             buyBtn.disabled = selectedNumbers.length !== 4;
             
-            // Highlight button text color for selection
             if (selectedNumbers.length === 4) {
                 buyBtn.style.opacity = "1";
             } else {
@@ -76,14 +96,12 @@ export function initLotteryUI() {
             const data = snap.data();
             const currentPool = data.currentPool || 0;
             
-            // A. Jackpot Display
             const poolEl = document.getElementById("lottery-jackpot-display");
             if (poolEl) {
                 poolEl.textContent = `$${currentPool.toLocaleString()}`;
                 poolEl.style.color = currentPool >= MAX_JACKPOT ? "#e74c3c" : "#2ecc71";
             }
 
-            // B. Countdown Timer Logic
             const timerContainer = document.getElementById("lotto-timer-container");
             const countdownEl = document.getElementById("lotto-countdown");
 
@@ -117,7 +135,6 @@ export function initLotteryUI() {
                 countdownInterval = setInterval(updateTimer, 1000);
             }
 
-            // C. Results Display
             const winNums = data.lastWinningNumbers || [0, 0, 0, 0];
             winNums.forEach((num, index) => {
                 const ball = document.getElementById(`ball-${index}`);
@@ -130,7 +147,7 @@ export function initLotteryUI() {
         }
     });
 
-    // 3. THE QUOTA & TICKETS LISTENER (Optimized for Mobile/Sidebar)
+    // 3. THE QUOTA & TICKETS LISTENER
     if (auth.currentUser) {
         const userTicketsQ = query(
             collection(db, "lottery_tickets"), 
@@ -145,7 +162,16 @@ export function initLotteryUI() {
             const tier = userData.membershipLevel || 'standard';
             const limits = { standard: 1, basic: 3, premium: 5, platinum: 7 };
             const maxAllowed = limits[tier];
-            const currentCount = snapshot.size;
+            
+            // Show/Hide BPS Notice
+            if (userData.hasLotteryBypass) {
+                bpsNotice.style.display = "block";
+            } else {
+                bpsNotice.style.display = "none";
+            }
+
+            const regularTickets = snapshot.docs.filter(doc => !doc.data().isBpsBypass);
+            const currentCount = regularTickets.length;
 
             if (quotaDisplay) {
                 quotaDisplay.textContent = `${currentCount} / ${maxAllowed} Used`;
@@ -159,13 +185,16 @@ export function initLotteryUI() {
                     ticketsList.innerHTML = "";
                     snapshot.forEach(tDoc => {
                         const ticket = tDoc.data();
+                        const isBps = ticket.isBpsBypass;
                         const div = document.createElement("div");
-                        div.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 6px;";
+                        div.style.cssText = `display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid ${isBps ? '#8e44ad' : 'rgba(255,255,255,0.05)'}; margin-bottom: 6px;`;
                         div.innerHTML = `
                             <span style="font-family: monospace; font-weight: 800; color: #f1c40f; letter-spacing: 1px;">
                                 ${ticket.numbers.join(' . ')}
                             </span>
-                            <span style="font-size: 0.6rem; color: #888; text-transform: uppercase; font-weight: bold;">ACTIVE</span>
+                            <span style="font-size: 0.6rem; color: ${isBps ? '#a29bfe' : '#888'}; text-transform: uppercase; font-weight: bold;">
+                                ${isBps ? 'BPS ENTRY' : 'ACTIVE'}
+                            </span>
                         `;
                         ticketsList.appendChild(div);
                     });
@@ -189,8 +218,11 @@ export function initLotteryUI() {
         const existingTicketsQ = query(collection(db, "lottery_tickets"), where("playerUID", "==", user.uid));
         const existingSnap = await getDocs(existingTicketsQ);
         
-        if (existingSnap.size >= maxAllowed) {
-            return alert(`🚫 Limit reached! Your tier max is ${maxAllowed} tickets.`);
+        const regularCount = existingSnap.docs.filter(doc => !doc.data().isBpsBypass).length;
+        const hasBypass = userData.hasLotteryBypass === true;
+
+        if (regularCount >= maxAllowed && !hasBypass) {
+            return alert(`🚫 Limit reached! Your tier max is ${maxAllowed} regular tickets. Visit the BPS Shop for extra entries!`);
         }
 
         const currentSelection = [...selectedNumbers].sort((a, b) => a - b);
@@ -216,15 +248,22 @@ export function initLotteryUI() {
             if (currentPool >= MAX_JACKPOT) poolIncrement = 0; 
             else if (currentPool + poolIncrement > MAX_JACKPOT) poolIncrement = MAX_JACKPOT - currentPool; 
 
-            await updateDoc(userRef, { balance: increment(-TICKET_PRICE) });
+            const userUpdates = { balance: increment(-TICKET_PRICE) };
+            
+            if (hasBypass) {
+                userUpdates.hasLotteryBypass = false;
+            }
+
+            await updateDoc(userRef, userUpdates);
             await addDoc(collection(db, "lottery_tickets"), {
                 playerUID: user.uid,
                 numbers: currentSelection,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                isBpsBypass: hasBypass 
             });
             await updateDoc(poolRef, { currentPool: increment(poolIncrement) });
 
-            await logHistory(user.uid, `🎟️ Lottery Entry: ${currentSelection.join(', ')}`, "purchase");
+            await logHistory(user.uid, `🎟️ Lottery Entry: ${currentSelection.join(', ')}${hasBypass ? ' (BPS Bypass)' : ''}`, "purchase");
             
             selectedNumbers = [];
             selectionDisplay.textContent = "None Selected";

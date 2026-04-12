@@ -1,4 +1,4 @@
-// ---------- retirement.js (CATCH-UP + LIFETIME TRACKER + INSURANCE BOOST) ----------
+// ---------- retirement.js (CATCH-UP + LIFETIME TRACKER + INSURANCE BOOST + BPS BOOST) ----------
 console.log("retirement.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
@@ -9,7 +9,7 @@ import { PLANS } from "./membership_plans.js";
 // ---------- Elements ----------
 const savingsEl = document.getElementById("retirement-savings");
 const interestEl = document.getElementById("retirement-interest");
-const totalEarnedEl = document.getElementById("retirement-total-earned"); // New Element
+const totalEarnedEl = document.getElementById("retirement-total-earned");
 const daysEl = document.getElementById("retirement-days");
 const depositInput = document.getElementById("retirement-deposit");
 const depositBtn = document.getElementById("retirement-deposit-btn");
@@ -20,30 +20,54 @@ const messageEl = document.getElementById("retirement-message");
 // --- LOCAL STATE ---
 let cachedUserData = null; 
 let retirementBusy = false; 
-let retirementChart = null; // Chart.js instance
+let retirementChart = null; 
+
+// ---------- Helper: Calculate Remaining Boost Days ----------
+function getRemainingBoostDays(expiryDateString) {
+    if (!expiryDateString) return 0;
+    const now = new Date();
+    const expiry = new Date(expiryDateString);
+    const diff = expiry - now;
+    if (diff <= 0) return 0;
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
 
 // ---------- Render Retirement UI ----------
 function renderSavings(userData) {
     if (!userData || !savingsEl) return;
     
+    // Safety: ensure cachedUserData is always a clean object
     cachedUserData = userData;
 
     // Membership Data
     const tier = userData.membershipLevel || 'standard';
-    const plan = PLANS[tier];
+    const plan = PLANS[tier] || { interest: 0.03 }; // Fallback if plan is missing
     
+    let activeInterestRate = plan.interest || 0;
+
     // --- INSURANCE LOGIC: Cross Go Package A (+2% Boost if Balance <= $325k) ---
-    let activeInterestRate = plan.interest;
-    const hasInterestBoost = userData.insurance?.activePackages?.includes("crossgo_a") && (userData.balance <= 325000);
-    
-    if (hasInterestBoost) {
+    const userBalance = Number(userData.balance || 0);
+    const hasInsuranceBoost = userData.insurance?.activePackages?.includes("crossgo_a") && (userBalance <= 325000);
+    if (hasInsuranceBoost) {
         activeInterestRate += 0.02;
+    }
+
+    // --- BPS BOOST LOGIC: +1% Boost for 30 Days ---
+    let bpsBoostActive = false;
+    let bpsDaysLeft = 0;
+    if (userData.activeBoosts?.interestBoostExpiry) {
+        const expiry = new Date(userData.activeBoosts.interestBoostExpiry);
+        if (new Date() < expiry) {
+            activeInterestRate += 0.01;
+            bpsBoostActive = true;
+            bpsDaysLeft = getRemainingBoostDays(userData.activeBoosts.interestBoostExpiry);
+        }
     }
 
     const interestRatePercent = (activeInterestRate * 100).toFixed(0);
     
     const savings = Number(userData.retirementSavings || 0);
-    const totalEarned = Number(userData.totalInterestEarned || 0); // New Field
+    const totalEarned = Number(userData.totalInterestEarned || 0);
     const status = userData.employmentStatus || "Unemployed";
 
     const now = new Date();
@@ -58,33 +82,39 @@ function renderSavings(userData) {
     }
     
     const calculatedInterest = savings * activeInterestRate;
-    interestEl.innerHTML = `Next Interest (${interestRatePercent}%): $${calculatedInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${hasInterestBoost ? '<span style="color: #2ecc71; font-size: 0.7rem; margin-left: 5px;">🚀 INSURED BOOST</span>' : ''}`;
     
-    daysEl.textContent = diffDays;
+    // UI Notice for boosts
+    let boostLabels = "";
+    if (hasInsuranceBoost) boostLabels += '<span style="color: #2ecc71; font-size: 0.7rem; margin-left: 5px;">🚀 INSURED BOOST</span>';
+    if (bpsBoostActive) {
+        boostLabels += `<span style="color: #a29bfe; font-size: 0.7rem; margin-left: 5px;">✨ BPS BOOST (+1% | ${bpsDaysLeft}d left)</span>`;
+    }
+
+    interestEl.innerHTML = `Next Interest (${interestRatePercent}%): $${calculatedInterest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${boostLabels}`;
+    
+    if (daysEl) daysEl.textContent = diffDays;
 
     // Update Visual Chart
     renderGrowthChart(savings, activeInterestRate);
 
+    // Button states based on employment
     if (retirementBusy) {
         toggleInputs(true);
-        return;
-    }
-
-    if (status === "Employed") {
-        depositBtn.disabled = false;
-        withdrawBtn.disabled = true;
-        depositInput.disabled = false;
-        withdrawInput.disabled = true;
+    } else if (status === "Employed") {
+        if (depositBtn) depositBtn.disabled = false;
+        if (withdrawBtn) withdrawBtn.disabled = true;
+        if (depositInput) depositInput.disabled = false;
+        if (withdrawInput) withdrawInput.disabled = true;
     } else if (status === "Retired") {
-        depositBtn.disabled = true;
-        withdrawBtn.disabled = false;
-        depositInput.disabled = true;
-        withdrawInput.disabled = false;
+        if (depositBtn) depositBtn.disabled = true;
+        if (withdrawBtn) withdrawBtn.disabled = false;
+        if (depositInput) depositInput.disabled = true;
+        if (withdrawInput) withdrawInput.disabled = false;
     } else {
         toggleInputs(true); 
     }
     
-    // NEW: Trigger Catch-up check instead of standard check
+    // Trigger interest catch up logic
     applyInterestCatchUp(userData, activeInterestRate);
 }
 
@@ -186,7 +216,7 @@ depositBtn?.addEventListener("click", async () => {
         showMsg("Deposit failed: " + err.message, "error");
     } finally {
         retirementBusy = false;
-        renderSavings(cachedUserData);
+        // The display will auto-update via the snapshot listener in main.js
     }
 });
 
@@ -234,7 +264,6 @@ withdrawBtn?.addEventListener("click", async () => {
         showMsg("Withdrawal failed: " + err.message, "error");
     } finally {
         retirementBusy = false;
-        renderSavings(cachedUserData);
     }
 });
 
@@ -243,21 +272,29 @@ withdrawBtn?.addEventListener("click", async () => {
 ========================================================= */
 async function applyInterestCatchUp(userData, activeRate) {
     if (!userData?.retirementSavings || userData.retirementSavings <= 0) return;
+    if (!auth.currentUser) return;
 
-    // Use current time if lastInterestApplied is missing
-    const lastApplied = userData.lastInterestApplied ? new Date(userData.lastInterestApplied) : new Date();
+    // Use current time if lastInterestApplied is missing to avoid huge fake payouts
+    const lastAppliedRaw = userData.lastInterestApplied;
+    if (!lastAppliedRaw) {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        await updateDoc(userRef, { lastInterestApplied: new Date().toISOString() });
+        return;
+    }
+
+    const lastApplied = new Date(lastAppliedRaw);
     const now = new Date();
     
-    // Calculate total months passed since last success
+    // Monthly calculation
     const monthsDiff = (now.getFullYear() - lastApplied.getFullYear()) * 12 + (now.getMonth() - lastApplied.getMonth());
 
     if (monthsDiff > 0) {
-        const currentSavings = userData.retirementSavings;
+        const currentSavings = Number(userData.retirementSavings || 0);
 
-        // Compound Formula: A = P(1 + r)^n
+        // Formula: A = P(1 + r)^n
         const newSavings = currentSavings * Math.pow((1 + activeRate), monthsDiff);
         const amountEarned = newSavings - currentSavings;
-        const newLifetimeEarned = (userData.totalInterestEarned || 0) + amountEarned;
+        const newLifetimeEarned = (Number(userData.totalInterestEarned) || 0) + amountEarned;
 
         const userRef = doc(db, "users", auth.currentUser.uid);
 
