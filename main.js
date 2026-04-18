@@ -11,7 +11,7 @@ import "./shop.js";
 import "./jobs.js";
 import "./inventory.js";
 import "./transfer.js";
-import "./admin.js";
+import "./admin.refactored.js";
 import "./retirement.js";
 
 

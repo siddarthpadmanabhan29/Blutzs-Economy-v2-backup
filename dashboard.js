@@ -33,7 +33,7 @@ import { logDailyEconomySnapshot } from "./economyLogger.js";
 
 // --- LOTTERY IMPORTS ---
 import { initLotteryUI } from "./lottery.js";
-import { listenForAdminLottery } from "./admin.js";
+import { listenForAdminLottery } from "./admin.refactored.js";
 
 // --- FINE SYSTEM IMPORT ---
 import { initFineSystem } from "./fines.js";

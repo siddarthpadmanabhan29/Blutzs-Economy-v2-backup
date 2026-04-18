@@ -14,6 +14,10 @@ const jobsContainer = document.getElementById("jobs");
 function loadJobs() {
   const jobsRef = collection(db, "jobs");
   onSnapshot(jobsRef, (snapshot) => {
+    if (!jobsContainer) {
+      console.warn("Jobs container element not found in DOM");
+      return;
+    }
     jobsContainer.innerHTML = "";
 
     if (snapshot.empty) {

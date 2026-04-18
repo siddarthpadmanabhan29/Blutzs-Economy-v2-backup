@@ -90,7 +90,11 @@ function renderShop(externalUserData = null) {
 
     const affordable = userBalance >= totalCost;
     const isExpired = localUserData?.expirationDate && new Date(localUserData.expirationDate) < new Date();
-    const isDisabled = !affordable || isExpired;
+    
+    // ========== STOCK MANAGEMENT ==========
+    const stock = Number(item.stock || 0);
+    const outOfStock = stock <= 0;
+    const isDisabled = !affordable || isExpired || outOfStock;
 
     let btnText = isFree ? "Claim" : (affordable ? "Purchase" : "Insufficient");
 
@@ -111,6 +115,7 @@ function renderShop(externalUserData = null) {
         box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         position: relative;
         overflow: hidden;
+        ${outOfStock ? 'opacity: 0.6;' : ''}
     `;
 
     let discountBadgeHTML = "";
@@ -138,22 +143,63 @@ function renderShop(externalUserData = null) {
         `;
     }
 
-    itemCard.onmouseenter = () => { itemCard.style.transform = "translateY(-4px)"; };
+    // ========== OUT OF STOCK BADGE ==========
+    let outOfStockBadgeHTML = "";
+    if (outOfStock) {
+        outOfStockBadgeHTML = `
+            <div style="
+                position: absolute;
+                top: 12px;
+                left: 12px;
+                background: #e74c3c;
+                color: white;
+                font-size: 0.65rem;
+                font-weight: 900;
+                padding: 6px 12px;
+                border-radius: 20px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                z-index: 10;
+                pointer-events: none;
+            ">
+                OUT OF STOCK
+            </div>
+        `;
+    }
+
+    itemCard.onmouseenter = () => { if (!outOfStock) itemCard.style.transform = "translateY(-4px)"; };
     itemCard.onmouseleave = () => { itemCard.style.transform = "translateY(0)"; };
+
+    // ========== BUTTON TEXT AND COLOR LOGIC ==========
+    let btnColor = '#3498db';
+    if (outOfStock) {
+        btnText = "Out of Stock";
+        btnColor = '#555';
+    } else if (!affordable) {
+        btnText = "Insufficient";
+        btnColor = '#e74c3c';
+    } else if (isExpired) {
+        btnText = "ID Expired";
+        btnColor = '#e67e22';
+    }
 
     itemCard.innerHTML = `
         ${discountBadgeHTML}
-      <div class="shop-item-image" style="width:100%; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.1);">
-        <img src="${item.image || 'https://via.placeholder.com/150?text=Item'}" alt="${item.name}" style="width:100%; height:100%; object-fit:cover;">
-      </div>
-      <div class="shop-item-info">
-        <h4 style="margin:0; font-size: 0.9rem;">${item.name}</h4>
+        ${outOfStockBadgeHTML}
+        <div class="shop-item-image" style="width:100%; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.1);">
+          <img src="${item.image || 'https://via.placeholder.com/150?text=Item'}" alt="${item.name}" style="width:100%; height:100%; object-fit:cover;">
+        </div>
+        <div class="shop-item-info">
+          <h4 style="margin:0; font-size: 0.9rem;">${item.name}</h4>
         <div class="shop-price" style="margin: 5px 0;">
             ${activeDiscount > 0 && !isFree ? `<span style="text-decoration: line-through; color: gray; font-size: 0.7rem; margin-right:5px;">$${originalCost.toLocaleString()}</span>` : ""}
             <span style="font-weight: 800; color: ${isFree ? '#2ecc71' : 'var(--text-main)'};">${priceDisplay}</span>
         </div>
+        <div style="font-size: 0.75rem; color: ${stock >= 5 ? '#2ecc71' : stock > 0 ? '#f39c12' : '#e74c3c'}; font-weight: 700; margin: 5px 0;">
+          ${stock >= 5 ? `✓ In Stock (${stock})` : stock > 0 ? `⚠ Only ${stock} left` : '❌ Out of Stock'}
+        </div>
         <button class="buy-item-btn" data-id="${item.id}" ${isDisabled ? "disabled" : ""} 
-            style="width: 100%; padding: 8px; border-radius: 6px; border:none; background: ${isDisabled ? '#444' : '#3498db'}; color:white; font-weight:bold; cursor:${isDisabled ? 'not-allowed' : 'pointer'};">
+            style="width: 100%; padding: 8px; border-radius: 6px; border:none; background: ${isDisabled ? '#555' : btnColor}; color:white; font-weight:bold; cursor:${isDisabled ? 'not-allowed' : 'pointer'};">
           ${btnText}
         </button>
       </div>
@@ -306,7 +352,8 @@ async function buyItem(itemId, btnElement) {
 
     // --- UPDATE GLOBAL ECONOMY STATS ---
     const shopItemUpdate = {
-        purchaseCount: increment(1)
+        purchaseCount: increment(1),
+        stock: increment(-1)  // Decrease stock by 1
     };
 
     // Run updates
@@ -346,6 +393,12 @@ async function buyItem(itemId, btnElement) {
     };
     
     if (isFree) localUserData.shopOrderCount = 0;
+    
+    // Update the item stock in local data
+    const itemIndex = currentShopItems.findIndex(i => i.id === itemId);
+    if (itemIndex !== -1) {
+        currentShopItems[itemIndex].stock = Math.max(0, (currentShopItems[itemIndex].stock || 1) - 1);
+    }
     
     renderShop();
 
