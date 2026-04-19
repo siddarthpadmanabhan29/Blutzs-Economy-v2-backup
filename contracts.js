@@ -3,6 +3,7 @@ import {
     collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, getDoc, addDoc, increment
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
+import { sendSlackMessage } from "./slackNotifier.js";
 
 const contractSection = document.getElementById("user-contract-display");
 const adminRosterContainer = document.getElementById("admin-active-contracts-list");
@@ -208,6 +209,13 @@ function renderActiveContract(docId, data, userData) {
             try {
                 await updateDoc(doc(db, "users", auth.currentUser.uid), { tradePending: true });
                 await logHistory(auth.currentUser.uid, "📢 Trade Request Submitted.", "contract");
+                
+                // Send Slack notification
+                const timestamp = new Date().toLocaleString();
+                const username = userData?.username || auth.currentUser.email.split('@')[0];
+                const teamName = data.team || 'Unknown Team';
+                await sendSlackMessage(`🏀 TRADE REQUEST: ${username} from ${teamName} has requested a trade (${timestamp})`);
+                
                 alert("✅ Trade request submitted!");
             } catch (err) {
                 console.error("Trade request error:", err);
@@ -224,6 +232,13 @@ function renderActiveContract(docId, data, userData) {
             try {
                 await updateDoc(doc(db, "users", auth.currentUser.uid), { releasePending: true });
                 await logHistory(auth.currentUser.uid, "📢 Release Request Submitted.", "contract");
+                
+                // Send Slack notification
+                const timestamp = new Date().toLocaleString();
+                const username = userData?.username || auth.currentUser.email.split('@')[0];
+                const teamName = data.team || 'Unknown Team';
+                await sendSlackMessage(`🏀 RELEASE REQUEST: ${username} from ${teamName} has requested to be released (${timestamp})`);
+                
                 alert("✅ Release request submitted!");
             } catch (err) {
                 console.error("Release request error:", err);
@@ -435,6 +450,14 @@ window.adminActionContract = async (docId, action) => {
             
             const logMsg = isCut ? `✂️ Contract Terminated.` : `🚫 Contract Voided.`;
             await logHistory(data.playerUID, logMsg, "admin");
+            
+            // Send Slack notification for release
+            const timestamp = new Date().toLocaleString();
+            const username = data.playerName || 'Unknown Player';
+            const teamName = data.team || 'Unknown Team';
+            const actionType = isCut ? 'RELEASED' : 'VOIDED';
+            await sendSlackMessage(`🏀 PLAYER ${actionType}: ${teamName} has ${actionType.toLowerCase()} ${username} (${timestamp})`);
+            
             alert(logMsg);
         }
     } catch (err) { console.error("Admin Action Error:", err); }
@@ -473,6 +496,17 @@ window.respondToContract = async (docId, status) => {
             if (bonus > 0) updates.balance = currentBal + bonus;
             await updateDoc(userRef, updates);
             await logHistory(user.uid, `✍️ Joined ${data.team}. Bonus: $${bonus.toLocaleString()}.`, "contract");
+            
+            // Send Slack notification for signed offer
+            const timestamp = new Date().toLocaleString();
+            const username = userSnap.data().username || user.email.split('@')[0];
+            const teamName = data.team || 'Unknown Team';
+            const seasons = data.terms?.seasons || 1;
+            const guaranteedPay = data.terms?.guaranteedPay || 0;
+            const nonGuaranteedPay = data.terms?.nonGuaranteedPay || 0;
+            const totalPay = (guaranteedPay + nonGuaranteedPay) * seasons + bonus;
+            await sendSlackMessage(`🏀 CONTRACT SIGNED: ${username} signed with ${teamName} - ${seasons} seasons, Total: $${totalPay.toLocaleString()} (Guaranteed: $${guaranteedPay.toLocaleString()}/yr, Bonus: $${nonGuaranteedPay.toLocaleString()}/yr, Signing: $${bonus.toLocaleString()}) (${timestamp})`);
+            
             alert(`✍️ Signed!`);
         }
     } catch (err) { console.error(err); }
@@ -508,6 +542,16 @@ window.respondToExtension = async (docId, choice) => {
                 extensionTerms: null 
             });
             await logHistory(user.uid, `✅ Extension Accepted.`, "contract");
+            
+            // Send Slack notification for extension acceptance
+            const timestamp = new Date().toLocaleString();
+            const username = data.playerName || 'Unknown Player';
+            const teamName = data.team || 'Unknown Team';
+            const newGuaranteed = Number(ext.newGuaranteedPerSeason);
+            const newBonus = Number(ext.newBonusPerSeason);
+            const totalExtensionValue = (newGuaranteed + newBonus) * extensionYears;
+            await sendSlackMessage(`🏀 EXTENSION ACCEPTED: ${username} extended with ${teamName} - ${extensionYears} seasons, Total: $${totalExtensionValue.toLocaleString()} (Guaranteed: $${newGuaranteed.toLocaleString()}/yr, Bonus: $${newBonus.toLocaleString()}/yr) (${timestamp})`);
+            
             alert("✅ Extension Accepted!");
         } else {
             await updateDoc(contractRef, { status: "active", extensionTerms: null });
@@ -558,10 +602,17 @@ window.tradePlayer = async (docId) => {
     if (!snap.exists()) return;
     const data = snap.data();
     try {
+        const oldTeam = data.team;
         await updateDoc(contractRef, { team: newTeam, tradeStatus: null });
         const userRef = doc(db, "users", data.playerUID);
         await updateDoc(userRef, { tradePending: false });
         await logHistory(data.playerUID, `🤝 Traded to ${newTeam}!`, "contract");
+        
+        // Send Slack notification for trade
+        const timestamp = new Date().toLocaleString();
+        const username = data.playerName || 'Unknown Player';
+        await sendSlackMessage(`🏀 PLAYER TRADED: ${username} traded from ${oldTeam} to ${newTeam} (${timestamp})`);
+        
         alert(`📢 Moved to ${newTeam}`);
     } catch (err) { alert("Trade failed."); }
 };
