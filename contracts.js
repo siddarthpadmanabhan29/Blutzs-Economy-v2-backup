@@ -190,11 +190,47 @@ function renderActiveContract(docId, data, userData) {
         </div>
 
         <div style="display: flex; gap: 10px;">
-            <button id="request-trade-btn" class="btn-secondary" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;">REQUEST TRADE</button>
-            <button id="request-release-btn" class="btn-danger" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;">REQUEST RELEASE</button>
+            <button id="request-trade-btn" class="btn-secondary" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;" ${userData?.tradePending ? 'disabled' : ''}>REQUEST TRADE</button>
+            <button id="request-release-btn" class="btn-danger" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;" ${userData?.releasePending ? 'disabled' : ''}>REQUEST RELEASE</button>
         </div>
     `;
     contractSection.appendChild(div);
+
+    // Add event listeners for request buttons
+    const tradeBtn = document.getElementById("request-trade-btn");
+    const releaseBtn = document.getElementById("request-release-btn");
+
+    if (tradeBtn) {
+        tradeBtn.addEventListener("click", async () => {
+            if (!auth.currentUser) return;
+            if (userData?.tradePending) return alert("You already have a trade request pending.");
+            if (!confirm("Request a trade? Your team will be notified.")) return;
+            try {
+                await updateDoc(doc(db, "users", auth.currentUser.uid), { tradePending: true });
+                await logHistory(auth.currentUser.uid, "📢 Trade Request Submitted.", "contract");
+                alert("✅ Trade request submitted!");
+            } catch (err) {
+                console.error("Trade request error:", err);
+                alert("Failed to submit trade request.");
+            }
+        });
+    }
+
+    if (releaseBtn) {
+        releaseBtn.addEventListener("click", async () => {
+            if (!auth.currentUser) return;
+            if (userData?.releasePending) return alert("You already have a release request pending.");
+            if (!confirm("Request release from contract? This will end your employment.")) return;
+            try {
+                await updateDoc(doc(db, "users", auth.currentUser.uid), { releasePending: true });
+                await logHistory(auth.currentUser.uid, "📢 Release Request Submitted.", "contract");
+                alert("✅ Release request submitted!");
+            } catch (err) {
+                console.error("Release request error:", err);
+                alert("Failed to submit release request.");
+            }
+        });
+    }
 }
 
 /**
