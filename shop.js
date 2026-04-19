@@ -353,7 +353,8 @@ async function buyItem(itemId, btnElement) {
     // --- UPDATE GLOBAL ECONOMY STATS ---
     const shopItemUpdate = {
         purchaseCount: increment(1),
-        stock: increment(-1)  // Decrease stock by 1
+        stock: increment(-1),  // Decrease stock by 1
+        lastPurchasedAt: new Date().toISOString()
     };
 
     // Run updates

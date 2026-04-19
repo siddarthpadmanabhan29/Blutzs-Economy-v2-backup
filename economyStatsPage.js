@@ -226,7 +226,25 @@ async function initTrendingItems() {
         let items = [];
         snapshot.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
 
-        const topThree = items.sort((a, b) => (b.purchaseCount || 0) - (a.purchaseCount || 0)).slice(0, 3);
+        // Filter items purchased in last 7 days
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const recentItems = items.filter(item => {
+            if (!item.lastPurchasedAt) return false;
+            const lastPurchase = new Date(item.lastPurchasedAt);
+            return lastPurchase >= sevenDaysAgo;
+        });
+
+        // Sort by purchaseCount desc
+        const topThree = recentItems.sort((a, b) => (b.purchaseCount || 0) - (a.purchaseCount || 0)).slice(0, 3);
+
+        // If less than 3 recent, fill with older trending items
+        if (topThree.length < 3) {
+            const olderItems = items.filter(item => !recentItems.includes(item))
+                .sort((a, b) => (b.purchaseCount || 0) - (a.purchaseCount || 0))
+                .slice(0, 3 - topThree.length);
+            topThree.push(...olderItems);
+        }
 
         trendingContainer.innerHTML = topThree.map((item, index) => {
             const isUrl = item.image && (item.image.startsWith('http') || item.image.startsWith('https'));
@@ -234,13 +252,23 @@ async function initTrendingItems() {
                 ? `<img src="${item.image}" style="width: 100%; height: 80px; object-fit: contain; border-radius: 8px; margin-bottom: 10px;" onerror="this.src='https://via.placeholder.com/80?text=📦'">` 
                 : `<div style="font-size: 2.5rem; margin-bottom: 10px;">${item.image || '📦'}</div>`;
 
+            // Calculate demand velocity based on recency
+            let velocity = "LOW";
+            if (item.lastPurchasedAt) {
+                const lastPurchase = new Date(item.lastPurchasedAt);
+                const now = new Date();
+                const hoursSince = (now - lastPurchase) / (1000 * 60 * 60);
+                if (hoursSince < 24) velocity = "HIGH";
+                else if (hoursSince < 168) velocity = "MEDIUM"; // 7 days
+            }
+
             return `
                 <div style="background: rgba(255,255,255,0.03); padding: 20px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); text-align: center; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center;">
                     <span style="position: absolute; top: 10px; left: 10px; background: #f1c40f; color: #000; font-size: 0.7rem; font-weight: 900; padding: 2px 8px; border-radius: 5px; z-index: 2;">#${index+1}</span>
                     ${displayMedia}
                     <h4 style="margin: 5px 0 0; font-size: 1rem; color: #fff; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</h4>
                     <p style="color: #2ecc71; font-weight: bold; margin: 5px 0;">$${(item.cost || 0).toLocaleString()}</p>
-                    <div style="font-size: 0.6rem; color: #666; text-transform: uppercase; font-weight: 800;">Demand Velocity: HIGH</div>
+                    <div style="font-size: 0.6rem; color: #666; text-transform: uppercase; font-weight: 800;">Demand Velocity: ${velocity}</div>
                 </div>
             `;
         }).join('');
