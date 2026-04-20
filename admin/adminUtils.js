@@ -1,5 +1,5 @@
 import { db, auth } from "../firebaseConfig.js";
-import { collection, doc, getDocs, getDoc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { collection, doc, getDocs, getDoc, query, where, onSnapshot, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Global listener cleanup state
 export const listeners = {
@@ -221,6 +221,10 @@ export function initAdminUI() {
   el.adminCosmeticsUsername?.addEventListener("input", () => handleUserLookup(el.adminCosmeticsUsername, el.adminCosmeticsUserInfo, null, "cosmetic"));
   el.empUsernameInput?.addEventListener("input", () => handleUserLookup(el.empUsernameInput, el.empUserInfo, el.empSetBtn, "emp"));
   el.adminContractUsername?.addEventListener("input", () => handleUserLookup(el.adminContractUsername, el.adminContractUserInfo, el.adminContractBtn, "contract"));
+  
+  // Setup button click listeners
+  el.adminGiveBtn?.addEventListener("click", () => executeGive(el.adminGiveUsername, el.adminGiveAmount, el.adminUserInfo, "balance", "money"));
+  el.adminGiveBpsBtn?.addEventListener("click", () => executeGive(el.adminGiveBpsUsername, el.adminGiveBpsAmount, el.adminBpsUserInfo, "bpsBalance", "BPS tokens"));
 }
 
 // Execute generic give operation
@@ -235,10 +239,9 @@ export async function executeGive(inputEl, amountEl, infoEl, field, typeLabel) {
     if (snap.empty) return alert("User not found.");
 
     const userDoc = snap.docs[0];
-    const { updateDoc, increment } = await import("https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js");
     const { logHistory } = await import("../historyManager.js");
     
-    await updateDoc(doc(db, "users", userDoc.id), { [field]: (userDoc.data()[field] || 0) + amount });
+    await updateDoc(doc(db, "users", userDoc.id), { [field]: increment(amount) });
     await logHistory(userDoc.id, `Admin gave ${amount} ${typeLabel}`, "admin");
 
     alert(`✅ Success!`);
