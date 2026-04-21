@@ -36,12 +36,17 @@ export function openPinModal(mode, callback, customTitle = null) {
     pendingAction = { mode, callback };
     modal.classList.remove("hidden");
     modal.style.display = "flex";
+
+    // Add keyboard event listener
+    document.addEventListener('keydown', handleKeyDown);
 }
 
 window.closePinModal = function() {
     modal.style.display = "none";
     modal.classList.add("hidden");
     currentInput = "";
+    // Remove keyboard event listener
+    document.removeEventListener('keydown', handleKeyDown);
 };
 
 if (escBtn) {
@@ -52,6 +57,35 @@ function updateDisplay() {
     const dots = "● ".repeat(currentInput.length);
     const blanks = "_ ".repeat(4 - currentInput.length);
     pinDisplay.innerText = dots + blanks;
+}
+
+// Handle keyboard input
+function handleKeyDown(event) {
+    const key = event.key;
+    
+    if (key >= '0' && key <= '9') {
+        event.preventDefault();
+        if (currentInput.length < 4) {
+            currentInput += key;
+            if (currentInput.length === 4) {
+                // Auto-submit on 4th digit
+                setTimeout(processSubmission, 300);
+            }
+            updateDisplay();
+        }
+    } else if (key === 'Backspace') {
+        event.preventDefault();
+        currentInput = currentInput.slice(0, -1);
+        updateDisplay();
+    } else if (key === 'Enter') {
+        event.preventDefault();
+        if (currentInput.length === 4) {
+            processSubmission();
+        }
+    } else if (key === 'Escape') {
+        event.preventDefault();
+        window.closePinModal();
+    }
 }
 
 // Handle Keypad Clicks
