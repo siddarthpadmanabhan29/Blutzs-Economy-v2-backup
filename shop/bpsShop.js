@@ -1,15 +1,15 @@
 // ---------- bpsShop.js (QUOTA OPTIMIZED + SYSTEM UI INTEGRATED) ----------
 console.log("bpsShop.js loaded");
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import { 
  doc, getDoc, updateDoc, collection, getDocs, arrayUnion, addDoc, query, where, increment 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // --- NEW BPS SECURITY IMPORTS ---
-import { openPinModal } from "./securityModal.js";
-import { applyBpsPerk, joinRewardsProgram, cancelRewardsProgram } from "./bpsManager.js";
-import { sendSlackMessage } from "./slackNotifier.js";
-import { logHistory } from "./historyManager.js";
+import { openPinModal } from "../securityModal.js";
+import { applyBpsPerk, joinRewardsProgram, cancelRewardsProgram } from "../bpsManager.js";
+import { sendSlackMessage } from "../slackNotifier.js";
+import { logHistory } from "../historyManager.js";
 
 const bpsContainer = document.getElementById("bps-shop-items");
 

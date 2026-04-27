@@ -1,14 +1,14 @@
 // ---------- inventory.js (INTEGRATED WITH NEW DASHBOARD UI) ----------
 console.log("inventory.js loaded");
 
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import { 
  doc, getDoc, updateDoc, onSnapshot, collection, deleteDoc, increment 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { updateBalanceDisplay } from "./main.js";
-import { logHistory } from "./historyManager.js";
-import { PLANS } from "./membership_plans.js";
-import { sendSlackMessage } from "./slackNotifier.js";
+import { updateBalanceDisplay } from "../main.js";
+import { logHistory } from "../historyManager.js";
+import { PLANS } from "../membership_plans.js";
+import { sendSlackMessage } from "../slackNotifier.js";
 
 const inventoryContainer = document.getElementById("inventory-items");
 const inventoryValueEl = document.getElementById("inventory-value");

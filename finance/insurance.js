@@ -1,10 +1,10 @@
 // ---------- insurance.js (ULTRA-MODERN REDESIGN + SLACK RESTORED) ----------
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import { 
     doc, updateDoc, increment, runTransaction 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { logHistory } from "./historyManager.js";
-import { sendSlackMessage } from "./slackNotifier.js";
+import { logHistory } from "../historyManager.js";
+import { sendSlackMessage } from "../slackNotifier.js";
 
 // UPDATED PRICING CONFIGURATION
 const PRICING = {

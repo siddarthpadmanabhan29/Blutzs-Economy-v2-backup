@@ -7,12 +7,12 @@ import "./firebaseConfig.js";
 // Import app feature modules
 import "./auth.js";
 import "./dashboard.js";
-import "./shop.js";
+import "./shop/shop.js";
 import "./jobs.js";
-import "./inventory.js";
-import "./transfer.js";
+import "./shop/inventory.js";
+import "./finance/transfer.js";
 import "./admin.refactored.js";
-import "./retirement.js";
+import "./finance/retirement.js";
 
 
 // ---------- Global UI Helpers (optional) ----------

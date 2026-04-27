@@ -5,16 +5,16 @@ import { auth, db } from "./firebaseConfig.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { doc, onSnapshot, updateDoc, collection, query, orderBy, limit, getDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
-import { renderSavings } from "./retirement.js"; 
-import { applyInterest, takeOutLoan, repayLoan, getCreditStatus } from "./loan.js"; 
+import { renderSavings } from "./finance/retirement.js"; 
+import { applyInterest, takeOutLoan, repayLoan, getCreditStatus } from "./finance/loan.js"; 
 
 // --- NEW CONTRACT IMPORTS ---
 import { listenForContractOffers, listenForAdminRoster, renderUserContract } from "./contracts.js";
 
 // --- SHOP & COSMETICS IMPORTS FOR QUOTA SAVING ---
-import { renderShop } from "./shop.js";
-import { renderBpsShop } from "./bpsShop.js";
-import { loadCosmetics } from "./cosmetics.js"; 
+import { renderShop } from "./shop/shop.js";
+import { renderBpsShop } from "./shop/bpsShop.js";
+import { loadCosmetics } from "./shop/cosmetics.js"; 
 
 // --- MEMBERSHIP IMPORTS ---
 import { PLANS, checkMembershipBilling, getTierBadge, getNextBillingDate, purchaseMembership, cancelMembership } from "./membership_plans.js";
@@ -39,7 +39,7 @@ import { listenForAdminLottery } from "./admin.refactored.js";
 import { initFineSystem } from "./fines.js";
 
 // --- INSURANCE SYSTEM IMPORT ---
-import { initInsurance } from "./insurance.js";
+import { initInsurance } from "./finance/insurance.js";
 
 // --- NEW BPS SECURITY IMPORTS ---
 import { openPinModal } from "./securityModal.js";

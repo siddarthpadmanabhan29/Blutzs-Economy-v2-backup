@@ -1,15 +1,15 @@
 // ---------- shop.js (QUOTA OPTIMIZED + SYSTEM UI INTEGRATED) ----------
 console.log("shop.js loaded");
 
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import { 
  doc, getDoc, updateDoc, collection, getDocs, addDoc, increment 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { logHistory } from "./historyManager.js";
-import { PLANS, isNextItemFree } from "./membership_plans.js";
-import { sendSlackMessage } from "./slackNotifier.js";
+import { logHistory } from "../historyManager.js";
+import { PLANS, isNextItemFree } from "../membership_plans.js";
+import { sendSlackMessage } from "../slackNotifier.js";
 // NEW: Import the central source of truth for economy math
-import { getLiveMarketRate } from "./economyUtils.js";
+import { getLiveMarketRate } from "../economyUtils.js";
 
 const shopItemsContainer = document.getElementById("shop-items");
 

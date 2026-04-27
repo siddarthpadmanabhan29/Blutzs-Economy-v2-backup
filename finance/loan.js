@@ -1,7 +1,7 @@
 // ---------- loan.js ----------
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import { doc, updateDoc, increment, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { logHistory } from "./historyManager.js";
+import { logHistory } from "../historyManager.js";
 
 /**
  * getCreditStatus

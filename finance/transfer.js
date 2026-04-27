@@ -1,16 +1,16 @@
 // ---------- transfer.js (UNIFIED HUB VERSION - OPTIMIZED) ----------
 console.log("transfer.js loaded");
 
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import { 
     collection, query, where, getDocs, doc, getDoc, runTransaction, addDoc, serverTimestamp, increment 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { updateBalanceDisplay } from "./main.js";
-import { logHistory } from "./historyManager.js";
-import { sendSlackMessage } from "./slackNotifier.js";
+import { updateBalanceDisplay } from "../main.js";
+import { logHistory } from "../historyManager.js";
+import { sendSlackMessage } from "../slackNotifier.js";
 
 // --- Import Hub Sub-Modules ---
-import { initRequests } from "./requests.js";
+import { initRequests } from "../requests.js";
 import { initEscrow } from "./escrow.js";
 
 // ---------- Slack Mention Mapping ----------

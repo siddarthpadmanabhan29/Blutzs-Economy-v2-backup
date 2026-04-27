@@ -1,9 +1,9 @@
 // ---------- escrow.js (Unified Hub Version + Live Timer) ----------
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import { 
     collection, query, where, onSnapshot, doc, runTransaction 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { updateBalanceDisplay } from "./main.js";
+import { updateBalanceDisplay } from "../main.js";
 
 const escrowList = document.getElementById("escrow-list");
 const escrowBadge = document.getElementById("escrow-count-badge");

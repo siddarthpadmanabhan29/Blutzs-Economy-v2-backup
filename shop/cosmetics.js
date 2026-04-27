@@ -1,7 +1,7 @@
 // ---------- cosmetics.js (QUOTA OPTIMIZED + SYSTEM UI INTEGRATED) ----------
 console.log("cosmetics.js loaded");
 
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import {
   doc, getDoc, updateDoc,
   collection, getDocs, addDoc

@@ -1,10 +1,10 @@
 // ---------- retirement.js (CATCH-UP + LIFETIME TRACKER + INSURANCE BOOST + BPS BOOST) ----------
 console.log("retirement.js loaded");
 
-import { db, auth } from "./firebaseConfig.js";
+import { db, auth } from "../firebaseConfig.js";
 import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-import { logHistory } from "./historyManager.js";
-import { PLANS } from "./membership_plans.js";
+import { logHistory } from "../historyManager.js";
+import { PLANS } from "../membership_plans.js";
 
 // ---------- Elements ----------
 const savingsEl = document.getElementById("retirement-savings");
