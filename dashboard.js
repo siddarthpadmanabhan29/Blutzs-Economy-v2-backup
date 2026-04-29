@@ -51,6 +51,7 @@ import { changeBpsPin, checkRewardsBilling } from "./bpsManager.js";
 let unsubUser = null;
 let unsubHistory = null;
 let listenersInitialized = false; 
+let insuranceInitialized = false;
 
 /* =========================================================
     CONNECTION STATUS UI ELEMENTS
@@ -204,6 +205,7 @@ onAuthStateChanged(auth, async (user) => {
     if(dashboard) dashboard.classList.add("hidden");
     currentDashboardData = null;
     listenersInitialized = false; 
+    insuranceInitialized = false;
     
     if (statusDot) {
         statusDot.style.backgroundColor = "#bbb";
@@ -275,7 +277,10 @@ onAuthStateChanged(auth, async (user) => {
     if (typeof renderBpsConverter === "function") renderBpsConverter(currentDashboardData);
     if (typeof renderStatsTeaser === "function") renderStatsTeaser(currentDashboardData);
     if (typeof renderUserContract === "function") renderUserContract(user.uid, currentDashboardData);
-    if (typeof initInsurance === "function") initInsurance(currentDashboardData);
+    if (!insuranceInitialized && typeof initInsurance === "function") {
+        initInsurance(currentDashboardData);
+        insuranceInitialized = true;
+    }
 
   }, (error) => {
     if (statusDot) {
