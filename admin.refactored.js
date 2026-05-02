@@ -19,12 +19,16 @@ export async function checkAdminAccess() {
 export { listenForAdminLottery, listenToGlobalTickets, listenForAdminRoster } from "./admin/adminLottery.js";
 
 // ========== MAIN ADMIN INITIALIZATION ==========
+let adminInitialized = false;
+
 export async function initializeAdminPanel() {
+  if (adminInitialized) return;
+  adminInitialized = true;
+
   try {
     const adminPanel = document.getElementById("admin-panel");
     const openAdminBtn = document.getElementById("open-admin");
     
-    // Check if panel exists
     if (!adminPanel && !openAdminBtn) {
       console.warn("Admin panel elements not found");
       return;
@@ -41,7 +45,7 @@ export async function initializeAdminPanel() {
     const { initMembershipsUI, loadRenewalRequests } = await import("./admin/adminMembers.js");
     const { initCosmeticsUI } = await import("./admin/adminCosmetics.js");
     const { initContractsUI, initEmploymentUI } = await import("./admin/adminContracts.js");
-    const { initShopUI } = await import("./admin/adminShop.js");
+    const { initShopUI, initSubscriptionShopUI } = await import("./admin/adminShop.js");
 
     console.log("✅ All modules imported");
 
@@ -49,6 +53,7 @@ export async function initializeAdminPanel() {
     initAdminUI();
     initEconomyUI();
     initShopUI();
+    initSubscriptionShopUI();
     initMembershipsUI();
     initFinesUI();
     initCosmeticsUI();
@@ -59,9 +64,6 @@ export async function initializeAdminPanel() {
 
     // Setup real-time listeners (Firestore subscriptions)
     listenToEconomyStats();
-    listenForAdminLottery();
-    listenToGlobalTickets();
-    listenForAdminRoster();
     listenForAppeals();
     listenToAllEscrow();
     loadRenewalRequests();
@@ -73,18 +75,3 @@ export async function initializeAdminPanel() {
     alert("Error initializing admin panel. Check console for details.");
   }
 }
-
-// ========== EVENT LISTENERS ==========
-document.addEventListener("DOMContentLoaded", () => {
-  const openAdminBtn = document.getElementById("open-admin");
-  
-  if (openAdminBtn) {
-    openAdminBtn.addEventListener("click", initializeAdminPanel);
-  }
-
-  // Initialize if panel already visible
-  const adminPanel = document.getElementById("admin-panel");
-  if (adminPanel && !adminPanel.classList.contains("hidden")) {
-    initializeAdminPanel();
-  }
-});

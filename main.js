@@ -8,7 +8,7 @@ import "./firebaseConfig.js";
 import "./auth.js";
 import "./dashboard.js";
 import "./shop/shop.js";
-import "./jobs.js";
+import "./shop/subscriptionShop.js";
 import "./shop/inventory.js";
 import "./finance/transfer.js";
 import "./admin.refactored.js";

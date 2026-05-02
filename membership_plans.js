@@ -7,12 +7,14 @@ import { sendSlackMessage } from "./slackNotifier.js";
 
 /**
  * SOURCE OF TRUTH: Configuration for all tiers.
+ * UPDATED: activeTaxRate integrated for Subscription Shop logic.
  */
 export const PLANS = {
     standard: {
         label: "Standard",
         price: 0,
         taxRate: 0.10,
+        activeTaxRate: 0.10, // 10% Tax on Subscriptions
         interest: 0.03,
         cashback: 0,
         bpsPerPurchase: 5,
@@ -25,6 +27,7 @@ export const PLANS = {
         label: "Basic",
         price: 100000,
         taxRate: 0.08,
+        activeTaxRate: 0.08, // 8% Tax on Subscriptions
         interest: 0.04,
         cashback: 0.01,
         bpsPerPurchase: 5,
@@ -37,6 +40,7 @@ export const PLANS = {
         label: "Premium",
         price: 300000,
         taxRate: 0.04,
+        activeTaxRate: 0.04, // 4% Tax on Subscriptions
         interest: 0.05,
         cashback: 0.02,
         bpsPerPurchase: 10,
@@ -49,6 +53,7 @@ export const PLANS = {
         label: "Platinum",
         price: 500000,
         taxRate: 0.00,
+        activeTaxRate: 0.00, // 0% Tax (Tax Exempt)
         interest: 0.05,
         cashback: 0.03,
         bpsPerPurchase: 20,
@@ -100,7 +105,8 @@ export async function checkMembershipBilling(userId, userData) {
                 membershipLevel: "standard",
                 trialExpiration: null, 
                 shopOrderCount: 0,
-                membershipLockedPrice: null
+                membershipLockedPrice: null,
+                activeTaxRate: PLANS.standard.activeTaxRate
             });
             alert("Your trial has expired. Reverting to Standard tier.");
             const username = userData.username || 'Unknown user';
@@ -140,7 +146,8 @@ export async function checkMembershipBilling(userId, userData) {
         if ((userData.balance || 0) >= cost) {
             const updatePayload = {
                 balance: increment(-cost),
-                membershipLastPaid: now.toISOString()
+                membershipLastPaid: now.toISOString(),
+                activeTaxRate: PLANS[tier].activeTaxRate
             };
 
             if (hasPriceLock && !userData.membershipLockedPrice) {
@@ -158,7 +165,8 @@ export async function checkMembershipBilling(userId, userData) {
             await updateDoc(doc(db, "users", userId), {
                 membershipLevel: "standard",
                 shopOrderCount: 0,
-                membershipLockedPrice: null
+                membershipLockedPrice: null,
+                activeTaxRate: PLANS.standard.activeTaxRate
             });
             alert("Membership renewal failed (insufficient funds). Reverting to Standard.");
             sendSlackMessage(`⚠️ *Membership Cancelled:* ${username} failed to renew ${tier.toUpperCase()} membership (Insufficient Funds). Reverted to Standard.\n*Time:* ${timestamp}`);
@@ -189,13 +197,10 @@ export async function purchaseMembership(userId, newTier, userData, oldTier = nu
     const cost = plan.price;
 
    if (currentTier === 'standard') {
-        // MATCHES: New Subscriber: bigarj99 subscribed to PLATINUM membership for $500,000.
         sendSlackMessage(`💥 *New Subscriber:* ${username} subscribed to ${newTier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
     } else if (plan.price > oldPlan.price) {
-        // MATCHES: Tier Upgrade
         sendSlackMessage(`🚀 *Tier Upgrade:* ${username} upgraded from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()} ($${cost.toLocaleString()}).\n*Time:* ${timestamp}`);
     } else if (plan.price < oldPlan.price) {
-        // MATCHES: Tier Downgrade
         sendSlackMessage(`📉 *Tier Downgrade:* ${username} downgraded from ${currentTier.toUpperCase()} to ${newTier.toUpperCase()} ($${cost.toLocaleString()}).\n*Time:* ${timestamp}`);
     } else {
         sendSlackMessage(`🟢 *Tier Refresh:* ${username} updated their ${newTier.toUpperCase()} membership.\n*Time:* ${timestamp}`);
@@ -203,7 +208,8 @@ export async function purchaseMembership(userId, newTier, userData, oldTier = nu
 
     const updatePayload = {
         membershipLevel: newTier,
-        membershipLastPaid: new Date().toISOString()
+        membershipLastPaid: new Date().toISOString(),
+        activeTaxRate: plan.activeTaxRate
     };
 
     if (userData.insurance?.activePackages?.includes("darkblue_a")) {
@@ -223,12 +229,12 @@ export async function cancelMembership(userId, userData, previousTier = null) {
     await updateDoc(doc(db, "users", userId), {
         membershipLevel: "standard",
         shopOrderCount: 0,
-        membershipLockedPrice: null
+        membershipLockedPrice: null,
+        activeTaxRate: PLANS.standard.activeTaxRate
     });
 
     const username = userData.username || 'Unknown user';
     if (tierToReport !== 'standard') {
-    // MATCHES: bigarj99 cancelled their BASIC membership. Reverted to Standard.
-    sendSlackMessage(`🚫 *Membership Cancelled:* ${username} cancelled their ${tierToReport.toUpperCase()} membership. Reverted to Standard.\n*Time:* ${timestamp}`);
-}
+        sendSlackMessage(`🚫 *Membership Cancelled:* ${username} cancelled their ${tierToReport.toUpperCase()} membership. Reverted to Standard.\n*Time:* ${timestamp}`);
+    }
 }

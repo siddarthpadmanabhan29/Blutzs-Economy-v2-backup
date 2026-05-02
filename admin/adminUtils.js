@@ -131,6 +131,16 @@ export function getDOMElements() {
     newItemImage: document.getElementById("new-item-image"),
     adminShopInventory: document.getElementById("admin-shop-inventory"),
     
+    // Subscription Shop
+    addSubscriptionBtn: document.getElementById("add-subscription-btn"),
+    newSubscriptionName: document.getElementById("new-subscription-name"),
+    newSubscriptionDesc: document.getElementById("new-subscription-desc"),
+    newSubscriptionCost: document.getElementById("new-subscription-cost"),
+    newSubscriptionInterval: document.getElementById("new-subscription-interval"),
+    newSubscriptionType: document.getElementById("new-subscription-type"),
+    newSubscriptionImage: document.getElementById("new-subscription-image"),
+    adminSubscriptionInventory: document.getElementById("admin-subscription-inventory"),
+    
     // Money/BPS transfers
     adminGiveUsername: document.getElementById("admin-give-username"),
     adminGiveAmount: document.getElementById("admin-give-amount"),

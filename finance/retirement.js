@@ -21,6 +21,7 @@ const messageEl = document.getElementById("retirement-message");
 let cachedUserData = null; 
 let retirementBusy = false; 
 let retirementChart = null; 
+let catchUpAttemptedThisSession = false; // QUOTA PROTECTION: Prevents infinite recursion loop
 
 // ---------- Helper: Calculate Remaining Boost Days ----------
 function getRemainingBoostDays(expiryDateString) {
@@ -114,8 +115,10 @@ function renderSavings(userData) {
         toggleInputs(true); 
     }
     
-    // Trigger interest catch up logic
-    applyInterestCatchUp(userData, activeInterestRate);
+    // QUOTA PROTECTION: Only trigger catch up if not already attempted in this session
+    if (!catchUpAttemptedThisSession) {
+        applyInterestCatchUp(userData, activeInterestRate);
+    }
 }
 
 function toggleInputs(disabled) {
@@ -272,13 +275,20 @@ withdrawBtn?.addEventListener("click", async () => {
 ========================================================= */
 async function applyInterestCatchUp(userData, activeRate) {
     if (!userData?.retirementSavings || userData.retirementSavings <= 0) return;
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || catchUpAttemptedThisSession) return;
+
+    // Immediately mark as attempted to block recursive triggers
+    catchUpAttemptedThisSession = true;
 
     // Use current time if lastInterestApplied is missing to avoid huge fake payouts
     const lastAppliedRaw = userData.lastInterestApplied;
     if (!lastAppliedRaw) {
         const userRef = doc(db, "users", auth.currentUser.uid);
-        await updateDoc(userRef, { lastInterestApplied: new Date().toISOString() });
+        try {
+            await updateDoc(userRef, { lastInterestApplied: new Date().toISOString() });
+        } catch (e) {
+            console.error("Initial interest timestamp failed:", e);
+        }
         return;
     }
 
@@ -313,6 +323,7 @@ async function applyInterestCatchUp(userData, activeRate) {
             );
         } catch (err) {
             console.error("Interest catch-up failed:", err);
+            // If it fails (likely permissions), the session flag is already true, stopping the loop.
         }
     }
 }

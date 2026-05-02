@@ -33,7 +33,7 @@ export function listenForAdminLottery() {
 
   // Setup draw trigger
   if (el.triggerLottoBtn) {
-    el.triggerLottoBtn.addEventListener("click", triggerLotteryDraw);
+    el.triggerLottoBtn.onclick = triggerLotteryDraw;
   }
 }
 
