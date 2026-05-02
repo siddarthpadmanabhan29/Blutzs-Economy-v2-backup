@@ -424,10 +424,10 @@ function resetBtn(btn) {
 
 auth.onAuthStateChanged(user => { if(user) loadBpsShop(); });
 
-setInterval(() => {
- if (currentUserData) {
-   renderBpsShop();
- }
-}, 10000);
+// setInterval(() => {
+//  if (currentUserData) {
+//    renderBpsShop();
+//  }
+// }, 10000);
 
 export { loadBpsShop, renderBpsShop };

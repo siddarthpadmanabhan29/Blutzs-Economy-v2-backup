@@ -3,7 +3,7 @@ console.log("subscriptionShop.js loaded");
 
 import { db, auth } from "../firebaseConfig.js";
 import { 
-  doc, getDoc, updateDoc, collection, getDocs, addDoc, increment, where, query, runTransaction 
+  doc, getDoc, updateDoc, collection, getDocs, addDoc, increment, where, query, runTransaction, deleteDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "../historyManager.js";
 import { PLANS, isNextItemFree } from "../membership_plans.js";
@@ -162,7 +162,33 @@ function renderUserSubscriptions() {
     if (!item) return;
 
     const nextBillingDate = new Date(subscription.nextBillingDate);
-    const daysUntilRenewal = Math.ceil((nextBillingDate - new Date()) / (1000 * 60 * 60 * 24));
+    const now = new Date();
+    const msUntilRenewal = nextBillingDate - now;
+    const daysUntilRenewal = Math.ceil(msUntilRenewal / (1000 * 60 * 60 * 24));
+    const hoursUntilRenewal = msUntilRenewal / (1000 * 60 * 60);
+    const canClip = hoursUntilRenewal <= 24 && hoursUntilRenewal > 0;
+    const hasClipped = !!subscription.clippedCoupon;
+
+    // Build coupon section HTML
+    let couponSectionHTML = "";
+    if (hasClipped) {
+      couponSectionHTML = `
+        <div style="margin-top: 8px; background: rgba(142,68,173,0.15); border: 1px solid #8e44ad; padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; color: #a29bfe; font-weight: 800;">
+          🎟️ ${subscription.clippedCoupon.discountValue}% OFF COUPON CLIPPED 🔒
+          <div style="font-size: 0.65rem; color: #888; font-weight: 400; margin-top: 2px;">Applies on next billing</div>
+        </div>`;
+    } else if (canClip) {
+      couponSectionHTML = `
+        <button class="clip-coupon-btn" data-sub-id="${subscription.id}"
+          style="margin-top: 8px; background: #8e44ad; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold; display: block;">
+          🎟️ Clip Coupon
+        </button>`;
+    } else {
+      couponSectionHTML = `
+        <div style="margin-top: 8px; font-size: 0.7rem; color: #555; font-style: italic;">
+          🔒 Coupon slot opens 1 day before renewal
+        </div>`;
+    }
 
     const subscriptionCard = document.createElement("div");
     subscriptionCard.style.cssText = `
@@ -172,7 +198,7 @@ function renderUserSubscriptions() {
       padding: 15px;
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       gap: 15px;
     `;
 
@@ -185,9 +211,10 @@ function renderUserSubscriptions() {
         <p style="margin: 5px 0 0 0; font-size: 0.75rem; color: #888;">
           Next charge: ${nextBillingDate.toLocaleDateString()} (in ${daysUntilRenewal} days)
         </p>
+        ${couponSectionHTML}
       </div>
       <button class="cancel-subscription-btn" data-subscription-id="${subscription.id}" data-item-id="${item.id}"
-        style="background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; white-space: nowrap;">
+        style="background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; white-space: nowrap; flex-shrink: 0;">
         Cancel Sub
       </button>
     `;
@@ -196,6 +223,7 @@ function renderUserSubscriptions() {
   });
 
   attachCancelListeners();
+  attachClipCouponListeners();
 }
 
 /**
@@ -218,6 +246,126 @@ function attachCancelListeners() {
       await cancelSubscription(btn.dataset.subscriptionId, btn.dataset.itemId, btn);
     });
   });
+}
+
+/**
+ * Attach clip coupon button listeners
+ */
+function attachClipCouponListeners() {
+  document.querySelectorAll(".clip-coupon-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await openCouponClipModal(btn.dataset.subId);
+    });
+  });
+}
+
+/**
+ * Show modal of available coupons to clip to a subscription
+ */
+async function openCouponClipModal(subscriptionId) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+    const inventoryRef = collection(db, "users", user.uid, "inventory");
+    const couponSnap = await getDocs(query(inventoryRef, where("type", "==", "coupon")));
+
+    if (couponSnap.empty) {
+      alert("You have no coupons in your inventory. Purchase one from the BPS shop first!");
+      return;
+    }
+
+    const coupons = [];
+    couponSnap.forEach(d => coupons.push({ id: d.id, ...d.data() }));
+
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.85); z-index: 3000; display: flex;
+      align-items: center; justify-content: center; backdrop-filter: blur(5px);
+    `;
+
+    modal.innerHTML = `
+      <div style="background: #1a1a1a; border: 2px solid #8e44ad; border-radius: 16px; padding: 25px; width: 90%; max-width: 420px;">
+        <h3 style="color: #8e44ad; margin: 0 0 5px 0;">🎟️ Clip a Coupon</h3>
+        <p style="color: #888; font-size: 0.8rem; margin: 0 0 20px 0;">
+          Select a coupon to lock to this subscription. Once clipped it cannot be undone or used elsewhere.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+          ${coupons.map(c => `
+            <button class="select-coupon-btn" data-inventory-id="${c.id}" data-discount="${c.discountValue}"
+              style="background: rgba(142,68,173,0.1); border: 1px solid #8e44ad; border-radius: 8px;
+              padding: 12px 15px; color: #fff; cursor: pointer; text-align: left; font-size: 0.85rem; font-weight: bold;">
+              🎟️ ${c.discountValue}% Off Coupon
+            </button>
+          `).join('')}
+        </div>
+        <button id="close-clip-modal" style="width: 100%; background: #333; color: #fff; border: none;
+          padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold;">
+          Cancel
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById("close-clip-modal").onclick = () => modal.remove();
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+
+    modal.querySelectorAll(".select-coupon-btn").forEach(btn => {
+      btn.onclick = async () => {
+        const inventoryId = btn.dataset.inventoryId;
+        const discountValue = Number(btn.dataset.discount);
+
+        if (!confirm(`Clip ${discountValue}% off coupon to this subscription? This is permanent and cannot be undone.`)) return;
+
+        modal.remove();
+        await clipCouponToSubscription(subscriptionId, inventoryId, discountValue);
+      };
+    });
+
+  } catch (err) {
+    console.error("Coupon modal error:", err);
+    alert("Failed to load coupons: " + err.message);
+  }
+}
+
+/**
+ * Clip a coupon to a subscription — removes from inventory and locks to sub
+ */
+async function clipCouponToSubscription(subscriptionId, inventoryId, discountValue) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+    const subRef = doc(db, "users", user.uid, "subscriptions", subscriptionId);
+    const inventoryItemRef = doc(db, "users", user.uid, "inventory", inventoryId);
+
+    // Remove from inventory immediately — coupon is now locked to sub
+    await deleteDoc(inventoryItemRef);
+
+    // Lock coupon to subscription
+    await updateDoc(subRef, {
+      clippedCoupon: { inventoryId, discountValue },
+      couponClippedAt: new Date().toISOString()
+    });
+
+    await logHistory(user.uid, `Clipped ${discountValue}% coupon to subscription (locked)`, "usage");
+
+    alert(`✅ ${discountValue}% coupon clipped and locked! It will apply on your next billing.`);
+
+    // Update local state and re-render
+    userActiveSubscriptions = userActiveSubscriptions.map(s =>
+      s.id === subscriptionId
+        ? { ...s, clippedCoupon: { inventoryId, discountValue }, couponClippedAt: new Date().toISOString() }
+        : s
+    );
+    renderUserSubscriptions();
+
+  } catch (err) {
+    console.error("Clip coupon error:", err);
+    alert("Failed to clip coupon: " + err.message);
+  }
 }
 
 /**
@@ -254,9 +402,29 @@ async function subscribeToItem(itemId, btnElement) {
     const discountedPrice = activeDiscount > 0 ? Math.floor(basePrice * (1 - activeDiscount)) : basePrice;
     const userTaxRate = Number(userData.activeTaxRate !== undefined ? userData.activeTaxRate : 0.10);
     const taxAmount = Math.floor(discountedPrice * userTaxRate);
-    const finalCost = discountedPrice + taxAmount;
-    
+    let finalCost = discountedPrice + taxAmount;
+
     const userBalance = Number(userData.balance || 0);
+
+    // Check for coupons to apply on first charge
+    let selectedCoupon = null;
+    const inventoryRef = collection(db, "users", user.uid, "inventory");
+    const couponSnap = await getDocs(query(inventoryRef, where("type", "==", "coupon")));
+
+    if (!couponSnap.empty) {
+      const coupons = [];
+      couponSnap.forEach(d => coupons.push({ id: d.id, ...d.data() }));
+      const couponList = coupons.map((c, i) => `${i + 1}. ${c.discountValue}% off`).join('\n');
+      const choice = prompt(`You have coupons available:\n${couponList}\n\nEnter the number to apply one to this first charge, or cancel to skip:`);
+      if (choice !== null) {
+        const index = parseInt(choice) - 1;
+        if (index >= 0 && index < coupons.length) {
+          selectedCoupon = coupons[index];
+          const couponDiscount = Math.floor(finalCost * (selectedCoupon.discountValue / 100));
+          finalCost = finalCost - couponDiscount;
+        }
+      }
+    }
 
     if (userBalance < finalCost) {
       alert(`Insufficient funds! Total cost with tax is $${finalCost.toLocaleString()}`);
@@ -288,30 +456,39 @@ async function subscribeToItem(itemId, btnElement) {
     await runTransaction(db, async (transaction) => {
         const uSnap = await transaction.get(userRef);
         const currentBalance = Number(uSnap.data().balance || 0);
-  
-     if (currentBalance < finalCost) throw new Error("Insufficient funds at moment of purchase.");
-      transaction.set(subscriptionsRef, {
-        itemId: itemId,
-        itemName: itemData.name,                
-        cost: basePrice, // Store base price for future tax calculations
-        status: "active",
-        subscribedAt: new Date().toISOString(),
-        nextBillingDate: nextBillingDate.toISOString(),
-        chargeCount: 1,
-        initialTaxPaid: userTaxRate,
-        renewalInterval: itemData.renewalInterval,
-        renewalType: itemData.renewalType 
-      });
 
-      transaction.update(userRef, {
-        balance: increment(-finalCost)
-      });
+        if (currentBalance < finalCost) throw new Error("Insufficient funds at moment of purchase.");
 
-      transaction.update(itemRef, {
-        subscriberCount: increment(1),
-        totalRevenue: increment(finalCost),
-        lastSubscribedAt: new Date().toISOString()
-      });
+        // If coupon was selected, delete it from inventory inside the transaction
+        if (selectedCoupon) {
+          const couponRef = doc(db, "users", user.uid, "inventory", selectedCoupon.id);
+          transaction.delete(couponRef);
+        }
+
+        transaction.set(subscriptionsRef, {
+          itemId: itemId,
+          itemName: itemData.name,
+          cost: basePrice,
+          status: "active",
+          subscribedAt: new Date().toISOString(),
+          nextBillingDate: nextBillingDate.toISOString(),
+          chargeCount: 1,
+          initialTaxPaid: userTaxRate,
+          renewalInterval: itemData.renewalInterval,
+          renewalType: itemData.renewalType,
+          clippedCoupon: null,
+          couponUsedAt: selectedCoupon ? new Date().toISOString() : null
+        });
+
+        transaction.update(userRef, {
+          balance: increment(-finalCost)
+        });
+
+        transaction.update(itemRef, {
+          subscriberCount: increment(1),
+          totalRevenue: increment(finalCost),
+          lastSubscribedAt: new Date().toISOString()
+        });
     });
 
     await logHistory(user.uid, `Subscribed to ${itemData.name}: Paid $${finalCost.toLocaleString()} (Tax included)`, "subscription");
@@ -326,14 +503,16 @@ async function subscribeToItem(itemId, btnElement) {
     // Update local state without re-fetching
     localUserData.balance -= finalCost;
     userActiveSubscriptions.push({
-    id: subscriptionsRef.id,
-    itemId: itemId,
-    itemName: itemData.name,
-    cost: basePrice,
-    status: "active",
-    nextBillingDate: nextBillingDate.toISOString(),
-    renewalInterval: itemData.renewalInterval,
-    renewalType: itemData.renewalType
+      id: subscriptionsRef.id,
+      itemId: itemId,
+      itemName: itemData.name,
+      cost: basePrice,
+      status: "active",
+      nextBillingDate: nextBillingDate.toISOString(),
+      renewalInterval: itemData.renewalInterval,
+      renewalType: itemData.renewalType,
+      clippedCoupon: null,
+      couponUsedAt: selectedCoupon ? new Date().toISOString() : null
     });
     renderSubscriptionShop();
     renderUserSubscriptions();

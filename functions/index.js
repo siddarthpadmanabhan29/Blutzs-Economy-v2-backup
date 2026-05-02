@@ -83,10 +83,19 @@ exports.processSubscriptionRenewals = onSchedule(
             const taxAmount = Math.floor(basePrice * userTaxRate);
             const finalRenewalCost = basePrice + taxAmount;
 
+            // Check for clipped coupon and apply discount
+            let finalChargeAmount = finalRenewalCost;
+            const clippedCoupon = subData.clippedCoupon || null;
+            if (clippedCoupon && clippedCoupon.discountValue) {
+              const couponDiscount = Math.floor(finalRenewalCost * (clippedCoupon.discountValue / 100));
+              finalChargeAmount = finalRenewalCost - couponDiscount;
+              logger.info(`Coupon applied: ${clippedCoupon.discountValue}% off. Original: $${finalRenewalCost}, After: $${finalChargeAmount}`);
+            }
+
             const userBalance = Number(userData.balance || 0);
 
-            // 1. Check Funds (Price + Tier Tax)
-            if (userBalance < finalRenewalCost) {
+            // 1. Check Funds (Price + Tier Tax + Coupon Applied)
+            if (userBalance < finalChargeAmount) {
               transaction.update(subRef, {
                 lastRenewalAttempt: nowIso,
                 renewalFailed: true,
@@ -106,7 +115,7 @@ exports.processSubscriptionRenewals = onSchedule(
 
             // 3. Commit Renewal
             transaction.update(userRef, {
-              balance: admin.firestore.FieldValue.increment(-finalRenewalCost),
+              balance: admin.firestore.FieldValue.increment(-finalChargeAmount),
             });
 
             transaction.update(subRef, {
@@ -114,12 +123,14 @@ exports.processSubscriptionRenewals = onSchedule(
               chargeCount: admin.firestore.FieldValue.increment(1),
               lastChargedAt: nowIso,
               renewalFailed: false,
-              lastPaidAmount: finalRenewalCost,
-              taxRateAtRenewal: userTaxRate
+              lastPaidAmount: finalChargeAmount,
+              taxRateAtRenewal: userTaxRate,
+              clippedCoupon: null,
+              couponUsedAt: clippedCoupon ? nowIso : null
             });
 
             transaction.update(itemSnap.ref, {
-              totalRevenue: admin.firestore.FieldValue.increment(finalRenewalCost),
+              totalRevenue: admin.firestore.FieldValue.increment(finalChargeAmount),
               lastChargeAt: nowIso,
             });
 

@@ -236,11 +236,28 @@ async function useItem(itemId, btnElement) {
 
    // --- COUPON LOGIC ---
    if (itemData.type === "coupon") {
-     await updateDoc(userRef, { activeDiscount: itemData.discountValue });
-     await logHistory(user.uid, `Activated Coupon: ${itemData.name}`, "usage");
+     const choice = confirm(
+       `How do you want to use this ${itemData.discountValue}% coupon?\n\n` +
+       `OK = Use on Regular Shop (activates discount now)\n` +
+       `Cancel = Keep in inventory to clip to a Subscription`
+     );
+
+     if (!choice) {
+       // User chose to keep it for subscription clipping — do nothing, leave in inventory
+       if (btnElement) {
+         btnElement.disabled = false;
+         btnElement.textContent = "Use";
+         btnElement.style.opacity = "1";
+       }
+       return;
+     }
+
+     // Activate for regular shop
+     await updateDoc(userRef, { activeDiscount: itemData.discountValue / 100 });
+     await logHistory(user.uid, `Activated ${itemData.discountValue}% Coupon for regular shop`, "usage");
      await deleteDoc(itemRef);
-     alert(`✅ Coupon Activated!`);
-     sendSlackMessage(`🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Type:* Coupon`);
+     alert(`✅ ${itemData.discountValue}% Coupon Activated for your next regular shop purchase!`);
+     sendSlackMessage(`🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* ${itemData.name} \n*Type:* Coupon (Regular Shop)`);
      return; 
    }
 
