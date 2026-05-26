@@ -1,5 +1,5 @@
 import { db } from "../firebaseConfig.js";
-import { collection, doc, getDocs, updateDoc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, updateDoc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "../historyManager.js";
 import { sendSlackMessage } from "../slackNotifier.js";
 import { getDOMElements, handleUserLookup } from "./adminUtils.js";
@@ -168,8 +168,6 @@ export function loadRenewalRequests() {
 }
 
 function attachRenewalListeners() {
-  const { doc: docRef, getDoc, updateDoc: updateDocFn } = window;
-  
   document.querySelectorAll(".approve-renew").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.dataset.id;
