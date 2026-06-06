@@ -58,6 +58,34 @@ export async function loadSubscriptionShop() {
 /**
  * Render available subscription items
  */
+function calculateSubscriptionPricing(basePrice, taxRate = 0.10, activeDiscount = 0, couponDiscountPercent = 0) {
+  const numericBasePrice = Number(basePrice || 0);
+  const numericTaxRate = Number(taxRate || 0.10);
+  const numericActiveDiscount = Number(activeDiscount || 0);
+  const numericCouponDiscount = Number(couponDiscountPercent || 0);
+
+  const discountedBase = numericActiveDiscount > 0
+    ? Math.floor(numericBasePrice * (1 - numericActiveDiscount))
+    : numericBasePrice;
+
+  const taxAmount = Math.floor(discountedBase * numericTaxRate);
+  let finalCost = discountedBase + taxAmount;
+
+  if (numericCouponDiscount > 0) {
+    finalCost = Math.max(0, finalCost - Math.floor(finalCost * (numericCouponDiscount / 100)));
+  }
+
+  return {
+    basePrice: numericBasePrice,
+    discountedBase,
+    taxAmount,
+    finalCost,
+    taxRate: numericTaxRate,
+    activeDiscount: numericActiveDiscount,
+    couponDiscountPercent: numericCouponDiscount
+  };
+}
+
 function renderSubscriptionShop() {
   if (!subscriptionItemsContainer) return;
 
@@ -71,14 +99,12 @@ function renderSubscriptionShop() {
 
   const userBalance = Number(localUserData?.balance || 0);
   const activeDiscount = Number(localUserData?.activeDiscount || 0);
+  const userTaxRate = Number(localUserData?.activeTaxRate !== undefined ? localUserData.activeTaxRate : 0.10);
 
   currentSubscriptionItems.forEach((item) => {
     const originalCost = Number(item.cost);
-    
-    let discountedPrice = originalCost;
-    if (activeDiscount > 0) {
-      discountedPrice = Math.floor(originalCost * (1 - activeDiscount));
-    }
+    const pricing = calculateSubscriptionPricing(originalCost, userTaxRate, activeDiscount);
+    const firstCharge = pricing.finalCost;
 
     const renewalText = item.renewalType === "days" 
       ? `Renews every ${item.renewalInterval} days` 
@@ -87,7 +113,7 @@ function renderSubscriptionShop() {
     // Check if user already subscribed to this item
     const alreadySubscribed = userActiveSubscriptions.some(sub => sub.itemId === item.id);
     
-    const affordable = userBalance >= discountedPrice;
+    const affordable = userBalance >= firstCharge;
     const isExpired = localUserData?.expirationDate && new Date(localUserData.expirationDate) < new Date();
     const isDisabled = !affordable || isExpired || alreadySubscribed;
 
@@ -125,7 +151,7 @@ function renderSubscriptionShop() {
           <div style="margin: 4px 0;">💚 ${renewalText}</div>
           <div style="margin: 4px 0; color: #f1c40f;">
             ${activeDiscount > 0 ? `<span style="text-decoration: line-through; opacity: 0.6;">$${originalCost.toLocaleString()}</span> ` : ''}
-            First charge: $${discountedPrice.toLocaleString()}
+            First charge: $${firstCharge.toLocaleString()}
           </div>
         </div>
       </div>
@@ -399,10 +425,8 @@ async function subscribeToItem(itemId, btnElement) {
 
     const basePrice = Number(itemData.cost);
     const activeDiscount = Number(localUserData?.activeDiscount || 0);
-    const discountedPrice = activeDiscount > 0 ? Math.floor(basePrice * (1 - activeDiscount)) : basePrice;
     const userTaxRate = Number(userData.activeTaxRate !== undefined ? userData.activeTaxRate : 0.10);
-    const taxAmount = Math.floor(discountedPrice * userTaxRate);
-    let finalCost = discountedPrice + taxAmount;
+    let finalCost = calculateSubscriptionPricing(basePrice, userTaxRate, activeDiscount).finalCost;
 
     const userBalance = Number(userData.balance || 0);
 
@@ -420,8 +444,7 @@ async function subscribeToItem(itemId, btnElement) {
         const index = parseInt(choice) - 1;
         if (index >= 0 && index < coupons.length) {
           selectedCoupon = coupons[index];
-          const couponDiscount = Math.floor(finalCost * (selectedCoupon.discountValue / 100));
-          finalCost = finalCost - couponDiscount;
+          finalCost = calculateSubscriptionPricing(basePrice, userTaxRate, activeDiscount, selectedCoupon.discountValue).finalCost;
         }
       }
     }
