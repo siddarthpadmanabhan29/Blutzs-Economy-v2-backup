@@ -79,6 +79,7 @@
                 <li class="nav-item" data-tab="tab-membership">💎 <span>Membership</span></li>
                 <li class="nav-item" data-tab="tab-insurance">🛡️ <span>Insurance Hub</span></li>
                 <li class="nav-item" data-tab="tab-shop">🛒 <span>Marketplace</span></li>
+                <li class="nav-item" data-tab="tab-stock">📈 <span>Stock Market</span></li>
                 <li class="nav-item" data-tab="tab-lottery">🎰 <span>Mega Lottery</span></li>
                 <li class="nav-item" data-tab="tab-history">📜 <span>Activity Log</span></li>
                 <li id="open-admin" class="nav-item hidden" data-tab="tab-admin" style="color: #e74c3c; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 20px;">🔑 <span>Admin Panel</span></li>
@@ -622,6 +623,26 @@
                 </div>
             </section>
 
+            <section id="tab-stock" class="tab-content">
+                <div class="section-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                        <div>
+                            <h3 style="color: #2ecc71; margin: 0;">📈 Stock Market</h3>
+                            <p style="font-size: 0.85rem; color: #aaa; margin: 6px 0 0 0;">Buy and sell company shares. Prices move with the market, so your gains or losses depend on current market momentum.</p>
+                        </div>
+                        <span style="background: rgba(46, 204, 113, 0.08); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.2); border-radius: 999px; padding: 6px 10px; font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Live market</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; align-items: start;">
+                        <div id="stock-market-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;"></div>
+                        <div class="section-card" style="margin: 0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                            <h4 style="margin: 0 0 8px 0; color: #f1c40f;">📊 Your Portfolio</h4>
+                            <p style="margin: 0 0 12px 0; color: #aaa; font-size: 0.8rem;">Your shares update live with market price changes.</p>
+                            <div id="stock-portfolio-list" style="display: grid; gap: 10px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section id="tab-lottery" class="tab-content">
     <div class="section-card" style="border: 2px solid #f1c40f; max-width: 600px; margin: 0 auto; background: #1a1a1a;">
         
@@ -747,6 +768,25 @@
                 <strong style="color: #2ecc71; font-size: 0.9rem;">ENCRYPTED</strong>
             </div>
         </div>
+
+        <div class="admin-section" style="border: 1px solid #3498db; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+        <span style="font-size: 1.2rem;">📈</span>
+        <h3 style="color: #3498db; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Stock Market Management</h3>
+    </div>
+    <p style="font-size: 0.75rem; color: #888; margin: 0 0 20px 0;">Add companies to the market and tie each one to an owner account. Users can then buy or sell shares based on the live market price.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px;">
+        <input id="new-company-name" type="text" placeholder="Company name" style="background: #111; border: 1px solid #333; color: #fff; padding: 10px; border-radius: 8px; font-size: 0.85rem;">
+        <input id="new-company-owner" type="text" placeholder="Owner username" style="background: #111; border: 1px solid #333; color: #fff; padding: 10px; border-radius: 8px; font-size: 0.85rem;">
+        <input id="new-company-price" type="number" placeholder="Opening price" min="1" step="0.01" style="background: #111; border: 1px solid #333; color: #fff; padding: 10px; border-radius: 8px; font-size: 0.85rem;">
+        <input id="new-company-shares" type="number" placeholder="Available shares" min="1" value="100" style="background: #111; border: 1px solid #333; color: #fff; padding: 10px; border-radius: 8px; font-size: 0.85rem;">
+        <input id="new-company-dividend" type="number" placeholder="Dividend %" min="0" step="0.1" value="0" style="background: #111; border: 1px solid #333; color: #fff; padding: 10px; border-radius: 8px; font-size: 0.85rem;">
+        <textarea id="new-company-description" rows="2" placeholder="Company description" style="background: #111; border: 1px solid #333; color: #fff; padding: 10px; border-radius: 8px; font-size: 0.85rem; resize: vertical;"></textarea>
+    </div>
+    <button id="add-stock-company-btn" class="btn-primary" style="padding: 10px 14px; background: #3498db; border-radius: 8px; font-weight: 800;">Add Company</button>
+    <div id="admin-stock-company-list" style="display: grid; gap: 10px; margin-top: 16px;"></div>
+</div>
 
         <div class="admin-section" style="border: 1px solid #f1c40f; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">

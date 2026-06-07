@@ -9,6 +9,7 @@ import "./auth.js";
 import "./dashboard.js";
 import "./shop/shop.js";
 import "./shop/subscriptionShop.js";
+import "./shop/stockMarket.js";
 import "./shop/inventory.js";
 import "./finance/transfer.js";
 import "./admin.refactored.js";

@@ -134,6 +134,15 @@ export function getDOMElements() {
     // Subscription Shop
     addSubscriptionBtn: document.getElementById("add-subscription-btn"),
     newSubscriptionName: document.getElementById("new-subscription-name"),
+    // Stock Market
+    addStockCompanyBtn: document.getElementById("add-stock-company-btn"),
+    newCompanyName: document.getElementById("new-company-name"),
+    newCompanyDescription: document.getElementById("new-company-description"),
+    newCompanyOwner: document.getElementById("new-company-owner"),
+    newCompanyPrice: document.getElementById("new-company-price"),
+    newCompanyShares: document.getElementById("new-company-shares"),
+    newCompanyDividend: document.getElementById("new-company-dividend"),
+    adminStockCompanyList: document.getElementById("admin-stock-company-list"),
     newSubscriptionDesc: document.getElementById("new-subscription-desc"),
     newSubscriptionCost: document.getElementById("new-subscription-cost"),
     newSubscriptionInterval: document.getElementById("new-subscription-interval"),

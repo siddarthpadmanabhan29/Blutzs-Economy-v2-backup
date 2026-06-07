@@ -1,13 +1,15 @@
 import { db, auth } from "../firebaseConfig.js";
 import { 
-  collection, addDoc, onSnapshot, getDocs, updateDoc, doc, deleteDoc 
+  collection, addDoc, onSnapshot, getDocs, updateDoc, doc, deleteDoc, query, where 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getDOMElements, logAdminAction } from "./adminUtils.js";
 
 let shopItems = [];
 let subscriptionItems = [];
+let stockCompanies = [];
 let activeShopListener = null;
 let activeSubListener = null;
+let activeStockListener = null;
 
 export function initShopUI() {
   const el = getDOMElements();
@@ -22,13 +24,9 @@ export function initShopUI() {
     console.warn("❌ Admin shop inventory container not found - buttons won't work");
   }
 
-  // Start real-time listener
   listenForShopItems();
 }
 
-/**
- * Real-time listener for shop items
- */
 export function listenForShopItems() {
   const shopRef = collection(db, "shop");
   
@@ -45,9 +43,6 @@ export function listenForShopItems() {
   });
 }
 
-/**
- * Renders the admin shop management UI
- */
 function renderAdminShopUI() {
   const el = getDOMElements();
   
@@ -143,14 +138,9 @@ function renderAdminShopUI() {
   });
 }
 
-/**
- * Handle admin shop actions (update stock, delete item, edit item, etc.)
- */
 async function handleShopActions(e) {
   const action = e.target.dataset.action;
   const itemId = e.target.dataset.itemId;
-
-  console.log("🔧 Shop action:", action, "Item:", itemId);
 
   if (action === "update-stock") {
     await updateItemStock(itemId);
@@ -164,13 +154,7 @@ async function handleShopActions(e) {
   }
 }
 
-/**
- * Update item stock from input field
- */
 async function updateItemStock(itemId) {
-  console.log("📝 Updating stock for item:", itemId);
-  
-  const el = getDOMElements();
   const inputField = document.querySelector(`input[data-stock-input="${itemId}"]`);
   
   if (!inputField) {
@@ -185,7 +169,6 @@ async function updateItemStock(itemId) {
     await updateDoc(itemRef, { stock: newStock });
     const itemName = shopItems.find(i => i.id === itemId)?.name || "Item";
     await logAdminAction(auth.currentUser.uid, `Updated ${itemName} stock to ${newStock} units`);
-    console.log(`✅ Updated stock for item ${itemId} to ${newStock}`);
     alert(`✅ Updated "${itemName}" stock to ${newStock} units`);
   } catch (err) {
     console.error("❌ Failed to update stock:", err);
@@ -193,13 +176,7 @@ async function updateItemStock(itemId) {
   }
 }
 
-/**
- * Adjust stock by a fixed amount (+/- 10)
- */
 async function adjustItemStock(itemId, adjustment) {
-  console.log("⚙️ Adjusting stock for item:", itemId, "Adjustment:", adjustment);
-  
-  const el = getDOMElements();
   const inputField = document.querySelector(`input[data-stock-input="${itemId}"]`);
   
   if (!inputField) {
@@ -209,7 +186,6 @@ async function adjustItemStock(itemId, adjustment) {
 
   const currentStock = Number(inputField.value || 0);
   const newStock = Math.max(0, currentStock + adjustment);
-  
   inputField.value = newStock;
 
   const itemRef = doc(db, "shop", itemId);
@@ -219,7 +195,6 @@ async function adjustItemStock(itemId, adjustment) {
     const itemName = shopItems.find(i => i.id === itemId)?.name || "Item";
     const action = adjustment > 0 ? `added ${adjustment}` : `removed ${Math.abs(adjustment)}`;
     await logAdminAction(auth.currentUser.uid, `${itemName}: ${action} units (now ${newStock})`);
-    console.log(`✅ Adjusted ${itemName} stock by ${adjustment} (new total: ${newStock})`);
     alert(`✅ ${itemName}: ${action} units (now ${newStock})`);
   } catch (err) {
     console.error("❌ Failed to adjust stock:", err);
@@ -227,16 +202,10 @@ async function adjustItemStock(itemId, adjustment) {
   }
 }
 
-/**
- * Delete a shop item
- */
 async function deleteShopItem(itemId) {
   const itemName = shopItems.find(i => i.id === itemId)?.name || "Item";
   
-  console.log("🗑️ Delete requested for item:", itemId, itemName);
-  
   if (!confirm(`⚠️ Are you sure you want to DELETE "${itemName}" from the shop? This action cannot be undone.`)) {
-    console.log("❌ Delete cancelled by user");
     return;
   }
 
@@ -245,7 +214,6 @@ async function deleteShopItem(itemId) {
   try {
     await deleteDoc(itemRef);
     await logAdminAction(auth.currentUser.uid, `Deleted shop item: ${itemName}`);
-    console.log(`✅ Deleted item ${itemId}`);
     alert(`✅ "${itemName}" has been removed from the shop.`);
   } catch (err) {
     console.error("❌ Failed to delete item:", err);
@@ -253,163 +221,59 @@ async function deleteShopItem(itemId) {
   }
 }
 
-/**
- * Show edit modal for an existing item
- */
 function showEditItemModal(itemId) {
   const item = shopItems.find(i => i.id === itemId);
   if (!item) return;
 
-  // Create modal overlay
   const modal = document.createElement("div");
   modal.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 2000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.8); z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
     backdrop-filter: blur(5px);
   `;
 
   modal.innerHTML = `
-    <div style="
-      background: rgba(0, 0, 0, 0.9);
-      border: 1px solid #444;
-      border-radius: 15px;
-      padding: 25px;
-      width: 90%;
-      max-width: 500px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    ">
+    <div style="background: rgba(0,0,0,0.9); border: 1px solid #444; border-radius: 15px; padding: 25px; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3 style="margin: 0; color: #fff; font-size: 1.2rem;">Edit Item: ${item.name}</h3>
-        <button id="close-edit-modal" style="
-          background: transparent;
-          border: none;
-          color: #888;
-          font-size: 1.5rem;
-          cursor: pointer;
-          padding: 5px;
-        ">×</button>
+        <button id="close-edit-modal" style="background: transparent; border: none; color: #888; font-size: 1.5rem; cursor: pointer;">×</button>
       </div>
-
       <div style="display: flex; flex-direction: column; gap: 15px;">
         <div>
           <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Item Name</label>
-          <input id="edit-item-name" type="text" value="${item.name}" style="
-            width: 100%;
-            height: 45px;
-            background: #111;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 0 15px;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 0.9rem;
-          ">
+          <input id="edit-item-name" type="text" value="${item.name}" style="width: 100%; height: 45px; background: #111; border: 1px solid #444; color: #fff; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem;">
         </div>
-
         <div>
           <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Price ($)</label>
-          <input id="edit-item-cost" type="number" value="${item.cost || 0}" min="0" step="0.01" style="
-            width: 100%;
-            height: 45px;
-            background: #111;
-            border: 1px solid #444;
-            color: #2ecc71;
-            padding: 0 15px;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 0.9rem;
-            font-weight: bold;
-          ">
+          <input id="edit-item-cost" type="number" value="${item.cost || 0}" min="0" step="0.01" style="width: 100%; height: 45px; background: #111; border: 1px solid #444; color: #2ecc71; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; font-weight: bold;">
         </div>
-
         <div>
           <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Stock Quantity</label>
-          <input id="edit-item-stock" type="number" value="${item.stock || 0}" min="0" style="
-            width: 100%;
-            height: 45px;
-            background: #111;
-            border: 1px solid #444;
-            color: #f39c12;
-            padding: 0 15px;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 0.9rem;
-            font-weight: bold;
-          ">
+          <input id="edit-item-stock" type="number" value="${item.stock || 0}" min="0" style="width: 100%; height: 45px; background: #111; border: 1px solid #444; color: #f39c12; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; font-weight: bold;">
         </div>
-
         <div>
           <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Image URL (Optional)</label>
-          <input id="edit-item-image" type="url" value="${item.image || ''}" placeholder="https://imgur.com/image.png" style="
-            width: 100%;
-            height: 45px;
-            background: #111;
-            border: 1px solid #444;
-            color: #888;
-            padding: 0 15px;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 0.8rem;
-          ">
+          <input id="edit-item-image" type="url" value="${item.image || ''}" placeholder="https://imgur.com/image.png" style="width: 100%; height: 45px; background: #111; border: 1px solid #444; color: #888; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.8rem;">
         </div>
-
         <div style="display: flex; gap: 10px; margin-top: 10px;">
-          <button id="save-edit-item" data-item-id="${itemId}" style="
-            flex: 1;
-            height: 50px;
-            background: #3498db;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-weight: 900;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          ">Save Changes</button>
-          <button id="cancel-edit-item" style="
-            flex: 1;
-            height: 50px;
-            background: #6c757d;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-weight: 900;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          ">Cancel</button>
+          <button id="save-edit-item" data-item-id="${itemId}" style="flex: 1; height: 50px; background: #3498db; color: #fff; border: none; border-radius: 8px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">Save Changes</button>
+          <button id="cancel-edit-item" style="flex: 1; height: 50px; background: #6c757d; color: #fff; border: none; border-radius: 8px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">Cancel</button>
         </div>
       </div>
     </div>
   `;
 
   document.body.appendChild(modal);
-
-  // Event listeners
   document.getElementById("close-edit-modal").addEventListener("click", () => modal.remove());
   document.getElementById("cancel-edit-item").addEventListener("click", () => modal.remove());
   document.getElementById("save-edit-item").addEventListener("click", async (e) => {
     await saveEditedItem(e.target.dataset.itemId);
     modal.remove();
   });
-
-  // Close on background click
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) modal.remove();
-  });
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
 }
 
-/**
- * Save edited item changes
- */
 async function saveEditedItem(itemId) {
   const name = document.getElementById("edit-item-name").value.trim();
   const cost = parseFloat(document.getElementById("edit-item-cost").value);
@@ -420,7 +284,6 @@ async function saveEditedItem(itemId) {
     alert("❌ Please enter valid name and price.");
     return;
   }
-
   if (stock < 0) {
     alert("❌ Stock cannot be negative.");
     return;
@@ -430,16 +293,8 @@ async function saveEditedItem(itemId) {
   const originalItem = shopItems.find(i => i.id === itemId);
 
   try {
-    const updates = {
-      name,
-      cost,
-      stock,
-      image: image || null
-    };
-
-    await updateDoc(itemRef, updates);
+    await updateDoc(itemRef, { name, cost, stock, image: image || null });
     
-    // Log changes
     const changes = [];
     if (originalItem.name !== name) changes.push(`name: "${originalItem.name}" → "${name}"`);
     if (originalItem.cost !== cost) changes.push(`price: $${originalItem.cost} → $${cost}`);
@@ -448,8 +303,6 @@ async function saveEditedItem(itemId) {
 
     const changeText = changes.length > 0 ? ` (${changes.join(", ")})` : "";
     await logAdminAction(auth.currentUser.uid, `Edited item "${name}"${changeText}`);
-    
-    console.log(`✅ Updated item ${itemId}`);
     alert(`✅ Item "${name}" updated successfully!`);
   } catch (err) {
     console.error("❌ Failed to update item:", err);
@@ -457,9 +310,6 @@ async function saveEditedItem(itemId) {
   }
 }
 
-/**
- * Add a new shop item
- */
 async function addShopItem() {
   const el = getDOMElements();
   const name = el.newItemName?.value?.trim();
@@ -467,28 +317,18 @@ async function addShopItem() {
   const stock = parseInt(el.newItemStock?.value) || 10;
   const image = el.newItemImage?.value?.trim();
   
-  if (!name || isNaN(cost) || cost <= 0) {
-    return alert("❌ Enter valid item name and cost.");
-  }
-  
-  if (stock < 0) {
-    return alert("❌ Stock cannot be negative.");
-  }
+  if (!name || isNaN(cost) || cost <= 0) return alert("❌ Enter valid item name and cost.");
+  if (stock < 0) return alert("❌ Stock cannot be negative.");
 
   try {
     await addDoc(collection(db, "shop"), { 
-      name, 
-      cost, 
-      stock: stock,  // Initialize with specified stock
+      name, cost, stock,
       image,
       purchaseCount: 0,
       createdAt: new Date().toISOString()
     });
-
     await logAdminAction(auth.currentUser.uid, `Added shop item: ${name} (Stock: ${stock}, Price: $${cost.toLocaleString()})`);
-    
     alert(`✅ Added item: ${name} with ${stock} units in stock!`);
-    
     if (el.newItemName) el.newItemName.value = "";
     if (el.newItemPrice) el.newItemPrice.value = "";
     if (el.newItemStock) el.newItemStock.value = "10";
@@ -499,11 +339,343 @@ async function addShopItem() {
   }
 }
 
-// ==================== SUBSCRIPTION SHOP MANAGEMENT ====================
+// ==================== STOCK MARKET MANAGEMENT ====================
+
+export function initStockMarketAdminUI() {
+  const el = getDOMElements();
+
+  if (el.addStockCompanyBtn) {
+    el.addStockCompanyBtn.addEventListener("click", addStockCompany);
+  }
+
+  if (el.adminStockCompanyList) {
+    el.adminStockCompanyList.addEventListener("click", handleStockCompanyActions);
+  }
+
+  listenForStockCompanies();
+}
+
+function listenForStockCompanies() {
+  const stockRef = collection(db, "stockCompanies");
+  if (activeStockListener) activeStockListener();
+
+  activeStockListener = onSnapshot(stockRef, (snapshot) => {
+    stockCompanies = [];
+    snapshot.forEach((docSnap) => {
+      stockCompanies.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderAdminStockCompanies();
+  }, (err) => {
+    console.error("❌ Failed to listen to stock companies:", err);
+  });
+}
+
+function renderAdminStockCompanies() {
+  const el = getDOMElements();
+  if (!el.adminStockCompanyList) return;
+
+  el.adminStockCompanyList.innerHTML = "";
+
+  if (stockCompanies.length === 0) {
+    el.adminStockCompanyList.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: #888; padding: 20px;">📈 No listed companies yet.</div>`;
+    return;
+  }
+
+  stockCompanies.forEach((company) => {
+    const basePrice = Number(company.basePrice || 0);
+    const shareCount = Number(company.availableShares || 0);
+    const marketTrend = Number(company.marketTrend || 0);
+    const volatility = Number(company.volatility || 0);
+    const trendColor = marketTrend >= 0 ? '#2ecc71' : '#e74c3c';
+
+    const itemBox = document.createElement("div");
+    itemBox.style.cssText = "background: rgba(0,0,0,0.2); border: 1px solid #3498db; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px;";
+    itemBox.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: start; gap: 8px;">
+        <div>
+          <h4 style="margin: 0 0 4px 0; color: #fff;">${company.name}</h4>
+          <p style="margin: 0; color: #aaa; font-size: 0.75rem;">Owner: <strong style="color: #2ecc71;">${company.ownerName || "Unknown"}</strong></p>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button data-action="edit-stock-company" data-company-id="${company.id}" 
+            style="background: #f39c12; color: white; border: none; padding: 6px 9px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">
+            EDIT
+          </button>
+          <button data-action="delete-stock-company" data-company-id="${company.id}" 
+            style="background: #e74c3c; color: white; border: none; padding: 6px 9px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold;">
+            DELETE
+          </button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 0.75rem; color: #ccc;">
+        <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 8px;">
+          Base Price<br><strong style="color: #f1c40f;">$${basePrice.toLocaleString()}</strong>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 8px;">
+          Shares Available<br><strong style="color: #3498db;">${shareCount}</strong>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 8px;">
+          Market Trend<br><strong style="color: ${trendColor};">${marketTrend >= 0 ? '+' : ''}${marketTrend}%</strong>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 8px;">
+          Volatility<br><strong style="color: #9b59b6;">${volatility}%</strong>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 8px; grid-column: 1/-1;">
+          Dividend Yield<br><strong style="color: #8e44ad;">${Number(company.dividendRate || 0)}%</strong>
+        </div>
+      </div>
+
+      <p style="margin: 0; color: #888; font-size: 0.75rem;">${company.description || "No description provided."}</p>
+    `;
+    el.adminStockCompanyList.appendChild(itemBox);
+  });
+}
+
+async function handleStockCompanyActions(e) {
+  const action = e.target.dataset.action;
+  const companyId = e.target.dataset.companyId;
+
+  if (action === "delete-stock-company") await deleteStockCompany(companyId);
+  if (action === "edit-stock-company") showEditStockCompanyModal(companyId);
+}
+
+async function deleteStockCompany(companyId) {
+  const company = stockCompanies.find((item) => item.id === companyId);
+  if (!company) return;
+  if (!confirm(`Delete company "${company.name}" from the market?`)) return;
+
+  try {
+    await deleteDoc(doc(db, "stockCompanies", companyId));
+    await logAdminAction(auth.currentUser.uid, `Deleted stock company: ${company.name}`);
+    alert(`✅ Removed ${company.name} from the stock market.`);
+  } catch (err) {
+    console.error("Failed to delete stock company:", err);
+    alert("Failed to delete company.");
+  }
+}
 
 /**
- * Initialize subscription shop admin UI
+ * Edit modal for stock company — lets admins control
+ * basePrice, marketTrend, volatility, dividendRate, availableShares
  */
+function showEditStockCompanyModal(companyId) {
+  const company = stockCompanies.find(c => c.id === companyId);
+  if (!company) return;
+
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.85); z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(5px);
+  `;
+
+  modal.innerHTML = `
+    <div style="
+      background: rgba(0,0,0,0.95);
+      border: 2px solid #3498db;
+      border-radius: 15px;
+      padding: 25px;
+      width: 90%;
+      max-width: 520px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      max-height: 90vh;
+      overflow-y: auto;
+    ">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h3 style="margin: 0; color: #3498db; font-size: 1.1rem;">Edit Company: ${company.name}</h3>
+          <p style="margin: 4px 0 0 0; font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800;">Market Control Panel</p>
+        </div>
+        <button id="close-edit-company-modal" style="background: transparent; border: none; color: #888; font-size: 1.5rem; cursor: pointer; padding: 5px;">×</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 15px;">
+
+        <div style="background: rgba(52,152,219,0.05); border: 1px solid rgba(52,152,219,0.2); border-radius: 10px; padding: 12px;">
+          <p style="margin: 0; font-size: 0.65rem; color: #3498db; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
+            ℹ️ Price changes here set the anchor. Buy/sell pressure will then move it from this new base.
+          </p>
+        </div>
+
+        <div>
+          <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Company Name</label>
+          <input id="edit-company-name" type="text" value="${company.name}" style="width: 100%; height: 42px; background: #111; border: 1px solid #444; color: #fff; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem;">
+        </div>
+
+        <div>
+          <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Description</label>
+          <textarea id="edit-company-description" rows="2" style="width: 100%; background: #111; border: 1px solid #444; color: #fff; padding: 10px 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.85rem; font-family: inherit; resize: vertical;">${company.description || ''}</textarea>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Base Price ($)</label>
+            <input id="edit-company-price" type="number" value="${company.basePrice || 0}" min="1" step="0.01"
+              style="width: 100%; height: 42px; background: #111; border: 1px solid #f1c40f; color: #f1c40f; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-weight: bold;">
+          </div>
+          <div>
+            <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Available Shares</label>
+            <input id="edit-company-shares" type="number" value="${company.availableShares || 0}" min="0"
+              style="width: 100%; height: 42px; background: #111; border: 1px solid #3498db; color: #3498db; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-weight: bold;">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Market Trend (%)</label>
+            <input id="edit-company-trend" type="number" value="${company.marketTrend || 0}" step="0.1"
+              style="width: 100%; height: 42px; background: #111; border: 1px solid #2ecc71; color: #2ecc71; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-weight: bold;">
+            <p style="margin: 4px 0 0 0; font-size: 0.6rem; color: #666;">Positive = bullish, negative = bearish</p>
+          </div>
+          <div>
+            <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Volatility (%)</label>
+            <input id="edit-company-volatility" type="number" value="${company.volatility || 0}" min="0" step="0.1"
+              style="width: 100%; height: 42px; background: #111; border: 1px solid #9b59b6; color: #9b59b6; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-weight: bold;">
+            <p style="margin: 4px 0 0 0; font-size: 0.6rem; color: #666;">Higher = wilder price swings</p>
+          </div>
+        </div>
+
+        <div>
+          <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Dividend Yield (%)</label>
+          <input id="edit-company-dividend" type="number" value="${company.dividendRate || 0}" min="0" step="0.1"
+            style="width: 100%; height: 42px; background: #111; border: 1px solid #8e44ad; color: #8e44ad; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-weight: bold;">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 5px;">
+          <button id="save-edit-company" data-company-id="${companyId}" style="
+            flex: 2; height: 50px; background: #3498db; color: #fff;
+            border: none; border-radius: 8px; font-weight: 900;
+            cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">
+            Save Changes
+          </button>
+          <button id="cancel-edit-company" style="
+            flex: 1; height: 50px; background: #6c757d; color: #fff;
+            border: none; border-radius: 8px; font-weight: 900;
+            cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById("close-edit-company-modal").addEventListener("click", () => modal.remove());
+  document.getElementById("cancel-edit-company").addEventListener("click", () => modal.remove());
+  document.getElementById("save-edit-company").addEventListener("click", async (e) => {
+    await saveEditedStockCompany(e.target.dataset.companyId);
+    modal.remove();
+  });
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+}
+
+async function saveEditedStockCompany(companyId) {
+  const name = document.getElementById("edit-company-name").value.trim();
+  const description = document.getElementById("edit-company-description").value.trim();
+  const basePrice = parseFloat(document.getElementById("edit-company-price").value);
+  const availableShares = parseInt(document.getElementById("edit-company-shares").value) || 0;
+  const marketTrend = parseFloat(document.getElementById("edit-company-trend").value) || 0;
+  const volatility = parseFloat(document.getElementById("edit-company-volatility").value) || 0;
+  const dividendRate = parseFloat(document.getElementById("edit-company-dividend").value) || 0;
+
+  if (!name) {
+    alert("❌ Company name cannot be empty.");
+    return;
+  }
+  if (isNaN(basePrice) || basePrice < 1) {
+    alert("❌ Base price must be at least $1.");
+    return;
+  }
+  if (availableShares < 0) {
+    alert("❌ Available shares cannot be negative.");
+    return;
+  }
+
+  const companyRef = doc(db, "stockCompanies", companyId);
+  const original = stockCompanies.find(c => c.id === companyId);
+
+  try {
+    await updateDoc(companyRef, {
+      name,
+      description,
+      basePrice,
+      availableShares,
+      marketTrend,
+      volatility,
+      dividendRate
+    });
+
+    // Log what changed
+    const changes = [];
+    if (original.name !== name) changes.push(`name: "${original.name}" → "${name}"`);
+    if (original.basePrice !== basePrice) changes.push(`basePrice: $${original.basePrice} → $${basePrice}`);
+    if (original.availableShares !== availableShares) changes.push(`shares: ${original.availableShares} → ${availableShares}`);
+    if (original.marketTrend !== marketTrend) changes.push(`trend: ${original.marketTrend}% → ${marketTrend}%`);
+    if (original.volatility !== volatility) changes.push(`volatility: ${original.volatility}% → ${volatility}%`);
+    if (original.dividendRate !== dividendRate) changes.push(`dividend: ${original.dividendRate}% → ${dividendRate}%`);
+
+    const changeText = changes.length > 0 ? ` (${changes.join(", ")})` : "";
+    await logAdminAction(auth.currentUser.uid, `Edited stock company "${name}"${changeText}`);
+    alert(`✅ "${name}" updated successfully!`);
+  } catch (err) {
+    console.error("❌ Failed to update stock company:", err);
+    alert("Failed to update company. Check console.");
+  }
+}
+
+async function addStockCompany() {
+  const el = getDOMElements();
+  const name = el.newCompanyName?.value?.trim();
+  const description = el.newCompanyDescription?.value?.trim();
+  const basePrice = parseFloat(el.newCompanyPrice?.value);
+  const shares = parseInt(el.newCompanyShares?.value, 10) || 0;
+  const ownerUsername = el.newCompanyOwner?.value?.trim().toLowerCase();
+  const dividendRate = parseFloat(el.newCompanyDividend?.value) || 0;
+
+  if (!name || isNaN(basePrice) || basePrice <= 0) return alert("Enter a valid company name and opening price.");
+  if (!ownerUsername) return alert("Enter the owner username so the company is tied to a user.");
+  if (shares < 1) return alert("Provide at least 1 available share.");
+
+  try {
+    const userQuery = query(collection(db, "users"), where("username", "==", ownerUsername));
+    const userSnap = await getDocs(userQuery);
+    if (userSnap.empty) return alert("Owner username not found.");
+
+    const ownerDoc = userSnap.docs[0];
+
+    await addDoc(collection(db, "stockCompanies"), {
+      name,
+      description: description || `${name} is now listed on the stock market.`,
+      basePrice,
+      availableShares: shares,
+      ownerId: ownerDoc.id,
+      ownerName: ownerDoc.data().username || ownerUsername,
+      marketTrend: 0,
+      volatility: 2,
+      dividendRate,
+      createdAt: new Date().toISOString()
+    });
+
+    await logAdminAction(auth.currentUser.uid, `Added stock company: ${name} for ${ownerDoc.data().username || ownerUsername}`);
+    alert(`✅ Added ${name} to the stock market.`);
+
+    if (el.newCompanyName) el.newCompanyName.value = "";
+    if (el.newCompanyDescription) el.newCompanyDescription.value = "";
+    if (el.newCompanyPrice) el.newCompanyPrice.value = "";
+    if (el.newCompanyShares) el.newCompanyShares.value = "100";
+    if (el.newCompanyOwner) el.newCompanyOwner.value = "";
+    if (el.newCompanyDividend) el.newCompanyDividend.value = "0";
+  } catch (err) {
+    console.error("❌ Failed to add stock company:", err);
+    alert("Failed to add stock company.");
+  }
+}
+
+// ==================== SUBSCRIPTION SHOP MANAGEMENT ====================
+
 export function initSubscriptionShopUI() {
   const el = getDOMElements();
   
@@ -517,13 +689,9 @@ export function initSubscriptionShopUI() {
     console.warn("❌ Admin subscription inventory container not found");
   }
 
-  // Start real-time listener
   listenForSubscriptionItems();
 }
 
-/**
- * Real-time listener for subscription items
- */
 export function listenForSubscriptionItems() {
   const subRef = collection(db, "subscriptionShop");
   
@@ -540,9 +708,6 @@ export function listenForSubscriptionItems() {
   });
 }
 
-/**
- * Render subscription items in admin panel
- */
 function renderAdminSubscriptionUI() {
   const el = getDOMElements();
   
@@ -614,29 +779,16 @@ function renderAdminSubscriptionUI() {
   });
 }
 
-/**
- * Handle subscription admin actions
- */
 async function handleSubscriptionActions(e) {
   const action = e.target.dataset.action;
   const itemId = e.target.dataset.itemId;
 
-  console.log("🔧 Subscription action:", action, "Item:", itemId);
-
-  if (action === "delete-subscription") {
-    await deleteSubscriptionItem(itemId);
-  } else if (action === "edit-subscription") {
-    showEditSubscriptionModal(itemId);
-  }
+  if (action === "delete-subscription") await deleteSubscriptionItem(itemId);
+  else if (action === "edit-subscription") showEditSubscriptionModal(itemId);
 }
 
-/**
- * Delete a subscription item
- */
 async function deleteSubscriptionItem(itemId) {
   const itemName = subscriptionItems.find(i => i.id === itemId)?.name || "Item";
-  
-  console.log("🗑️ Delete subscription item:", itemId, itemName);
   
   if (!confirm(`⚠️ Are you sure you want to DELETE "${itemName}" subscription? This won't affect existing subscribers.`)) {
     return;
@@ -654,198 +806,76 @@ async function deleteSubscriptionItem(itemId) {
   }
 }
 
-/**
- * Show edit modal for subscription item
- */
 function showEditSubscriptionModal(itemId) {
   const item = subscriptionItems.find(i => i.id === itemId);
   if (!item) return;
 
   const modal = document.createElement("div");
   modal.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 2000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.8); z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
     backdrop-filter: blur(5px);
   `;
 
   modal.innerHTML = `
     <div style="
-      background: rgba(0, 0, 0, 0.9);
-      border: 2px solid #2ecc71;
-      border-radius: 15px;
-      padding: 25px;
-      width: 90%;
-      max-width: 550px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-      max-height: 90vh;
-      overflow-y: auto;
+      background: rgba(0,0,0,0.9); border: 2px solid #2ecc71; border-radius: 15px;
+      padding: 25px; width: 90%; max-width: 550px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto;
     ">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3 style="margin: 0; color: #2ecc71; font-size: 1.2rem;">Edit Subscription: ${item.name}</h3>
-        <button id="close-edit-sub-modal" style="
-          background: transparent;
-          border: none;
-          color: #888;
-          font-size: 1.5rem;
-          cursor: pointer;
-          padding: 5px;
-        ">×</button>
+        <button id="close-edit-sub-modal" style="background: transparent; border: none; color: #888; font-size: 1.5rem; cursor: pointer; padding: 5px;">×</button>
       </div>
-
       <div style="display: flex; flex-direction: column; gap: 15px;">
         <div>
           <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Name</label>
-          <input id="edit-sub-name" type="text" value="${item.name}" style="
-            width: 100%;
-            height: 45px;
-            background: #111;
-            border: 1px solid #2ecc71;
-            color: #fff;
-            padding: 0 15px;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 0.9rem;
-          ">
+          <input id="edit-sub-name" type="text" value="${item.name}" style="width: 100%; height: 45px; background: #111; border: 1px solid #2ecc71; color: #fff; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem;">
         </div>
-
         <div>
           <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Description</label>
-          <textarea id="edit-sub-desc" style="
-            width: 100%;
-            height: 60px;
-            background: #111;
-            border: 1px solid #2ecc71;
-            color: #fff;
-            padding: 10px;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 0.9rem;
-            font-family: inherit;
-          ">${item.description || ''}</textarea>
+          <textarea id="edit-sub-desc" style="width: 100%; height: 60px; background: #111; border: 1px solid #2ecc71; color: #fff; padding: 10px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; font-family: inherit;">${item.description || ''}</textarea>
         </div>
-
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
           <div>
             <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Cost ($)</label>
-            <input id="edit-sub-cost" type="number" value="${item.cost || 0}" min="0" step="0.01" style="
-              width: 100%;
-              height: 45px;
-              background: #111;
-              border: 1px solid #f1c40f;
-              color: #f1c40f;
-              padding: 0 15px;
-              border-radius: 8px;
-              box-sizing: border-box;
-              font-size: 0.9rem;
-              font-weight: bold;
-            ">
+            <input id="edit-sub-cost" type="number" value="${item.cost || 0}" min="0" step="0.01" style="width: 100%; height: 45px; background: #111; border: 1px solid #f1c40f; color: #f1c40f; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; font-weight: bold;">
           </div>
           <div>
             <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Renewal Interval</label>
-            <input id="edit-sub-interval" type="number" value="${item.renewalInterval || 7}" min="1" style="
-              width: 100%;
-              height: 45px;
-              background: #111;
-              border: 1px solid #3498db;
-              color: #3498db;
-              padding: 0 15px;
-              border-radius: 8px;
-              box-sizing: border-box;
-              font-size: 0.9rem;
-              font-weight: bold;
-            ">
+            <input id="edit-sub-interval" type="number" value="${item.renewalInterval || 7}" min="1" style="width: 100%; height: 45px; background: #111; border: 1px solid #3498db; color: #3498db; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; font-weight: bold;">
           </div>
         </div>
-
         <div>
           <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Renewal Type</label>
-          <select id="edit-sub-type" style="
-            width: 100%;
-            height: 45px;
-            background: #111;
-            border: 1px solid #3498db;
-            color: #3498db;
-            padding: 0 15px;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 0.9rem;
-            font-weight: bold;
-          ">
+          <select id="edit-sub-type" style="width: 100%; height: 45px; background: #111; border: 1px solid #3498db; color: #3498db; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; font-weight: bold;">
             <option value="days" ${item.renewalType === 'days' ? 'selected' : ''}>Days</option>
             <option value="months" ${item.renewalType === 'months' ? 'selected' : ''}>Months</option>
           </select>
         </div>
-
         <div>
           <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Image URL (Optional)</label>
-          <input id="edit-sub-image" type="url" value="${item.image || ''}" placeholder="https://imgur.com/image.png" style="
-            width: 100%;
-            height: 45px;
-            background: #111;
-            border: 1px solid #888;
-            color: #888;
-            padding: 0 15px;
-            border-radius: 8px;
-            box-sizing: border-box;
-            font-size: 0.8rem;
-          ">
+          <input id="edit-sub-image" type="url" value="${item.image || ''}" placeholder="https://imgur.com/image.png" style="width: 100%; height: 45px; background: #111; border: 1px solid #888; color: #888; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-size: 0.8rem;">
         </div>
-
         <div style="display: flex; gap: 10px; margin-top: 10px;">
-          <button id="save-edit-subscription" data-item-id="${itemId}" style="
-            flex: 1;
-            height: 50px;
-            background: #2ecc71;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-weight: 900;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          ">Save Changes</button>
-          <button id="cancel-edit-subscription" style="
-            flex: 1;
-            height: 50px;
-            background: #6c757d;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-weight: 900;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          ">Cancel</button>
+          <button id="save-edit-subscription" data-item-id="${itemId}" style="flex: 1; height: 50px; background: #2ecc71; color: #fff; border: none; border-radius: 8px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">Save Changes</button>
+          <button id="cancel-edit-subscription" style="flex: 1; height: 50px; background: #6c757d; color: #fff; border: none; border-radius: 8px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;">Cancel</button>
         </div>
       </div>
     </div>
   `;
 
   document.body.appendChild(modal);
-
   document.getElementById("close-edit-sub-modal").addEventListener("click", () => modal.remove());
   document.getElementById("cancel-edit-subscription").addEventListener("click", () => modal.remove());
   document.getElementById("save-edit-subscription").addEventListener("click", async (e) => {
     await saveEditedSubscription(e.target.dataset.itemId);
     modal.remove();
   });
-
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) modal.remove();
-  });
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
 }
 
-/**
- * Save edited subscription item
- */
 async function saveEditedSubscription(itemId) {
   const name = document.getElementById("edit-sub-name").value.trim();
   const description = document.getElementById("edit-sub-desc").value.trim();
@@ -858,7 +888,6 @@ async function saveEditedSubscription(itemId) {
     alert("❌ Please enter valid name and cost.");
     return;
   }
-
   if (renewalInterval < 1) {
     alert("❌ Renewal interval must be at least 1.");
     return;
@@ -868,26 +897,16 @@ async function saveEditedSubscription(itemId) {
   const originalItem = subscriptionItems.find(i => i.id === itemId);
 
   try {
-    const updates = {
-      name,
-      description,
-      cost,
-      renewalInterval,
-      renewalType,
-      image: image || null
-    };
-
-    await updateDoc(itemRef, updates);
+    await updateDoc(itemRef, { name, description, cost, renewalInterval, renewalType, image: image || null });
     
     const changes = [];
     if (originalItem.name !== name) changes.push(`name: "${originalItem.name}" → "${name}"`);
     if (originalItem.cost !== cost) changes.push(`cost: $${originalItem.cost} → $${cost}`);
-    if (originalItem.renewalInterval !== renewalInterval || originalItem.renewalType !== renewalType) 
+    if (originalItem.renewalInterval !== renewalInterval || originalItem.renewalType !== renewalType)
       changes.push(`renewal: ${originalItem.renewalInterval}${originalItem.renewalType} → ${renewalInterval}${renewalType}`);
 
     const changeText = changes.length > 0 ? ` (${changes.join(", ")})` : "";
     await logAdminAction(auth.currentUser.uid, `Edited subscription "${name}"${changeText}`);
-    
     alert(`✅ Subscription "${name}" updated successfully!`);
   } catch (err) {
     console.error("❌ Failed to update subscription:", err);
@@ -895,9 +914,6 @@ async function saveEditedSubscription(itemId) {
   }
 }
 
-/**
- * Add new subscription item
- */
 async function addSubscriptionItem() {
   const el = getDOMElements();
   const name = el.newSubscriptionName?.value?.trim();
@@ -907,31 +923,18 @@ async function addSubscriptionItem() {
   const renewalType = el.newSubscriptionType?.value || "days";
   const image = el.newSubscriptionImage?.value?.trim();
   
-  if (!name || isNaN(cost) || cost <= 0) {
-    return alert("❌ Enter valid name and cost.");
-  }
-  
-  if (renewalInterval < 1) {
-    return alert("❌ Renewal interval must be at least 1.");
-  }
+  if (!name || isNaN(cost) || cost <= 0) return alert("❌ Enter valid name and cost.");
+  if (renewalInterval < 1) return alert("❌ Renewal interval must be at least 1.");
 
   try {
     await addDoc(collection(db, "subscriptionShop"), { 
-      name, 
-      description,
-      cost, 
-      renewalInterval,
-      renewalType,
-      image,
+      name, description, cost, renewalInterval, renewalType, image,
       subscriberCount: 0,
       totalRevenue: 0,
       createdAt: new Date().toISOString()
     });
-
     await logAdminAction(auth.currentUser.uid, `Added subscription: ${name} ($${cost}/${renewalInterval}${renewalType})`);
-    
     alert(`✅ Added subscription: ${name}!`);
-    
     if (el.newSubscriptionName) el.newSubscriptionName.value = "";
     if (el.newSubscriptionDesc) el.newSubscriptionDesc.value = "";
     if (el.newSubscriptionCost) el.newSubscriptionCost.value = "";

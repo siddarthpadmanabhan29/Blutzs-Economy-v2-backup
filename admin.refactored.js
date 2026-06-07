@@ -45,7 +45,7 @@ export async function initializeAdminPanel() {
     const { initMembershipsUI, loadRenewalRequests } = await import("./admin/adminMembers.js");
     const { initCosmeticsUI } = await import("./admin/adminCosmetics.js");
     const { initContractsUI, initEmploymentUI } = await import("./admin/adminContracts.js");
-    const { initShopUI, initSubscriptionShopUI } = await import("./admin/adminShop.js");
+    const { initShopUI, initSubscriptionShopUI, initStockMarketAdminUI } = await import("./admin/adminShop.js");
 
     console.log("✅ All modules imported");
 
@@ -54,6 +54,7 @@ export async function initializeAdminPanel() {
     initEconomyUI();
     initShopUI();
     initSubscriptionShopUI();
+    initStockMarketAdminUI();
     initMembershipsUI();
     initFinesUI();
     initCosmeticsUI();
