@@ -48,10 +48,101 @@ export async function loadSubscriptionShop() {
     });
     console.log("✅ Loaded user subscriptions:", userActiveSubscriptions);
 
+    // CHANGE 1: Process any overdue subscriptions before rendering
+    await processOverdueSubscriptions(user);
+
     renderSubscriptionShop();
     renderUserSubscriptions();
   } catch (err) {
     console.error("Failed to load subscription shop:", err);
+  }
+}
+
+/**
+ * Process any subscriptions whose billing date has passed
+ */
+async function processOverdueSubscriptions(user) {
+  const now = new Date();
+
+  for (const subscription of userActiveSubscriptions) {
+    const nextBilling = new Date(subscription.nextBillingDate);
+    if (nextBilling > now) continue; // not due yet, skip
+
+    const item = currentSubscriptionItems.find(i => i.id === subscription.itemId);
+    if (!item) continue;
+
+    const userRef = doc(db, "users", user.uid);
+    const subRef = doc(db, "users", user.uid, "subscriptions", subscription.id);
+    const itemRef = doc(db, "subscriptionShop", subscription.itemId);
+
+    try {
+      // Calculate next billing date from the ORIGINAL due date (not now)
+      // so drift doesn't accumulate if the user logs in late
+      const nextBillingDate = new Date(nextBilling);
+      if (subscription.renewalType === "days") {
+        nextBillingDate.setDate(nextBillingDate.getDate() + subscription.renewalInterval);
+      } else {
+        nextBillingDate.setMonth(nextBillingDate.getMonth() + subscription.renewalInterval);
+      }
+
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data();
+      const userTaxRate = Number(userData.activeTaxRate !== undefined ? userData.activeTaxRate : 0.10);
+      const activeDiscount = Number(userData.activeDiscount || 0);
+
+      // Apply clipped coupon if present
+      const couponDiscount = subscription.clippedCoupon ? subscription.clippedCoupon.discountValue : 0;
+      const pricing = calculateSubscriptionPricing(item.cost, userTaxRate, activeDiscount, couponDiscount);
+      const renewalCost = pricing.finalCost;
+      const currentBalance = Number(userData.balance || 0);
+
+      if (currentBalance < renewalCost) {
+        // Can't afford it — cancel the subscription
+        await updateDoc(subRef, {
+          status: "cancelled",
+          cancelledAt: new Date().toISOString(),
+          cancellationReason: "insufficient_funds"
+        });
+        await updateDoc(itemRef, { subscriberCount: increment(-1) });
+        await logHistory(user.uid, `Subscription to ${item.name} auto-cancelled: insufficient funds`, "subscription");
+
+        sendSlackMessage(`⚠️ *Auto-Cancelled:* ${userData.username || 'User'} couldn't afford renewal of *${item.name}* ($${renewalCost.toLocaleString()})`);
+
+        // Remove from local state
+        userActiveSubscriptions = userActiveSubscriptions.filter(s => s.id !== subscription.id);
+        continue;
+      }
+
+      // Charge and renew
+      await runTransaction(db, async (transaction) => {
+        const freshSnap = await transaction.get(userRef);
+        const freshBalance = Number(freshSnap.data().balance || 0);
+        if (freshBalance < renewalCost) throw new Error("Insufficient funds");
+
+        transaction.update(userRef, { balance: increment(-renewalCost) });
+        transaction.update(subRef, {
+          nextBillingDate: nextBillingDate.toISOString(),
+          chargeCount: increment(1),
+          lastRenewedAt: new Date().toISOString(),
+          clippedCoupon: null,       // clear coupon after use
+          couponUsedAt: subscription.clippedCoupon ? new Date().toISOString() : null
+        });
+        transaction.update(itemRef, {
+          totalRevenue: increment(renewalCost)
+        });
+      });
+
+      await logHistory(user.uid, `Subscription renewed: ${item.name} — $${renewalCost.toLocaleString()}`, "subscription");
+      sendSlackMessage(`🔄 *Renewal:* ${userData.username || 'User'} renewed *${item.name}* for *$${renewalCost.toLocaleString()}*`);
+
+      // Update local state
+      subscription.nextBillingDate = nextBillingDate.toISOString();
+      subscription.clippedCoupon = null;
+      localUserData.balance -= renewalCost;
+
+    } catch (err) {
+      console.error(`Failed to renew subscription ${subscription.id}:`, err);
+    }
   }
 }
 
@@ -191,9 +282,10 @@ function renderUserSubscriptions() {
     const now = new Date();
     const msUntilRenewal = nextBillingDate - now;
     const daysUntilRenewal = Math.ceil(msUntilRenewal / (1000 * 60 * 60 * 24));
-    const hoursUntilRenewal = msUntilRenewal / (1000 * 60 * 60);
-    const canClip = hoursUntilRenewal <= 24 && hoursUntilRenewal > 0;
+
+    // CHANGE 2: Allow coupon clipping at any time, not just 1 day before
     const hasClipped = !!subscription.clippedCoupon;
+    const canClip = !hasClipped;
 
     // Build coupon section HTML
     let couponSectionHTML = "";
@@ -212,7 +304,7 @@ function renderUserSubscriptions() {
     } else {
       couponSectionHTML = `
         <div style="margin-top: 8px; font-size: 0.7rem; color: #555; font-style: italic;">
-          🔒 Coupon slot opens 1 day before renewal
+          🔒 No coupon available to clip
         </div>`;
     }
 
