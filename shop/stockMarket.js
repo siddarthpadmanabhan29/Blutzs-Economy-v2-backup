@@ -76,42 +76,42 @@ function renderStockMarket() {
     const estimatedSellTax = livePrice * SELL_TAX_RATE;
 
     return `
-      <article style="background: rgba(0,0,0,0.25); border: 1px solid ${delta >= 0 ? '#2ecc71' : '#e74c3c'}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; justify-content: space-between; gap: 10px; align-items: start;">
-          <div>
-            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1rem;">${company.name}</h4>
-            <p style="margin: 0; color: #aaa; font-size: 0.75rem;">${company.description || "Public company listed for investor trading."}</p>
+      <article class="stock-card" style="background: rgba(0,0,0,0.25); border: 1px solid ${delta >= 0 ? '#2ecc71' : '#e74c3c'}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 200px;">
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1rem; word-break: break-word;">${company.name}</h4>
+            <p style="margin: 0; color: #aaa; font-size: 0.75rem; word-break: break-word;">${company.description || "Public company listed for investor trading."}</p>
           </div>
-          <span style="background: rgba(52,152,219,0.12); color: #3498db; border: 1px solid rgba(52,152,219,0.2); border-radius: 999px; padding: 4px 8px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase;">${ownerLabel}</span>
+          <span style="background: rgba(52,152,219,0.12); color: #3498db; border: 1px solid rgba(52,152,219,0.2); border-radius: 999px; padding: 4px 8px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; white-space: nowrap; flex-shrink: 0;">${ownerLabel}</span>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem; color: #ddd;">
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px;">
+        <div class="stock-info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem; color: #ddd;">
+          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Live Price<br><strong style="color: #f1c40f; font-size: 1rem;">$${livePrice.toLocaleString()}</strong>
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px;">
+          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Market Change<br><strong style="color: ${changeClass}; font-size: 1rem;">${delta >= 0 ? '+' : ''}$${delta.toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</strong>
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px;">
+          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Shares Available<br><strong style="color: #2ecc71; font-size: 1rem;">${availableShares}</strong>
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px;">
+          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Dividend Yield<br><strong style="color: #8e44ad; font-size: 1rem;">${Number(company.dividendRate || 0)}%</strong>
             <span style="display: block; font-size: 0.6rem; color: #888;">Paid weekly · 15% tax</span>
           </div>
         </div>
 
-        <div style="background: rgba(231,76,60,0.06); border: 1px solid rgba(231,76,60,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.7rem; color: #e74c3c;">
+        <div style="background: rgba(231,76,60,0.06); border: 1px solid rgba(231,76,60,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.7rem; color: #e74c3c; word-break: break-word;">
           ⚠️ Sell Tax: 10% deducted from proceeds (~$${estimatedSellTax.toFixed(2)} per share at current price)
         </div>
 
-        <div style="display: flex; gap: 8px; align-items: center;">
+        <div class="stock-action-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <input id="stock-qty-${company.id}" type="number" min="1" max="${availableShares}" value="1"
-            style="flex: 1; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem;" />
+            style="flex: 1; min-width: 70px; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; box-sizing: border-box;" />
           <button class="stock-buy-btn" data-company-id="${company.id}" data-price="${livePrice}"
-            style="background: #2ecc71; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer;">Buy</button>
+            style="background: #2ecc71; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;">Buy</button>
           <button class="stock-sell-btn" data-company-id="${company.id}" data-price="${livePrice}"
-            style="background: #e74c3c; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer;">Sell</button>
+            style="background: #e74c3c; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;">Sell</button>
         </div>
       </article>
     `;
@@ -153,25 +153,25 @@ function renderPortfolio() {
     const daysUntilNext = Math.max(0, DIVIDEND_INTERVAL_DAYS - daysSinceLastPaid);
 
     return `
-      <article style="background: rgba(46,204,113,0.08); border: 1px solid ${positive ? '#2ecc71' : '#e74c3c'}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
-        <div style="display: flex; justify-content: space-between; align-items: start; gap: 10px;">
-          <div>
-            <h4 style="margin: 0; color: #fff; font-size: 0.95rem;">${company.name || item.companyId}</h4>
-            <p style="margin: 2px 0 0 0; color: #aaa; font-size: 0.72rem;">${sharesOwned} share(s) @ avg $${avgCost.toLocaleString()} each</p>
+      <article class="portfolio-card" style="background: rgba(46,204,113,0.08); border: 1px solid ${positive ? '#2ecc71' : '#e74c3c'}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 150px;">
+            <h4 style="margin: 0; color: #fff; font-size: 0.95rem; word-break: break-word;">${company.name || item.companyId}</h4>
+            <p style="margin: 2px 0 0 0; color: #aaa; font-size: 0.72rem; word-break: break-word;">${sharesOwned} share(s) @ avg $${avgCost.toLocaleString()} each</p>
           </div>
-          <span style="color: ${positive ? '#2ecc71' : '#e74c3c'}; font-size: 0.75rem; font-weight: 800;">
+          <span style="color: ${positive ? '#2ecc71' : '#e74c3c'}; font-size: 0.75rem; font-weight: 800; white-space: nowrap; flex-shrink: 0;">
             ${positive ? '+' : ''}$${profit.toLocaleString()} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)
           </span>
         </div>
 
-        <div style="font-size: 0.75rem; color: #ddd;">
+        <div style="font-size: 0.75rem; color: #ddd; word-break: break-word;">
           Live value: <strong style="color: #f1c40f;">$${(livePrice * sharesOwned).toLocaleString()}</strong>
         </div>
 
         ${dividendRate > 0 ? `
-          <div style="background: rgba(142,68,173,0.08); border: 1px solid rgba(142,68,173,0.2); border-radius: 8px; padding: 8px 10px; font-size: 0.7rem; color: #ccc;">
+          <div style="background: rgba(142,68,173,0.08); border: 1px solid rgba(142,68,173,0.2); border-radius: 8px; padding: 8px 10px; font-size: 0.7rem; color: #ccc; word-break: break-word;">
             💰 Next dividend: <strong style="color: #8e44ad;">$${estimatedDividendAfterTax.toFixed(2)}</strong> after 15% tax
-            <span style="color: #888; margin-left: 6px;">(in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'})</span>
+            <span style="color: #888; display: block; margin-top: 3px;">(in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'})</span>
           </div>
         ` : ''}
       </article>
