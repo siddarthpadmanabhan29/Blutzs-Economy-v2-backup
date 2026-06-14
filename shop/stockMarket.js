@@ -14,7 +14,8 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  addDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "../historyManager.js";
 
@@ -59,129 +60,177 @@ function formatDelta(price, base) {
 
 // ==================== CHART & HISTORY ====================
 
-// Store price history in memory (in production, store in Firestore)
-const priceHistory = new Map();
-
-function generatePriceHistory(company) {
-  if (priceHistory.has(company.id)) return priceHistory.get(company.id);
-
-  const basePrice = Number(company.basePrice || 0);
-  const now = new Date();
-  const history = [];
-
-  // Generate 365 days of historical data
-  for (let i = 365; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-
-    // Generate realistic price movement (random walk)
-    const randomChange = (Math.random() - 0.48) * 0.05; // Slight upward bias
-    const volatility = Number(company.volatility || 0.02);
-    const dailyPrice = basePrice * (1 + randomChange * volatility);
-    
-    history.push({
-      date: date.toISOString().split('T')[0],
-      price: Math.max(1, Number(dailyPrice.toFixed(2))),
-      timestamp: date.getTime()
+// Record price snapshot to Firestore whenever price changes
+export async function recordPriceSnapshot(companyId, price) {
+  try {
+    const historyRef = collection(db, "stockCompanies", companyId, "priceHistory");
+    await addDoc(historyRef, {
+      price: Number(price.toFixed(2)),
+      date: new Date().toISOString().split('T')[0],
+      timestamp: new Date().getTime()
     });
+  } catch (err) {
+    console.error("Failed to record price snapshot:", err);
   }
-
-  priceHistory.set(company.id, history);
-  return history;
 }
 
-function getHistoryByTimeframe(company, timeframe = 'daily') {
-  const history = generatePriceHistory(company);
+// Get all price history from Firestore for a company
+async function getPriceHistoryFromFirestore(companyId) {
+  try {
+    const historyRef = collection(db, "stockCompanies", companyId, "priceHistory");
+    const q = query(historyRef);
+    const snapshot = await getDocs(q);
+    
+    const history = [];
+    snapshot.forEach((doc) => {
+      history.push(doc.data());
+    });
+    
+    // Sort by timestamp ascending
+    history.sort((a, b) => a.timestamp - b.timestamp);
+    return history;
+  } catch (err) {
+    console.error("Failed to fetch price history:", err);
+    return [];
+  }
+}
+
+// Get aggregated history for timeframe with date ranges
+async function getHistoryByTimeframe(company, timeframe = 'daily') {
+  const history = await getPriceHistoryFromFirestore(company.id);
+  if (!history || history.length === 0) {
+    // Return empty array if no data
+    return [];
+  }
+
   const now = new Date();
-  const data = [];
 
   switch (timeframe) {
     case 'daily':
-      // Last 30 days
-      return history.slice(-30);
+      // Last 30 days - group by day
+      const dailyData = [];
+      const dayGroups = new Map();
+      
+      history.forEach(h => {
+        const date = h.date; // YYYY-MM-DD format
+        if (!dayGroups.has(date)) {
+          dayGroups.set(date, []);
+        }
+        dayGroups.get(date).push(h.price);
+      });
+      
+      dayGroups.forEach((prices, date) => {
+        const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+        dailyData.push({
+          date: date,
+          price: Number(avg.toFixed(2)),
+          timestamp: new Date(date).getTime()
+        });
+      });
+      
+      return dailyData.slice(-30);
 
     case 'weekly':
-      // Last 52 weeks, aggregated
+      // Group by week with date range (e.g., "Jan 15-22")
       const weeklyData = [];
-      for (let i = 51; i >= 0; i--) {
-        const weekEnd = new Date(now);
-        weekEnd.setDate(weekEnd.getDate() - (i * 7));
+      const weekGroups = new Map();
+      
+      history.forEach(h => {
+        const date = new Date(h.date);
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6); // End of week (Saturday)
         
-        const weekStart = new Date(weekEnd);
-        weekStart.setDate(weekStart.getDate() - 7);
-
-        const weekPrices = history.filter(h => {
-          const hDate = new Date(h.timestamp);
-          return hDate >= weekStart && hDate <= weekEnd;
-        });
-
-        if (weekPrices.length > 0) {
-          const avgPrice = weekPrices.reduce((sum, h) => sum + h.price, 0) / weekPrices.length;
-          weeklyData.push({
-            date: `Week ${51 - i + 1}`,
-            price: Number(avgPrice.toFixed(2)),
-            timestamp: weekEnd.getTime()
-          });
+        const weekKey = weekStart.toISOString().split('T')[0];
+        if (!weekGroups.has(weekKey)) {
+          weekGroups.set(weekKey, { prices: [], start: weekStart, end: weekEnd });
         }
-      }
-      return weeklyData;
+        weekGroups.get(weekKey).prices.push(h.price);
+      });
+      
+      const sortedWeeks = Array.from(weekGroups.entries()).sort((a, b) => 
+        new Date(a[0]).getTime() - new Date(b[0]).getTime()
+      );
+      
+      sortedWeeks.forEach(([weekKey, data]) => {
+        const avg = data.prices.reduce((a, b) => a + b, 0) / data.prices.length;
+        const startDate = data.start;
+        const endDate = data.end;
+        const dateLabel = `${(startDate.getMonth() + 1).toString().padStart(2, '0')}-${startDate.getDate().toString().padStart(2, '0')} to ${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}`;
+        
+        weeklyData.push({
+          date: dateLabel,
+          price: Number(avg.toFixed(2)),
+          timestamp: endDate.getTime()
+        });
+      });
+      
+      return weeklyData.slice(-52);
 
     case 'monthly':
-      // Last 12 months, aggregated
+      // Group by month with date range (e.g., "Jan 1-31")
       const monthlyData = [];
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthGroups = new Map();
       
-      for (let i = 11; i >= 0; i--) {
-        const monthEnd = new Date(now);
-        monthEnd.setMonth(monthEnd.getMonth() - i);
-        
-        const monthStart = new Date(monthEnd);
-        monthStart.setDate(1);
-
-        const monthPrices = history.filter(h => {
-          const hDate = new Date(h.timestamp);
-          return hDate >= monthStart && hDate <= monthEnd;
-        });
-
-        if (monthPrices.length > 0) {
-          const avgPrice = monthPrices.reduce((sum, h) => sum + h.price, 0) / monthPrices.length;
-          monthlyData.push({
-            date: monthNames[monthEnd.getMonth()],
-            price: Number(avgPrice.toFixed(2)),
-            timestamp: monthEnd.getTime()
-          });
+      history.forEach(h => {
+        const date = new Date(h.date);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        if (!monthGroups.has(monthKey)) {
+          monthGroups.set(monthKey, { prices: [], dates: [] });
         }
-      }
-      return monthlyData;
+        monthGroups.get(monthKey).prices.push(h.price);
+        monthGroups.get(monthKey).dates.push(date);
+      });
+      
+      const sortedMonths = Array.from(monthGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      
+      sortedMonths.forEach(([monthKey, data]) => {
+        const avg = data.prices.reduce((a, b) => a + b, 0) / data.prices.length;
+        const [year, month] = monthKey.split('-');
+        const monthDate = new Date(parseInt(year), parseInt(month) - 1);
+        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const dateLabel = `${monthNames[parseInt(month) - 1]} 1-${lastDay}`;
+        
+        monthlyData.push({
+          date: dateLabel,
+          price: Number(avg.toFixed(2)),
+          timestamp: monthDate.getTime()
+        });
+      });
+      
+      return monthlyData.slice(-12);
 
     case 'yearly':
-      // Last 5 years, aggregated
+      // Group by year with date range (e.g., "2024 Jan-Dec")
       const yearlyData = [];
-      for (let i = 4; i >= 0; i--) {
-        const yearEnd = new Date(now);
-        yearEnd.setFullYear(yearEnd.getFullYear() - i);
-        
-        const yearStart = new Date(yearEnd);
-        yearStart.setFullYear(yearStart.getFullYear() - 1);
-
-        const yearPrices = history.filter(h => {
-          const hDate = new Date(h.timestamp);
-          return hDate >= yearStart && hDate <= yearEnd;
-        });
-
-        if (yearPrices.length > 0) {
-          const avgPrice = yearPrices.reduce((sum, h) => sum + h.price, 0) / yearPrices.length;
-          yearlyData.push({
-            date: yearEnd.getFullYear().toString(),
-            price: Number(avgPrice.toFixed(2)),
-            timestamp: yearEnd.getTime()
-          });
+      const yearGroups = new Map();
+      
+      history.forEach(h => {
+        const date = new Date(h.date);
+        const year = date.getFullYear().toString();
+        if (!yearGroups.has(year)) {
+          yearGroups.set(year, []);
         }
-      }
-      return yearlyData;
+        yearGroups.get(year).push(h.price);
+      });
+      
+      const sortedYears = Array.from(yearGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      
+      sortedYears.forEach(([year, prices]) => {
+        const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+        yearlyData.push({
+          date: year,
+          price: Number(avg.toFixed(2)),
+          timestamp: new Date(year, 0, 1).getTime()
+        });
+      });
+      
+      return yearlyData.slice(-5);
 
     default:
-      return history.slice(-30);
+      return [];
   }
 }
 
@@ -208,76 +257,88 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const data = getHistoryByTimeframe(company, initialTimeframe);
-  const stats = calculateChartStats(data);
-  const isPositive = stats.change >= 0;
+  // Make it async to load real data
+  (async () => {
+    const data = await getHistoryByTimeframe(company, initialTimeframe);
+    const stats = calculateChartStats(data);
+    const isPositive = stats.change >= 0;
 
-  const labels = data.map(d => d.date);
-  const prices = data.map(d => d.price);
+    const labels = data.map(d => d.date);
+    const prices = data.map(d => d.price);
 
-  // Destroy existing chart if it exists
-  const existingCanvas = container.querySelector('canvas');
-  if (existingCanvas && window.Chart?.helpers?.canvases) {
-    const chartInstance = Chart.helpers.canvases.find(c => c === existingCanvas);
-    if (chartInstance?.instance) chartInstance.instance.destroy();
-  }
+    if (labels.length === 0) {
+      container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px; font-size: 0.75rem;">No price data yet. Check back after trading begins.</p>';
+      return;
+    }
 
-  const canvas = document.createElement('canvas');
-  container.innerHTML = '';
-  container.appendChild(canvas);
+    // Destroy existing chart if it exists
+    const existingCanvas = container.querySelector('canvas');
+    if (existingCanvas) {
+      const charts = Chart.instances || [];
+      charts.forEach(chart => {
+        if (chart && chart.canvas === existingCanvas) {
+          chart.destroy();
+        }
+      });
+    }
 
-  const ctx = canvas.getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: `${company.name} Price`,
-        data: prices,
-        borderColor: isPositive ? '#2ecc71' : '#e74c3c',
-        backgroundColor: isPositive ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
-        borderWidth: 2,
-        fill: true,
-        tension: 0.4,
-        pointRadius: 3,
-        pointBackgroundColor: isPositive ? '#2ecc71' : '#e74c3c',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 1,
-        pointHoverRadius: 5,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          titleColor: '#fff',
-          bodyColor: '#ddd',
+    const canvas = document.createElement('canvas');
+    container.innerHTML = '';
+    container.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: `${company.name} Price`,
+          data: prices,
           borderColor: isPositive ? '#2ecc71' : '#e74c3c',
-          borderWidth: 1,
-          padding: 8,
-          displayColors: false,
-          callbacks: {
-            label: (context) => `$${Number(context.parsed.y).toFixed(2)}`
+          backgroundColor: isPositive ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: isPositive ? '#2ecc71' : '#e74c3c',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 1,
+          pointHoverRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            titleColor: '#fff',
+            bodyColor: '#ddd',
+            borderColor: isPositive ? '#2ecc71' : '#e74c3c',
+            borderWidth: 1,
+            padding: 8,
+            displayColors: false,
+            callbacks: {
+              label: (context) => `$${Number(context.parsed.y).toFixed(2)}`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: false,
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: '#aaa', callback: (val) => `$${val.toFixed(2)}` }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: '#aaa', maxTicksLimit: 10 }
           }
         }
-      },
-      scales: {
-        y: {
-          beginAtZero: false,
-          grid: { color: 'rgba(255,255,255,0.05)' },
-          ticks: { color: '#aaa', callback: (val) => `$${val.toFixed(2)}` }
-        },
-        x: {
-          grid: { display: false },
-          ticks: { color: '#aaa', maxTicksLimit: 10 }
-        }
       }
-    }
-  });
+    });
+  })();
 }
 
 // ==================== RENDER ====================
@@ -423,23 +484,26 @@ function updateChartStats(company, timeframe) {
   const statsContainer = document.getElementById(`chart-stats-${company.id}`);
   if (!statsContainer) return;
 
-  const data = getHistoryByTimeframe(company, timeframe);
-  const stats = calculateChartStats(data);
-  
-  statsContainer.innerHTML = `
-    <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-      Min: <strong style="color: #aaa;">$${stats.min}</strong>
-    </div>
-    <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-      Max: <strong style="color: #aaa;">$${stats.max}</strong>
-    </div>
-    <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-      Avg: <strong style="color: #aaa;">$${stats.avg}</strong>
-    </div>
-    <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-      Change: <strong style="color: ${stats.change >= 0 ? '#2ecc71' : '#e74c3c'};">${stats.change >= 0 ? '+' : ''}$${stats.change} (${stats.changePercent >= 0 ? '+' : ''}${stats.changePercent}%)</strong>
-    </div>
-  `;
+  // Make it async to load real data
+  (async () => {
+    const data = await getHistoryByTimeframe(company, timeframe);
+    const stats = calculateChartStats(data);
+    
+    statsContainer.innerHTML = `
+      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+        Min: <strong style="color: #aaa;">$${stats.min}</strong>
+      </div>
+      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+        Max: <strong style="color: #aaa;">$${stats.max}</strong>
+      </div>
+      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+        Avg: <strong style="color: #aaa;">$${stats.avg}</strong>
+      </div>
+      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+        Change: <strong style="color: ${stats.change >= 0 ? '#2ecc71' : '#e74c3c'};">${stats.change >= 0 ? '+' : ''}$${stats.change} (${stats.changePercent >= 0 ? '+' : ''}${stats.changePercent}%)</strong>
+      </div>
+    `;
+  })();
 }
 
 function attachTradeButtons() {
@@ -556,6 +620,7 @@ async function tradeShares(companyId, quantity, price, action) {
         }, { merge: true });
       });
 
+      await recordPriceSnapshot(companyId, newBasePrice);
       await logHistory(user.uid, `Bought ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each`, "stock");
       alert(`✅ Bought ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each.\nTotal paid: $${totalCost.toLocaleString()}`);
       return;
@@ -610,6 +675,7 @@ async function tradeShares(companyId, quantity, price, action) {
         }
       });
 
+      await recordPriceSnapshot(companyId, newBasePrice);
       await logHistory(
         user.uid,
         `Sold ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each — received $${netProceeds.toLocaleString()} after 10% tax ($${taxAmount.toLocaleString()} deducted)`,
