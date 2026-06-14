@@ -57,6 +57,229 @@ function formatDelta(price, base) {
   return { delta, pct };
 }
 
+// ==================== CHART & HISTORY ====================
+
+// Store price history in memory (in production, store in Firestore)
+const priceHistory = new Map();
+
+function generatePriceHistory(company) {
+  if (priceHistory.has(company.id)) return priceHistory.get(company.id);
+
+  const basePrice = Number(company.basePrice || 0);
+  const now = new Date();
+  const history = [];
+
+  // Generate 365 days of historical data
+  for (let i = 365; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+
+    // Generate realistic price movement (random walk)
+    const randomChange = (Math.random() - 0.48) * 0.05; // Slight upward bias
+    const volatility = Number(company.volatility || 0.02);
+    const dailyPrice = basePrice * (1 + randomChange * volatility);
+    
+    history.push({
+      date: date.toISOString().split('T')[0],
+      price: Math.max(1, Number(dailyPrice.toFixed(2))),
+      timestamp: date.getTime()
+    });
+  }
+
+  priceHistory.set(company.id, history);
+  return history;
+}
+
+function getHistoryByTimeframe(company, timeframe = 'daily') {
+  const history = generatePriceHistory(company);
+  const now = new Date();
+  const data = [];
+
+  switch (timeframe) {
+    case 'daily':
+      // Last 30 days
+      return history.slice(-30);
+
+    case 'weekly':
+      // Last 52 weeks, aggregated
+      const weeklyData = [];
+      for (let i = 51; i >= 0; i--) {
+        const weekEnd = new Date(now);
+        weekEnd.setDate(weekEnd.getDate() - (i * 7));
+        
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekStart.getDate() - 7);
+
+        const weekPrices = history.filter(h => {
+          const hDate = new Date(h.timestamp);
+          return hDate >= weekStart && hDate <= weekEnd;
+        });
+
+        if (weekPrices.length > 0) {
+          const avgPrice = weekPrices.reduce((sum, h) => sum + h.price, 0) / weekPrices.length;
+          weeklyData.push({
+            date: `Week ${51 - i + 1}`,
+            price: Number(avgPrice.toFixed(2)),
+            timestamp: weekEnd.getTime()
+          });
+        }
+      }
+      return weeklyData;
+
+    case 'monthly':
+      // Last 12 months, aggregated
+      const monthlyData = [];
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      for (let i = 11; i >= 0; i--) {
+        const monthEnd = new Date(now);
+        monthEnd.setMonth(monthEnd.getMonth() - i);
+        
+        const monthStart = new Date(monthEnd);
+        monthStart.setDate(1);
+
+        const monthPrices = history.filter(h => {
+          const hDate = new Date(h.timestamp);
+          return hDate >= monthStart && hDate <= monthEnd;
+        });
+
+        if (monthPrices.length > 0) {
+          const avgPrice = monthPrices.reduce((sum, h) => sum + h.price, 0) / monthPrices.length;
+          monthlyData.push({
+            date: monthNames[monthEnd.getMonth()],
+            price: Number(avgPrice.toFixed(2)),
+            timestamp: monthEnd.getTime()
+          });
+        }
+      }
+      return monthlyData;
+
+    case 'yearly':
+      // Last 5 years, aggregated
+      const yearlyData = [];
+      for (let i = 4; i >= 0; i--) {
+        const yearEnd = new Date(now);
+        yearEnd.setFullYear(yearEnd.getFullYear() - i);
+        
+        const yearStart = new Date(yearEnd);
+        yearStart.setFullYear(yearStart.getFullYear() - 1);
+
+        const yearPrices = history.filter(h => {
+          const hDate = new Date(h.timestamp);
+          return hDate >= yearStart && hDate <= yearEnd;
+        });
+
+        if (yearPrices.length > 0) {
+          const avgPrice = yearPrices.reduce((sum, h) => sum + h.price, 0) / yearPrices.length;
+          yearlyData.push({
+            date: yearEnd.getFullYear().toString(),
+            price: Number(avgPrice.toFixed(2)),
+            timestamp: yearEnd.getTime()
+          });
+        }
+      }
+      return yearlyData;
+
+    default:
+      return history.slice(-30);
+  }
+}
+
+function calculateChartStats(data) {
+  if (!data || data.length === 0) return { min: 0, max: 0, avg: 0, change: 0, changePercent: 0 };
+
+  const prices = data.map(d => d.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+  const change = prices[prices.length - 1] - prices[0];
+  const changePercent = prices[0] > 0 ? (change / prices[0]) * 100 : 0;
+
+  return {
+    min: Number(min.toFixed(2)),
+    max: Number(max.toFixed(2)),
+    avg: Number(avg.toFixed(2)),
+    change: Number(change.toFixed(2)),
+    changePercent: Number(changePercent.toFixed(2))
+  };
+}
+
+function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const data = getHistoryByTimeframe(company, initialTimeframe);
+  const stats = calculateChartStats(data);
+  const isPositive = stats.change >= 0;
+
+  const labels = data.map(d => d.date);
+  const prices = data.map(d => d.price);
+
+  // Destroy existing chart if it exists
+  const existingCanvas = container.querySelector('canvas');
+  if (existingCanvas && window.Chart?.helpers?.canvases) {
+    const chartInstance = Chart.helpers.canvases.find(c => c === existingCanvas);
+    if (chartInstance?.instance) chartInstance.instance.destroy();
+  }
+
+  const canvas = document.createElement('canvas');
+  container.innerHTML = '';
+  container.appendChild(canvas);
+
+  const ctx = canvas.getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: `${company.name} Price`,
+        data: prices,
+        borderColor: isPositive ? '#2ecc71' : '#e74c3c',
+        backgroundColor: isPositive ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: isPositive ? '#2ecc71' : '#e74c3c',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1,
+        pointHoverRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          titleColor: '#fff',
+          bodyColor: '#ddd',
+          borderColor: isPositive ? '#2ecc71' : '#e74c3c',
+          borderWidth: 1,
+          padding: 8,
+          displayColors: false,
+          callbacks: {
+            label: (context) => `$${Number(context.parsed.y).toFixed(2)}`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: false,
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: '#aaa', callback: (val) => `$${val.toFixed(2)}` }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: '#aaa', maxTicksLimit: 10 }
+        }
+      }
+    }
+  });
+}
+
 // ==================== RENDER ====================
 
 function renderStockMarket() {
@@ -99,6 +322,21 @@ function renderStockMarket() {
             Dividend Yield<br><strong style="color: #8e44ad; font-size: 1rem;">${Number(company.dividendRate || 0)}%</strong>
             <span style="display: block; font-size: 0.6rem; color: #888;">Paid weekly · 15% tax</span>
           </div>
+        </div>
+
+        <!-- CHART SECTION -->
+        <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.05);">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+            <span style="color: #aaa; font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Performance</span>
+            <div class="chart-timeframe-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button class="chart-btn chart-btn-daily" data-company-id="${company.id}" data-timeframe="daily" style="background: rgba(46,204,113,0.2); color: #2ecc71; border: 1px solid rgba(46,204,113,0.3); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">D</button>
+              <button class="chart-btn chart-btn-weekly" data-company-id="${company.id}" data-timeframe="weekly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">W</button>
+              <button class="chart-btn chart-btn-monthly" data-company-id="${company.id}" data-timeframe="monthly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">M</button>
+              <button class="chart-btn chart-btn-yearly" data-company-id="${company.id}" data-timeframe="yearly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">Y</button>
+            </div>
+          </div>
+          <div id="chart-container-${company.id}" style="position: relative; height: 200px; width: 100%;"></div>
+          <div id="chart-stats-${company.id}" class="chart-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; font-size: 0.7rem; color: #aaa;"></div>
         </div>
 
         <div style="background: rgba(231,76,60,0.06); border: 1px solid rgba(231,76,60,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.7rem; color: #e74c3c; word-break: break-word;">
@@ -181,7 +419,63 @@ function renderPortfolio() {
 
 // ==================== TRADE BUTTONS ====================
 
+function updateChartStats(company, timeframe) {
+  const statsContainer = document.getElementById(`chart-stats-${company.id}`);
+  if (!statsContainer) return;
+
+  const data = getHistoryByTimeframe(company, timeframe);
+  const stats = calculateChartStats(data);
+  
+  statsContainer.innerHTML = `
+    <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      Min: <strong style="color: #aaa;">$${stats.min}</strong>
+    </div>
+    <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      Max: <strong style="color: #aaa;">$${stats.max}</strong>
+    </div>
+    <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      Avg: <strong style="color: #aaa;">$${stats.avg}</strong>
+    </div>
+    <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      Change: <strong style="color: ${stats.change >= 0 ? '#2ecc71' : '#e74c3c'};">${stats.change >= 0 ? '+' : ''}$${stats.change} (${stats.changePercent >= 0 ? '+' : ''}${stats.changePercent}%)</strong>
+    </div>
+  `;
+}
+
 function attachTradeButtons() {
+  // Initialize charts
+  companies.forEach((company) => {
+    renderPriceChart(company, `chart-container-${company.id}`, 'daily');
+    updateChartStats(company, 'daily');
+  });
+
+  // Attach chart timeframe button listeners
+  document.querySelectorAll(".chart-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const companyId = btn.dataset.companyId;
+      const timeframe = btn.dataset.timeframe;
+      const company = companies.find(c => c.id === companyId);
+      
+      if (company) {
+        // Update active button styling
+        const buttonGroup = btn.parentElement;
+        buttonGroup.querySelectorAll(".chart-btn").forEach(b => {
+          b.style.background = "rgba(255,255,255,0.05)";
+          b.style.color = "#aaa";
+          b.style.borderColor = "rgba(255,255,255,0.1)";
+        });
+        btn.style.background = "rgba(46,204,113,0.2)";
+        btn.style.color = "#2ecc71";
+        btn.style.borderColor = "rgba(46,204,113,0.3)";
+        
+        // Render new chart
+        renderPriceChart(company, `chart-container-${company.id}`, timeframe);
+        updateChartStats(company, timeframe);
+      }
+    });
+  });
+
+  // Attach buy/sell buttons
   document.querySelectorAll(".stock-buy-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const companyId = btn.dataset.companyId;

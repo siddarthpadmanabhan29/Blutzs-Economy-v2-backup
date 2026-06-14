@@ -1058,6 +1058,42 @@ html {
     overflow: hidden;
 }
 
+/* Chart styles */
+.chart-timeframe-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.chart-btn {
+    background: rgba(255,255,255,0.05);
+    color: #aaa;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    min-width: 30px;
+    text-align: center;
+}
+
+.chart-btn:hover {
+    background: rgba(46,204,113,0.15);
+    color: #2ecc71;
+    border-color: rgba(46,204,113,0.3);
+}
+
+.chart-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    font-size: 0.7rem;
+    color: #aaa;
+}
+
 /* Medium screens (tablets and below) */
 @media (max-width: 900px) {
     /* Stack the stock market grid layout on mobile */
@@ -1073,6 +1109,11 @@ html {
     /* Make the info grid in cards responsive */
     .stock-info-grid {
         grid-template-columns: 1fr !important;
+    }
+    
+    /* Chart responsive */
+    #stock-market-list [style*="height: 200px"] {
+        height: 180px !important;
     }
 }
 
@@ -1121,6 +1162,16 @@ html {
     
     .portfolio-card {
         padding: 10px !important;
+    }
+    
+    /* Chart responsive on tablet */
+    .chart-timeframe-buttons {
+        justify-content: flex-end;
+    }
+    
+    .chart-btn {
+        min-width: 32px;
+        padding: 6px 10px;
     }
 }
 
@@ -1195,6 +1246,27 @@ html {
     .portfolio-card p {
         font-size: 0.65rem !important;
     }
+    
+    /* Chart responsive on small phones */
+    #stock-market-list [style*="height: 200px"] {
+        height: 150px !important;
+    }
+    
+    .chart-timeframe-buttons {
+        gap: 4px !important;
+    }
+    
+    .chart-btn {
+        padding: 3px 8px !important;
+        font-size: 0.6rem !important;
+        min-width: 28px !important;
+    }
+    
+    .chart-stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+        font-size: 0.65rem !important;
+    }
 }
 
 /* Very small phones (320px and below) */
@@ -1216,5 +1288,10 @@ html {
     .stock-card > div:first-child > span {
         font-size: 0.6rem !important;
         padding: 3px 6px !important;
+    }
+    
+    /* Chart on very small screens */
+    #stock-market-list [style*="height: 200px"] {
+        height: 120px !important;
     }
 }
