@@ -1043,19 +1043,38 @@ html {
 .stock-card {
     word-break: break-word;
     overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 520px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.15);
 }
 
 .stock-info-grid {
     width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
 }
 
 .stock-action-row {
     width: 100%;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .portfolio-card {
     word-break: break-word;
     overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12);
 }
 
 /* Chart styles */
@@ -1126,7 +1145,8 @@ html {
     
     /* Stock card adjustments for tablet */
     .stock-card {
-        padding: 12px !important;
+        padding: 16px !important;
+        min-height: auto !important;
     }
     
     /* Make the info grid in cards vertical on mobile */
@@ -1161,7 +1181,7 @@ html {
     }
     
     .portfolio-card {
-        padding: 10px !important;
+        padding: 14px !important;
     }
     
     /* Chart responsive on tablet */

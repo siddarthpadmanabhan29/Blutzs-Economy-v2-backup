@@ -512,7 +512,7 @@ function showEditStockCompanyModal(companyId) {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div>
             <label style="display: block; color: #aaa; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-bottom: 5px;">Base Price ($)</label>
-            <input id="edit-company-price" type="number" value="${company.basePrice || 0}" min="1" step="0.01"
+            <input id="edit-company-price" type="number" value="${company.basePrice || 0}" min="0" step="0.01"
               style="width: 100%; height: 42px; background: #111; border: 1px solid #f1c40f; color: #f1c40f; padding: 0 15px; border-radius: 8px; box-sizing: border-box; font-weight: bold;">
           </div>
           <div>
@@ -585,8 +585,8 @@ async function saveEditedStockCompany(companyId) {
     alert("❌ Company name cannot be empty.");
     return;
   }
-  if (isNaN(basePrice) || basePrice < 1) {
-    alert("❌ Base price must be at least $1.");
+  if (isNaN(basePrice) || basePrice < 0) {
+    alert("❌ Base price must be at least $0.");
     return;
   }
   if (availableShares < 0) {
@@ -635,7 +635,7 @@ async function addStockCompany() {
   const ownerUsername = el.newCompanyOwner?.value?.trim().toLowerCase();
   const dividendRate = parseFloat(el.newCompanyDividend?.value) || 0;
 
-  if (!name || isNaN(basePrice) || basePrice <= 0) return alert("Enter a valid company name and opening price.");
+  if (!name || isNaN(basePrice) || basePrice < 0) return alert("Enter a valid company name and opening price.");
   if (!ownerUsername) return alert("Enter the owner username so the company is tied to a user.");
   if (shares < 1) return alert("Provide at least 1 available share.");
 

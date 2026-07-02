@@ -18,6 +18,7 @@ import {
   addDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "../historyManager.js";
+import { logAdminAction } from "../admin/adminUtils.js";
 
 const stockMarketList = document.getElementById("stock-market-list");
 const stockPortfolioList = document.getElementById("stock-portfolio-list");
@@ -31,6 +32,7 @@ let authUnsubscribe = null; // added
 const SELL_TAX_RATE = 0.10;       // 10% tax on sell proceeds
 const DIVIDEND_TAX_RATE = 0.15;   // 15% tax on dividend payouts
 const DIVIDEND_INTERVAL_DAYS = 30; // Pay dividends every 30 days
+const MIN_STOCK_PRICE = 0; // allow exact zero so losses can reach -100%
 
 // ==================== PRICE LOGIC ====================
 
@@ -38,7 +40,7 @@ function getLivePrice(company) {
   const base = Number(company.basePrice || 0);
   const trend = Number(company.marketTrend || 0) / 100;
   const live = base * (1 + trend);
-  return Math.max(1, Number(live.toFixed(2)));
+  return Math.max(MIN_STOCK_PRICE, Number(live.toFixed(2)));
 }
 
 function calculatePriceImpact(company, quantity, action) {
@@ -49,7 +51,7 @@ function calculatePriceImpact(company, quantity, action) {
   const impactPct = Math.min(tradeFraction, maxImpact);
   const direction = action === "buy" ? 1 : -1;
   const newBase = currentBase * (1 + direction * impactPct);
-  return Math.max(1, Number(newBase.toFixed(2)));
+  return Math.max(MIN_STOCK_PRICE, Number(newBase.toFixed(2)));
 }
 
 function formatDelta(price, base) {
@@ -352,7 +354,7 @@ function renderStockMarket() {
   }
 
   stockMarketList.innerHTML = companies.map((company) => {
-    const livePrice = getLivePrice(company);
+    const livePrice = (company.isBankrupt || Number(company.basePrice || 0) <= MIN_STOCK_PRICE) ? 0 : getLivePrice(company);
     const { delta, pct } = formatDelta(livePrice, Number(company.basePrice || 0));
     const changeClass = delta >= 0 ? "#2ecc71" : "#e74c3c";
     const availableShares = Number(company.availableShares || 0);
@@ -371,7 +373,7 @@ function renderStockMarket() {
 
         <div class="stock-info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem; color: #ddd;">
           <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
-            Live Price<br><strong style="color: #f1c40f; font-size: 1rem;">$${livePrice.toLocaleString()}</strong>
+            ${company.isBankrupt ? `Status<br><strong style="color: #e74c3c; font-size: 1rem;">Bankrupt</strong>` : `Live Price<br><strong style="color: #f1c40f; font-size: 1rem;">$${livePrice.toLocaleString()}</strong>`}
           </div>
           <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Market Change<br><strong style="color: ${changeClass}; font-size: 1rem;">${delta >= 0 ? '+' : ''}$${delta.toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</strong>
@@ -408,6 +410,7 @@ function renderStockMarket() {
           <input id="stock-qty-${company.id}" type="number" min="1" max="${availableShares}" value="1"
             style="flex: 1; min-width: 70px; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; box-sizing: border-box;" />
           <button class="stock-buy-btn" data-company-id="${company.id}" data-price="${livePrice}"
+            ${company.isBankrupt ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}
             style="background: #2ecc71; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;">Buy</button>
           <button class="stock-sell-btn" data-company-id="${company.id}" data-price="${livePrice}"
             style="background: #e74c3c; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;">Sell</button>
@@ -429,7 +432,7 @@ function renderPortfolio() {
 
   stockPortfolioList.innerHTML = holdings.map((item) => {
     const company = companies.find((c) => c.id === item.companyId) || {};
-    const livePrice = getLivePrice(company);
+    const livePrice = (company.isBankrupt || Number(company.basePrice || 0) <= MIN_STOCK_PRICE) ? 0 : getLivePrice(company);
     const avgCost = Number(item.avgCost || 0);
     const sharesOwned = Number(item.shares || 0);
     const profit = (livePrice - avgCost) * sharesOwned;
@@ -452,14 +455,14 @@ function renderPortfolio() {
     const daysUntilNext = Math.max(0, DIVIDEND_INTERVAL_DAYS - daysSinceLastPaid);
 
     const totalInvested = avgCost * sharesOwned;
-    const currentValue = livePrice * sharesOwned;
+    const currentValue = company.isBankrupt ? 0 : livePrice * sharesOwned;
     const gainLoss = currentValue - totalInvested;
 
     return `
       <article class="portfolio-card" style="background: rgba(46,204,113,0.08); border: 1px solid ${positive ? '#2ecc71' : '#e74c3c'}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
           <div style="flex: 1; min-width: 150px;">
-            <h4 style="margin: 0; color: #fff; font-size: 0.95rem; word-break: break-word;">${company.name || item.companyId}</h4>
+            <h4 style="margin: 0; color: #fff; font-size: 0.95rem; word-break: break-word;">${company.name || item.companyId} ${company.isBankrupt ? '<span style="color:#e74c3c; font-weight:800; font-size:0.8rem; margin-left:8px;">(Bankrupt)</span>' : ''}</h4>
             <p style="margin: 2px 0 0 0; color: #aaa; font-size: 0.72rem; word-break: break-word;">${sharesOwned} share(s) @ avg $${avgCost.toLocaleString()} each</p>
           </div>
           <span style="color: ${positive ? '#2ecc71' : '#e74c3c'}; font-size: 0.75rem; font-weight: 800; white-space: nowrap; flex-shrink: 0;">
@@ -587,12 +590,14 @@ async function tradeShares(companyId, quantity, price, action) {
 
     const companyData = companySnap.data();
     const userData = userSnap.data();
-    const livePrice = getLivePrice(companyData);
+      const livePrice = (companyData.isBankrupt || Number(companyData.basePrice || 0) <= MIN_STOCK_PRICE) ? 0 : getLivePrice(companyData);
     const totalCost = livePrice * quantity;
     const newBasePrice = calculatePriceImpact(companyData, quantity, action);
+      const willBankrupt = newBasePrice <= MIN_STOCK_PRICE;
 
     // ── BUY ──
     if (action === "buy") {
+      if (companyData.isBankrupt) return alert("Cannot buy shares: company is bankrupt/delisted.");
       if (Number(companyData.availableShares || 0) < quantity) return alert("Not enough shares available.");
       if (Number(userData.balance || 0) < totalCost) return alert("Insufficient funds for this trade.");
 
@@ -614,8 +619,9 @@ async function tradeShares(companyId, quantity, price, action) {
 
         transaction.update(userRef, { balance: increment(-totalCost) });
         transaction.update(companyRef, {
-          availableShares: increment(-quantity),
-          basePrice: newBasePrice
+          availableShares: willBankrupt ? 0 : increment(-quantity),
+          basePrice: willBankrupt ? MIN_STOCK_PRICE : newBasePrice,
+          isBankrupt: willBankrupt
         });
         transaction.set(holdingRef, {
           companyId,
@@ -628,6 +634,13 @@ async function tradeShares(companyId, quantity, price, action) {
 
       await recordPriceSnapshot(companyId, newBasePrice);
       await logHistory(user.uid, `Bought ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each`, "stock");
+      if (willBankrupt) {
+        try {
+          await logAdminAction(user.uid, `Company ${companyData.name} declared BANKRUPT after trade by ${user.uid}`);
+        } catch (err) {
+          console.error("Failed to log bankruptcy action:", err);
+        }
+      }
       alert(`✅ Bought ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each.\nTotal paid: $${totalCost.toLocaleString()}`);
       return;
     }
@@ -667,8 +680,9 @@ async function tradeShares(companyId, quantity, price, action) {
         // Credit net proceeds (after tax) to user
         transaction.update(userRef, { balance: increment(netProceeds) });
         transaction.update(companyRef, {
-          availableShares: increment(quantity),
-          basePrice: newBasePrice
+          availableShares: willBankrupt ? 0 : increment(quantity),
+          basePrice: willBankrupt ? MIN_STOCK_PRICE : newBasePrice,
+          isBankrupt: willBankrupt
         });
 
         if (nextShares <= 0) {
@@ -687,6 +701,13 @@ async function tradeShares(companyId, quantity, price, action) {
         `Sold ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each — received $${netProceeds.toLocaleString()} after 10% tax ($${taxAmount.toLocaleString()} deducted)`,
         "stock"
       );
+      if (willBankrupt) {
+        try {
+          await logAdminAction(user.uid, `Company ${companyData.name} declared BANKRUPT after trade by ${user.uid}`);
+        } catch (err) {
+          console.error("Failed to log bankruptcy action:", err);
+        }
+      }
       alert(
         `✅ Sold ${quantity} share(s) of ${companyData.name}\n\n` +
         `Gross: $${grossProceeds.toLocaleString()}\n` +
