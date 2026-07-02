@@ -451,6 +451,10 @@ function renderPortfolio() {
       : DIVIDEND_INTERVAL_DAYS;
     const daysUntilNext = Math.max(0, DIVIDEND_INTERVAL_DAYS - daysSinceLastPaid);
 
+    const totalInvested = avgCost * sharesOwned;
+    const currentValue = livePrice * sharesOwned;
+    const gainLoss = currentValue - totalInvested;
+
     return `
       <article class="portfolio-card" style="background: rgba(46,204,113,0.08); border: 1px solid ${positive ? '#2ecc71' : '#e74c3c'}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
@@ -463,8 +467,10 @@ function renderPortfolio() {
           </span>
         </div>
 
-        <div style="font-size: 0.75rem; color: #ddd; word-break: break-word;">
-          Live value: <strong style="color: #f1c40f;">$${(livePrice * sharesOwned).toLocaleString()}</strong>
+        <div style="font-size: 0.75rem; color: #ddd; display: grid; gap: 6px; word-break: break-word;">
+          <div>Initial investment: <strong style="color: #f1c40f;">$${totalInvested.toLocaleString()}</strong></div>
+          <div>Current value: <strong style="color: #f1c40f;">$${currentValue.toLocaleString()}</strong></div>
+          <div>Gain/Loss: <strong style="color: ${positive ? '#2ecc71' : '#e74c3c'};">${gainLoss >= 0 ? '+' : ''}$${gainLoss.toLocaleString()}</strong></div>
         </div>
 
         ${dividendRate > 0 ? `
