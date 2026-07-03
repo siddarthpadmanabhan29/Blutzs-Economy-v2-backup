@@ -1189,21 +1189,23 @@ html {
 /* Medium screens (tablets and below) */
 @media (max-width: 900px) {
     /* Force the stock tab outer layout to stack vertically */
-    #tab-stock > .section-card > div[style*="grid-template-columns:"] {
-        grid-template-columns: 1fr !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-        gap: 12px !important;
-    }
+    #stock-layout-grid {
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    gap: 12px !important;
+}
 
-    #tab-stock > .section-card > div[style*="grid-template-columns:"] > div {
-        width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-        justify-self: stretch !important;
-        align-self: stretch !important;
-    }
+#stock-layout-grid > div,
+#stock-portfolio-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    justify-self: stretch !important;
+    align-self: stretch !important;
+}
     
     /* Make the market list responsive on smaller screens */
     #stock-market-list {
