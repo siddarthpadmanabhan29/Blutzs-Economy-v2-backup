@@ -310,7 +310,7 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },

@@ -398,6 +398,79 @@ body.dark-mode #login-screen {
 }
 
 /* Background Glow Effect */
+
+/* ---------- STOCK MARKET RESPONSIVE FIXES ---------- */
+/* Make stock cards and portfolio cards flow nicely on small screens */
+.stock-card, .portfolio-card {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px !important;
+}
+
+.stock-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.stock-action-row input[type="number"] {
+    min-width: 0;
+}
+
+/* Chart container pattern selector for dynamic IDs */
+div[id^="chart-container-"] {
+    height: 200px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 800px) {
+    .main-content { padding: 16px; }
+    .stock-card, .portfolio-card {
+        padding: 10px !important;
+        border-radius: 10px !important;
+    }
+
+    .stock-card h4, .portfolio-card h4 { font-size: 0.98rem; }
+    .stock-card p, .portfolio-card p { font-size: 0.72rem; }
+
+    .stock-info-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .chart-timeframe-buttons { gap: 4px; }
+
+    .stock-action-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    .stock-action-row input[type="number"] {
+        width: 100% !important;
+        margin-bottom: 8px;
+    }
+
+    .stock-action-row button {
+        width: 100% !important;
+        padding: 8px 10px !important;
+        font-size: 0.9rem !important;
+    }
+
+    div[id^="chart-container-"] {
+        height: 160px !important;
+    }
+}
+
+@media (max-width: 420px) {
+    .stock-card, .portfolio-card {
+        padding: 8px !important;
+        border-radius: 8px !important;
+    }
+
+    .stock-card h4, .portfolio-card h4 { font-size: 0.9rem; }
+    .stock-card p, .portfolio-card p { font-size: 0.66rem; }
+
+    .chart-timeframe-buttons button { padding: 4px 8px !important; font-size: 0.6rem !important; }
+    div[id^="chart-container-"] { height: 130px !important; }
+}
+
 .login-glow {
     position: absolute;
     width: 400px;
@@ -1115,9 +1188,21 @@ html {
 
 /* Medium screens (tablets and below) */
 @media (max-width: 900px) {
-    /* Stack the stock market grid layout on mobile */
-    #tab-stock [style*="grid-template-columns: 1.2fr"] {
+    /* Force the stock tab outer layout to stack vertically */
+    #tab-stock > .section-card > div[style*="grid-template-columns:"] {
         grid-template-columns: 1fr !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        gap: 12px !important;
+    }
+
+    #tab-stock > .section-card > div[style*="grid-template-columns:"] > div {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        justify-self: stretch !important;
+        align-self: stretch !important;
     }
     
     /* Make the market list responsive on smaller screens */
@@ -1200,6 +1285,24 @@ html {
     #stock-market-list {
         grid-template-columns: 1fr !important;
         gap: 10px !important;
+    }
+    
+    /* Force the outer stock section to stack vertically */
+    #tab-stock > .section-card > div[style*="grid-template-columns:"] {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        width: 100% !important;
+    }
+
+    #tab-stock > .section-card > div[style*="grid-template-columns:"] > div {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    #tab-stock > .section-card > div[style*="grid-template-columns:"] > div:last-child {
+        margin: 0 !important;
+        justify-self: stretch !important;
+        align-self: stretch !important;
     }
     
     /* Reduce padding on small phones */
