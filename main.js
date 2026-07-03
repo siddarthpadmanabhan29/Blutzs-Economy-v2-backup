@@ -29,8 +29,8 @@ export function showScreen(id) {
 export function updateBalanceDisplay(balance, elemId = "user-balance", changeType = null) {
   const el = document.getElementById(elemId);
   if (!el) return;
+  if (balance === undefined || balance === null) return;   // 👈 bail out safely
 
-  // 1. Prepare the display value
   let displayValue = balance;
 
   // If it's a raw number, format it properly. If it's already a string, leave it alone.

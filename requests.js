@@ -3,7 +3,7 @@ console.log("requests.js loaded");
 
 import { db, auth } from "./firebaseConfig.js";
 import { 
-    collection, query, where, onSnapshot, doc, getDoc, runTransaction, serverTimestamp, deleteDoc 
+    collection, query, where, onSnapshot, doc, getDoc, runTransaction, serverTimestamp, deleteDoc, increment 
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 import { updateBalanceDisplay } from "./main.js";
@@ -120,7 +120,6 @@ async function payRequest(requestId, amount, requesterUid, requesterName) {
 
         await runTransaction(db, async (transaction) => {
             const payerSnap = await transaction.get(payerRef);
-            const requesterSnap = await transaction.get(requesterRef);
 
             if (!payerSnap.exists()) throw "Payer data missing.";
             const payerData = payerSnap.data();
@@ -129,7 +128,7 @@ async function payRequest(requestId, amount, requesterUid, requesterName) {
 
             // Deduct from payer, Add to requester
             transaction.update(payerRef, { balance: payerData.balance - amount });
-            transaction.update(requesterRef, { balance: (requesterSnap.data().balance || 0) + amount });
+            transaction.update(requesterRef, { balance: increment(amount) });
 
             // Delete the invoice document
             transaction.delete(requestDocRef);
@@ -146,7 +145,6 @@ async function payRequest(requestId, amount, requesterUid, requesterName) {
             logHistory(requesterUid, `Invoice Paid: $${amount.toLocaleString()} from ${payerName}`, "transfer-in")
         ]);
 
-        if (typeof updateBalanceDisplay === "function") updateBalanceDisplay();
         alert("Payment successful!");
     } catch (err) {
         console.error("Payment failed:", err);
