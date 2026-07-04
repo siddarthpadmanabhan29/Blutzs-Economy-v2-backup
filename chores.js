@@ -17,6 +17,7 @@ import {
   where
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
+import { sendSlackMessage } from "./slackNotifier.js";
 
 // How long a completed/denied chore stays visible in the list before it's hidden client-side.
 const CHORE_HISTORY_VISIBLE_DAYS = 1;
@@ -50,6 +51,48 @@ function formatDeadline(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "No deadline";
   return date.toLocaleString();
+}
+
+function getChoreAssigneeName(chore) {
+  return chore.assignedTo ? getUserNameByUid(chore.assignedTo) : "Open for pickup";
+}
+
+async function notifyChoreCreated(chore) {
+  const createdAt = chore.createdAt ? formatDeadline(chore.createdAt) : "just now";
+  const reward = formatMoney(chore.reward);
+  const deadline = formatDeadline(chore.deadline);
+
+  if (chore.assignmentMode === "assigned" && chore.assignedTo) {
+    const assigneeName = getChoreAssigneeName(chore);
+    await sendSlackMessage(
+      `🧹 *New assigned chore created:* ${chore.title}\n*Reward:* ${reward}\n*Deadline:* ${deadline}\n*Assigned to:* ${assigneeName}\n*Created:* ${createdAt}`
+    );
+    return;
+  }
+
+  await sendSlackMessage(
+    `🧹 *New chore available:* ${chore.title}\n*Reward:* ${reward}\n*Deadline:* ${deadline}\n*Created:* ${createdAt}\n*Pickup:* Open for anyone`
+  );
+}
+
+async function notifyChoreStatusChange(chore, action, actorName) {
+  const actorLabel = actorName || "A user";
+  const reward = formatMoney(chore.reward);
+  const deadline = formatDeadline(chore.deadline);
+
+  switch (action) {
+    case "accept":
+      await sendSlackMessage(`✅ *Chore accepted:* ${chore.title}\n*By:* ${actorLabel}\n*Reward:* ${reward}\n*Deadline:* ${deadline}`);
+      break;
+    case "decline":
+      await sendSlackMessage(`⚠️ *Chore declined:* ${chore.title}\n*By:* ${actorLabel}\n*Reward:* ${reward}\n*Deadline:* ${deadline}`);
+      break;
+    case "done":
+      await sendSlackMessage(`📝 *Chore marked complete:* ${chore.title}\n*By:* ${actorLabel}\n*Reward:* ${reward}\n*Deadline:* ${deadline}`);
+      break;
+    default:
+      break;
+  }
 }
 
 function getStatusLabel(status) {
@@ -113,14 +156,14 @@ function renderChoreAdminManagement() {
         const canDismiss = chore.status === "completed" || chore.status === "denied";
 
         return `
-          <div style="background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px;">
-            <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div class="chore-card chore-card--compact" style="background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+            <div class="chore-title-row" style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
               <strong style="color:#fff; font-size:0.85rem;">${escapeHtml(chore.title)}</strong>
               <span style="font-size:0.65rem; text-transform:uppercase; color:#f1c40f; font-weight:800;">${getStatusLabel(chore.status)}</span>
             </div>
             <div style="font-size:0.75rem; color:#aaa;">Assigned to: ${chore.assignedTo ? escapeHtml(getUserNameByUid(chore.assignedTo)) : "Open for pickup"}</div>
             <div style="font-size:0.75rem; color:#aaa;">Reward: ${formatMoney(chore.reward)} • Deadline: ${formatDeadline(chore.deadline)}</div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="chore-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
               ${canReview ? `<button class="btn-primary" data-action="approve" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Approve</button>` : ""}
               ${canReview ? `<button class="btn-danger" data-action="deny" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Deny</button>` : ""}
               ${canDismiss ? `<button class="btn-secondary" data-action="dismiss" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Remove from Display</button>` : ""}
@@ -209,8 +252,8 @@ function renderChores() {
   if (adminReviewEl) {
     adminReviewEl.innerHTML = pendingReview.length
       ? pendingReview.map((chore) => `
-          <div style="background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px;">
-            <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div class="chore-card chore-card--compact" style="background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+            <div class="chore-title-row" style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
               <strong style="color:#fff;">${escapeHtml(chore.title)}</strong>
               <span style="font-size:0.7rem; text-transform:uppercase; color:#f1c40f; font-weight:800;">${getStatusLabel(chore.status)}</span>
             </div>
@@ -239,21 +282,21 @@ function renderChores() {
         const canDone = isAssignedToMe && chore.status === "in_progress";
 
         return `
-          <div style="background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
-            <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:center;">
+          <div class="chore-card" style="background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+            <div class="chore-title-row" style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:center;">
               <div>
                 <div style="font-weight:800; color:#fff;">${escapeHtml(chore.title)}</div>
-                <div style="font-size:0.75rem; color:#888; margin-top:2px;">${escapeHtml(chore.assignmentMode === "free" ? "Free pick up" : "Assigned chore")}</div>
+                <div class="chore-subtitle" style="font-size:0.75rem; color:#888; margin-top:2px;">${escapeHtml(chore.assignmentMode === "free" ? "Free pick up" : "Assigned chore")}</div>
               </div>
               <span style="font-size:0.7rem; text-transform:uppercase; color:#f1c40f; font-weight:800;">${getStatusLabel(chore.status)}</span>
             </div>
-            <div style="display:grid; gap:6px; font-size:0.82rem; color:#aaa;">
+            <div class="chore-meta-grid" style="display:grid; gap:6px; font-size:0.82rem; color:#aaa;">
               <div>Reward: ${formatMoney(chore.reward)}</div>
               <div>Deadline: ${formatDeadline(chore.deadline)}</div>
               <div>Owner: ${escapeHtml(getUserNameByUid(chore.createdBy) || "Admin")}</div>
               <div>Assigned to: ${chore.assignedTo ? escapeHtml(getUserNameByUid(chore.assignedTo)) : "Open for pickup"}</div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="chore-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
               ${canAccept ? `<button class="btn-primary" data-action="accept" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Accept</button>` : ""}
               ${canDecline ? `<button class="btn-danger" data-action="decline" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Decline</button>` : ""}
               ${canPickUp ? `<button class="btn-primary" data-action="pickup" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Pick Up</button>` : ""}
@@ -315,6 +358,7 @@ async function createChore(event) {
   };
 
   await addDoc(collection(db, "chores"), choreData);
+  await notifyChoreCreated(choreData);
   form.reset();
   await logHistory(currentUser.uid, `Created chore: ${title}`, "chore");
   alert("Chore created successfully.");
@@ -340,6 +384,7 @@ async function handleChoreAction(event) {
     if (action === "accept") {
       if (!isOwnerOfAssignment || chore.status !== "assigned") return;
       await updateDoc(choreRef, { status: "in_progress", acceptedAt: now });
+      await notifyChoreStatusChange(chore, "accept", currentUserData?.username || currentUser?.displayName || "A user");
       await logHistory(currentUser.uid, `Accepted chore: ${chore.title}`, "chore", now);
 
     } else if (action === "decline") {
@@ -361,6 +406,7 @@ async function handleChoreAction(event) {
         chorePoints: existingPoints > 0 ? increment(-1) : 0
       });
 
+      await notifyChoreStatusChange(chore, "decline", currentUserData?.username || currentUser?.displayName || "A user");
       await logHistory(currentUser.uid, `Declined chore: ${chore.title}`, "chore", now);
 
     } else if (action === "pickup") {
@@ -371,6 +417,7 @@ async function handleChoreAction(event) {
     } else if (action === "done") {
       if (!isOwnerOfAssignment || chore.status !== "in_progress") return;
       await updateDoc(choreRef, { status: "pending_review", completedBy: currentUser.uid, submittedAt: now });
+      await notifyChoreStatusChange(chore, "done", currentUserData?.username || currentUser?.displayName || "A user");
       await logHistory(currentUser.uid, `Marked chore done: ${chore.title}`, "chore", now);
 
     } else if (action === "approve") {
