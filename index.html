@@ -81,6 +81,7 @@
                 <li class="nav-item" data-tab="tab-shop">🛒 <span>Marketplace</span></li>
                 <li class="nav-item" data-tab="tab-stock">📈 <span>Stock Market</span></li>
                 <li class="nav-item" data-tab="tab-lottery">🎰 <span>Mega Lottery</span></li>
+                <li class="nav-item" data-tab="tab-chores">🧹 <span>Chores</span></li>
                 <li class="nav-item" data-tab="tab-history">📜 <span>Activity Log</span></li>
                 <li id="open-admin" class="nav-item hidden" data-tab="tab-admin" style="color: #e74c3c; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 20px;">🔑 <span>Admin Panel</span></li>
             </ul>
@@ -714,6 +715,33 @@
     </div>
 </section>
 
+            <section id="tab-chores" class="tab-content">
+    <div class="section-card" style="border: 2px solid #2ecc71; background: var(--card-bg); border-radius: 15px; padding: 25px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
+            <div>
+                <h3 style="margin:0; color:#2ecc71;">🧹 Community Chores</h3>
+                <p style="margin: 6px 0 0 0; font-size:0.8rem; color:#aaa;">Admins create chores, users can pick them up or accept assigned work, and completed chores are reviewed before payment is released.</p>
+            </div>
+            <span id="chores-status-badge" style="background: rgba(46,204,113,0.12); color:#2ecc71; border:1px solid rgba(46,204,113,0.2); padding:6px 12px; border-radius:999px; font-size:0.7rem; font-weight:800; text-transform:uppercase;">Loading</span>
+        </div>
+
+        <div id="chores-stats" style="margin-bottom:18px;"></div>
+
+        <div style="display:grid; grid-template-columns: 1.4fr 0.8fr; gap:20px; align-items:start;">
+            <div>
+                <h4 style="margin:0 0 10px 0; color:#fff;">📋 Available Chores</h4>
+                <div id="chores-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+            <div>
+                <h4 style="margin:0 0 10px 0; color:#f1c40f;">🏆 Chore Leaderboard</h4>
+                <div id="chores-leaderboard" style="background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px;"></div>
+                <h4 style="margin:16px 0 10px 0; color:#3498db;">📝 Pending Review</h4>
+                <div id="chores-admin-review-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
             <section id="tab-history" class="tab-content">
     <div class="section-card compact-history" style="border: 1px solid var(--contract-border); background: var(--card-bg); border-radius: 15px; padding: 20px;">
         
@@ -768,6 +796,55 @@
                 <strong style="color: #2ecc71; font-size: 0.9rem;">ENCRYPTED</strong>
             </div>
         </div>
+
+        <div class="admin-section" style="border: 1px solid #2ecc71; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+        <span style="font-size: 1.2rem;">🧹</span>
+        <h3 style="color: #2ecc71; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Chore Management</h3>
+    </div>
+    <p style="font-size: 0.75rem; color: #888; margin: 0 0 20px 0;">Create new chores, set rewards and deadlines, and choose whether they are free-pickup or assigned to a specific user.</p>
+
+    <div id="chores-admin-section" style="background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px;">
+        <p id="chores-admin-info" style="margin:0 0 12px 0; font-size:0.78rem; color:#888;">Admin controls enabled</p>
+        <form id="chore-form" style="display:grid; gap:12px;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+                <div>
+                    <label style="display:block; margin-bottom:6px; font-size:0.7rem; color:#aaa; text-transform:uppercase; font-weight:800;">Chore Name</label>
+                    <input id="chore-title" required placeholder="e.g. Clean lobby" style="width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #444; background:#111; color:#fff;">
+                </div>
+                <div>
+                    <label style="display:block; margin-bottom:6px; font-size:0.7rem; color:#aaa; text-transform:uppercase; font-weight:800;">Reward</label>
+                    <input id="chore-reward" type="number" min="1" required placeholder="5000" style="width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #444; background:#111; color:#fff;">
+                </div>
+                <div>
+                    <label style="display:block; margin-bottom:6px; font-size:0.7rem; color:#aaa; text-transform:uppercase; font-weight:800;">Deadline</label>
+                    <input id="chore-deadline" type="datetime-local" required style="width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #444; background:#111; color:#fff;">
+                </div>
+                <div>
+                    <label style="display:block; margin-bottom:6px; font-size:0.7rem; color:#aaa; text-transform:uppercase; font-weight:800;">Assignment Type</label>
+                    <select id="chore-assignment-mode" style="width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #444; background:#111; color:#fff;">
+                        <option value="free">Free Pickup</option>
+                        <option value="assigned">Assign to User</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr auto; gap:12px; align-items:end;">
+                <div style="flex:1;">
+                    <label style="display:block; margin-bottom:6px; font-size:0.7rem; color:#aaa; text-transform:uppercase; font-weight:800;">Assign To Username</label>
+                    <input id="chore-assign-to" placeholder="Optional username" style="width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #444; background:#111; color:#fff;">
+                </div>
+                <button type="submit" class="btn-primary" style="padding:10px 16px; font-weight:800;">Create Chore</button>
+            </div>
+        </form>
+
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08);">
+            <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 0.9rem;">🗂️ Manage Existing Chores</h4>
+            <div id="chores-admin-manage-list" style="display:flex; flex-direction:column; gap:8px; max-height: 500px; overflow-y: auto;">
+                <p style="color:#666; font-size:0.75rem; margin:0;">Loading chores...</p>
+            </div>
+        </div>
+    </div>
+</div>
 
         <div class="admin-section" style="border: 1px solid #3498db; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">

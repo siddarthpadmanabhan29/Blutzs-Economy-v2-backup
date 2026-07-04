@@ -14,6 +14,7 @@ import "./shop/inventory.js";
 import "./finance/transfer.js";
 import "./admin.refactored.js";
 import "./finance/retirement.js";
+import "./chores.js";
 
 
 // ---------- Global UI Helpers (optional) ----------
