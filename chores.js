@@ -435,33 +435,40 @@ async function handleChoreAction(event) {
       if (targetUid) {
         const targetRef = doc(db, "users", targetUid);
 
-        // Transaction avoids a race condition where two near-simultaneous
-        // approvals could both read stale chorePoints and mis-fire the
-        // every-10th-chore bonus.
-        await runTransaction(db, async (tx) => {
-          const targetSnap = await tx.get(targetRef);
-          const priorPoints = Number(targetSnap.exists() ? targetSnap.data().chorePoints || 0 : 0);
-          const priorBalance = Number(targetSnap.exists() ? targetSnap.data().balance || 0 : 0);
-          const priorCompleted = Number(targetSnap.exists() ? targetSnap.data().choresCompleted || 0 : 0);
+          // Transaction avoids a race condition where two near-simultaneous
+          // approvals could both read stale chorePoints and mis-fire the
+          // every-10th-chore bonus.
+          await runTransaction(db, async (tx) => {
+            const targetSnap = await tx.get(targetRef);
+            const priorPoints = Number(targetSnap.exists() ? targetSnap.data().chorePoints || 0 : 0);
+            const priorBalance = Number(targetSnap.exists() ? targetSnap.data().balance || 0 : 0);
+            const priorCompleted = Number(targetSnap.exists() ? targetSnap.data().choresCompleted || 0 : 0);
 
-          const newPoints = priorPoints + 1;
-          const bonusAmount = newPoints % 10 === 0 ? 5000 : 0;
+            const newPoints = priorPoints + 1;
+            const bonusAmount = newPoints % 10 === 0 ? 5000 : 0;
 
-          tx.update(targetRef, {
-            balance: priorBalance + currentReward + bonusAmount,
-            chorePoints: newPoints,
-            choresCompleted: priorCompleted + 1,
-            ...(bonusAmount > 0 ? { lastChoreBonusAt: now } : {})
+            tx.update(targetRef, {
+              balance: priorBalance + currentReward + bonusAmount,
+              chorePoints: newPoints,
+              choresCompleted: priorCompleted + 1,
+              ...(bonusAmount > 0 ? { lastChoreBonusAt: now } : {})
+            });
           });
-        });
 
-        await logHistory(targetUid, `Chore approved and paid: ${chore.title}`, "chore", now);
-      }
+          // Read back the updated user doc to compute what was actually paid
+          const afterSnap = await getDoc(targetRef);
+          const newPoints = Number(afterSnap.exists() ? afterSnap.data().chorePoints || 0 : 0);
+          const bonusAmount = newPoints % 10 === 0 ? 5000 : 0;
+          const paidMsg = `Chore approved and paid: ${chore.title} — Received $${currentReward.toLocaleString()}${bonusAmount ? ` + $${bonusAmount.toLocaleString()} bonus` : ""}`;
+
+          await logHistory(targetUid, paidMsg, "chore", now);
+        }
 
     } else if (action === "deny") {
       if (!isAdmin) return;
       await updateDoc(choreRef, { status: "denied", reviewedAt: now, reviewedBy: currentUser.uid, reviewedByName: currentUserData?.username || "Admin" });
-      await logHistory(chore.assignedTo || currentUser.uid, `Chore denied: ${chore.title}`, "chore", now);
+      const deniedUid = chore.assignedTo || currentUser.uid;
+      await logHistory(deniedUid, `Chore denied: ${chore.title} — Not approved by admin`, "chore", now);
 
     } else if (action === "delete") {
       if (!isAdmin) return;
