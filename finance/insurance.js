@@ -293,7 +293,6 @@ export function initInsurance(userData) {
 
     refreshUI();
     processInsuranceCycle(auth.currentUser.uid, userData);
-    checkMondayAllowance(auth.currentUser.uid, userData);
 }
 
 // ─── Billing cycle processor ──────────────────────────────────────────────────
@@ -364,29 +363,54 @@ async function processInsuranceCycle(uid, userData) {
     }
 }
 
+// ─── EST helpers (matches economyLogger / dashboard date logic) ───────────────
+
+function getESTDateString(offsetDays = 0) {
+    const now = new Date();
+    const estDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) - (5 * 3600000));
+    estDate.setDate(estDate.getDate() + offsetDays);
+    return estDate.toISOString().split("T")[0];
+}
+
+function isESTMonday() {
+    const now = new Date();
+    const estDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) - (5 * 3600000));
+    return estDate.getUTCDay() === 1;
+}
+
 // ─── Monday BPS allowance ─────────────────────────────────────────────────────
 
 async function checkMondayAllowance(uid, userData) {
-    if (!userData.insurance?.activePackages?.includes("darkblue_c")) return;
-    const now = new Date();
-    if (now.getDay() !== 1) return;
-    const todayStr = now.toISOString().split('T')[0];
+    if (!userData?.insurance?.activePackages?.includes("darkblue_c")) return;
+    if (!isESTMonday()) return;
+
+    const todayStr = getESTDateString();
 
     // FIX: Use a transaction to guard against two simultaneous page loads on
     // Monday both passing the stale lastBpsDate check and each awarding +5 BPS.
-    // The transaction reads the live lastBpsDate from Firestore before writing,
-    // so only the first caller actually increments; the second bails out cleanly.
+    // The transaction reads live Firestore state before writing, so only the
+    // first caller actually increments; the second bails out cleanly.
     try {
         const userRef = doc(db, "users", uid);
+        let awarded = false;
+
         await runTransaction(db, async (transaction) => {
-            const userSnap     = await transaction.get(userRef);
-            const lastBpsDate  = userSnap.data()?.insurance?.lastBpsDate;
-            if (lastBpsDate === todayStr) return; // already awarded today
+            const userSnap = await transaction.get(userRef);
+            const liveData = userSnap.data() || {};
+
+            if (!liveData.insurance?.activePackages?.includes("darkblue_c")) return;
+            if (liveData.insurance?.lastBpsDate === todayStr) return;
+
+            awarded = true;
             transaction.update(userRef, {
                 bpsBalance: increment(5),
                 "insurance.lastBpsDate": todayStr
             });
         });
+
+        if (awarded) {
+            await logHistory(uid, "Dark Blue Weekly C: +5 BPS", "membership");
+        }
     } catch (e) { console.error(e); }
 }
 

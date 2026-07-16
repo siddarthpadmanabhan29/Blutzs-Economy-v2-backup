@@ -41,7 +41,7 @@ import { listenForAdminLottery } from "./admin.refactored.js";
 import { initFineSystem } from "./fines.js";
 
 // --- INSURANCE SYSTEM IMPORT ---
-import { initInsurance } from "./finance/insurance.js";
+import { initInsurance, checkMondayAllowance } from "./finance/insurance.js";
 
 // --- NEW BPS SECURITY IMPORTS ---
 import { openPinModal } from "./securityModal.js";
@@ -54,6 +54,7 @@ let unsubUser = null;
 let unsubHistory = null;
 let listenersInitialized = false; 
 let insuranceInitialized = false;
+let _lastWeeklyBpsCheckKey = null;
 let subscriptionShopLoaded = false;
 
 /* =========================================================
@@ -245,6 +246,7 @@ onAuthStateChanged(auth, async (user) => {
     currentDashboardData = null;
     listenersInitialized = false; 
     insuranceInitialized = false;
+    _lastWeeklyBpsCheckKey = null;
 
     // Reset all anti-flicker caches on logout
     _prevSavingsKey = null;
@@ -382,6 +384,16 @@ onAuthStateChanged(auth, async (user) => {
     if (!insuranceInitialized && typeof initInsurance === "function") {
         initInsurance(currentDashboardData);
         insuranceInitialized = true;
+    }
+
+    // Dark Blue Weekly C: award +5 BPS every Monday (EST) while subscribed
+    const hasWeeklyC = currentDashboardData.insurance?.activePackages?.includes("darkblue_c");
+    if (hasWeeklyC && typeof checkMondayAllowance === "function") {
+        const weeklyBpsKey = `${getESTDate(0)}|weekly-c`;
+        if (weeklyBpsKey !== _lastWeeklyBpsCheckKey) {
+            _lastWeeklyBpsCheckKey = weeklyBpsKey;
+            checkMondayAllowance(user.uid, currentDashboardData);
+        }
     }
 
   }, (error) => {
