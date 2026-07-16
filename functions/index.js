@@ -20,6 +20,21 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+const SUBSCRIPTION_TAX_BY_TIER = {
+  standard: 0.10,
+  basic: 0.08,
+  premium: 0.04,
+  platinum: 0.00,
+};
+
+function resolveSubscriptionTaxRate(userData) {
+  if (userData.activeTaxRate !== undefined && userData.activeTaxRate !== null) {
+    return Number(userData.activeTaxRate);
+  }
+  const tier = userData.membershipLevel || "standard";
+  return SUBSCRIPTION_TAX_BY_TIER[tier] ?? 0.10;
+}
+
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time.
 setGlobalOptions({ maxInstances: 10 });
@@ -79,7 +94,7 @@ exports.processSubscriptionRenewals = onSchedule(
             
             // --- TAX LOGIC INTEGRATION ---
             // Calculate tax based on the user's current membership tier tax rate
-            const userTaxRate = Number(userData.activeTaxRate !== undefined ? userData.activeTaxRate : 0.10);
+            const userTaxRate = resolveSubscriptionTaxRate(userData);
             const taxAmount = Math.floor(basePrice * userTaxRate);
             const finalRenewalCost = basePrice + taxAmount;
 

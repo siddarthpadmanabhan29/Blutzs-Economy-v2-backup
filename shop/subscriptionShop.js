@@ -87,7 +87,7 @@ async function processOverdueSubscriptions(user) {
 
       const userSnap = await getDoc(userRef);
       const userData = userSnap.data();
-      const userTaxRate = Number(userData.activeTaxRate !== undefined ? userData.activeTaxRate : 0.10);
+      const userTaxRate = resolveSubscriptionTaxRate(userData);
       const activeDiscount = Number(userData.activeDiscount || 0);
 
       // Apply clipped coupon if present
@@ -147,11 +147,24 @@ async function processOverdueSubscriptions(user) {
 }
 
 /**
+ * Resolve subscription-shop tax from stored tier rate or membership level.
+ * Uses nullish checks so 0% (Platinum) is not treated as missing.
+ */
+function resolveSubscriptionTaxRate(userData) {
+  if (userData?.activeTaxRate !== undefined && userData?.activeTaxRate !== null) {
+    return Number(userData.activeTaxRate);
+  }
+  const tier = userData?.membershipLevel || "standard";
+  const plan = PLANS[tier] || PLANS.standard;
+  return Number(plan.activeTaxRate ?? 0.10);
+}
+
+/**
  * Render available subscription items
  */
 function calculateSubscriptionPricing(basePrice, taxRate = 0.10, activeDiscount = 0, couponDiscountPercent = 0) {
   const numericBasePrice = Number(basePrice || 0);
-  const numericTaxRate = Number(taxRate || 0.10);
+  const numericTaxRate = Number(taxRate ?? 0.10);
   const numericActiveDiscount = Number(activeDiscount || 0);
   const numericCouponDiscount = Number(couponDiscountPercent || 0);
 
@@ -190,12 +203,13 @@ function renderSubscriptionShop() {
 
   const userBalance = Number(localUserData?.balance || 0);
   const activeDiscount = Number(localUserData?.activeDiscount || 0);
-  const userTaxRate = Number(localUserData?.activeTaxRate !== undefined ? localUserData.activeTaxRate : 0.10);
+  const userTaxRate = resolveSubscriptionTaxRate(localUserData);
 
   currentSubscriptionItems.forEach((item) => {
     const originalCost = Number(item.cost);
     const pricing = calculateSubscriptionPricing(originalCost, userTaxRate, activeDiscount);
     const firstCharge = pricing.finalCost;
+    const taxPercent = Math.round(userTaxRate * 100);
 
     const renewalText = item.renewalType === "days" 
       ? `Renews every ${item.renewalInterval} days` 
@@ -242,6 +256,8 @@ function renderSubscriptionShop() {
           <div style="margin: 4px 0;">💚 ${renewalText}</div>
           <div style="margin: 4px 0; color: #f1c40f;">
             ${activeDiscount > 0 ? `<span style="text-decoration: line-through; opacity: 0.6;">$${originalCost.toLocaleString()}</span> ` : ''}
+          </div>
+          <div style="margin: 4px 0; color: gold; font-weight: 700;">
             First charge: $${firstCharge.toLocaleString()}
           </div>
         </div>
@@ -517,7 +533,7 @@ async function subscribeToItem(itemId, btnElement) {
 
     const basePrice = Number(itemData.cost);
     const activeDiscount = Number(localUserData?.activeDiscount || 0);
-    const userTaxRate = Number(userData.activeTaxRate !== undefined ? userData.activeTaxRate : 0.10);
+    const userTaxRate = resolveSubscriptionTaxRate(userData);
     let finalCost = calculateSubscriptionPricing(basePrice, userTaxRate, activeDiscount).finalCost;
 
     const userBalance = Number(userData.balance || 0);
@@ -548,9 +564,11 @@ async function subscribeToItem(itemId, btnElement) {
 
     // --- UPDATED ALERT TEXT ---
     const taxPercent = Math.round(userTaxRate * 100);
+    const basePricing = calculateSubscriptionPricing(basePrice, userTaxRate, activeDiscount, selectedCoupon?.discountValue || 0);
     const confirmMsg = `Subscribe to ${itemData.name}?\n\n` +
-                       `Total Today: $${finalCost.toLocaleString()}\n` +
-                       `(Includes ${taxPercent}% Tier Tax)\n\n` +
+                       `Base: $${basePricing.discountedBase.toLocaleString()}\n` +
+                       `Tax (${taxPercent}%): $${basePricing.taxAmount.toLocaleString()}\n` +
+                       `Total Today: $${finalCost.toLocaleString()}\n\n` +
                        `Note: Future renewals will apply the tax rate of your current membership tier at the time of billing.\n\n` +
                        `You can cancel anytime.`;
 
