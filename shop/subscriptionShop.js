@@ -113,32 +113,64 @@ async function processOverdueSubscriptions(user) {
         continue;
       }
 
-      // Charge and renew
+      // Charge and renew — supports subscription-specific free cycles based on membership
+      const preExistingUpcomingFree = !!subscription.upcomingFree;
       await runTransaction(db, async (transaction) => {
-        const freshSnap = await transaction.get(userRef);
-        const freshBalance = Number(freshSnap.data().balance || 0);
-        if (freshBalance < renewalCost) throw new Error("Insufficient funds");
+        const freshUserSnap = await transaction.get(userRef);
+        const freshSubSnap = await transaction.get(subRef);
+        const freshItemSnap = await transaction.get(itemRef);
 
-        transaction.update(userRef, { balance: increment(-renewalCost) });
-        transaction.update(subRef, {
+        const freshBalance = Number(freshUserSnap.data().balance || 0);
+        const freshSub = freshSubSnap.exists() ? freshSubSnap.data() : {};
+        const freshItem = freshItemSnap.exists() ? freshItemSnap.data() : {};
+
+        // Determine membership free-frequency
+        const tier = freshUserSnap.data().membershipLevel || 'standard';
+        const freq = (PLANS[tier] && PLANS[tier].shopFreeFreq) ? PLANS[tier].shopFreeFreq : 0;
+
+        // If upcomingFree is set on the subscription, apply a free renewal (no charge)
+        const willBeFree = !!freshSub.upcomingFree;
+
+        if (!willBeFree) {
+          if (freshBalance < renewalCost) throw new Error("Insufficient funds");
+          transaction.update(userRef, { balance: increment(-renewalCost) });
+          transaction.update(itemRef, { totalRevenue: increment(renewalCost) });
+        }
+
+        // Compute new charge count
+        const prevCount = Number(freshSub.chargeCount || 0);
+        const newCount = willBeFree ? 0 : prevCount + 1;
+
+        const updatePayload = {
           nextBillingDate: nextBillingDate.toISOString(),
-          chargeCount: increment(1),
+          chargeCount: newCount,
           lastRenewedAt: new Date().toISOString(),
-          clippedCoupon: null,       // clear coupon after use
-          couponUsedAt: subscription.clippedCoupon ? new Date().toISOString() : null
-        });
-        transaction.update(itemRef, {
-          totalRevenue: increment(renewalCost)
-        });
+          clippedCoupon: null,
+          couponUsedAt: (!willBeFree && subscription.clippedCoupon) ? new Date().toISOString() : null,
+          upcomingFree: false
+        };
+
+        // If after this paid renewal the user's count hits the frequency, mark upcomingFree for next cycle
+        if (freq > 0 && !willBeFree && (newCount >= freq)) {
+          updatePayload.upcomingFree = true;
+        }
+
+        transaction.update(subRef, updatePayload);
       });
 
-      await logHistory(user.uid, `Subscription renewed: ${item.name} — $${renewalCost.toLocaleString()}`, "subscription");
-      sendSlackMessage(`🔄 *Renewal:* ${userData.username || 'User'} renewed *${item.name}* for *$${renewalCost.toLocaleString()}*`);
+      // Logging and notifications
+      if (preExistingUpcomingFree) {
+        await logHistory(user.uid, `Subscription renewed for FREE: ${item.name}`, "subscription");
+        sendSlackMessage(`🎁 *Free Renewal:* ${userData.username || 'User'} received a free renewal for *${item.name}*`);
+      } else {
+        await logHistory(user.uid, `Subscription renewed: ${item.name} — $${renewalCost.toLocaleString()}`, "subscription");
+        sendSlackMessage(`🔄 *Renewal:* ${userData.username || 'User'} renewed *${item.name}* for *$${renewalCost.toLocaleString()}*`);
+      }
 
-      // Update local state
+      // Update local state: reflect nextBillingDate and coupon cleared
       subscription.nextBillingDate = nextBillingDate.toISOString();
       subscription.clippedCoupon = null;
-      localUserData.balance -= renewalCost;
+      if (!subscription.upcomingFree) localUserData.balance -= renewalCost;
 
     } catch (err) {
       console.error(`Failed to renew subscription ${subscription.id}:`, err);
@@ -400,6 +432,17 @@ async function openCouponClipModal(subscriptionId) {
   const user = auth.currentUser;
   if (!user) return;
 
+  // Prevent clipping if this subscription already has a free renewal queued
+  try {
+    const subSnap = await getDoc(doc(db, "users", user.uid, "subscriptions", subscriptionId));
+    if (subSnap.exists() && subSnap.data().upcomingFree) {
+      alert("This subscription already has a free renewal queued. Coupons cannot be clipped while the next charge is free.");
+      return;
+    }
+  } catch (e) {
+    console.error("Failed to check subscription before clipping coupon:", e);
+  }
+
   try {
     const inventoryRef = collection(db, "users", user.uid, "inventory");
     const couponSnap = await getDocs(query(inventoryRef, where("type", "==", "coupon")));
@@ -470,6 +513,13 @@ async function openCouponClipModal(subscriptionId) {
 async function clipCouponToSubscription(subscriptionId, inventoryId, discountValue) {
   const user = auth.currentUser;
   if (!user) return;
+
+  // Double-check subscription state before clipping
+  const subSnap = await getDoc(doc(db, "users", user.uid, "subscriptions", subscriptionId));
+  if (subSnap.exists() && subSnap.data().upcomingFree) {
+    alert("Cannot clip a coupon: the next charge for this subscription is already free.");
+    return;
+  }
 
   try {
     const subRef = doc(db, "users", user.uid, "subscriptions", subscriptionId);
@@ -598,6 +648,11 @@ async function subscribeToItem(itemId, btnElement) {
           transaction.delete(couponRef);
         }
 
+        // Determine if the membership tier grants a queued free renewal after initial charge
+        const tier = userData.membershipLevel || 'standard';
+        const freq = (PLANS[tier] && PLANS[tier].shopFreeFreq) ? PLANS[tier].shopFreeFreq : 0;
+        const upcomingFreeFlag = (freq > 0 && 1 >= freq);
+
         transaction.set(subscriptionsRef, {
           itemId: itemId,
           itemName: itemData.name,
@@ -606,6 +661,7 @@ async function subscribeToItem(itemId, btnElement) {
           subscribedAt: new Date().toISOString(),
           nextBillingDate: nextBillingDate.toISOString(),
           chargeCount: 1,
+          upcomingFree: upcomingFreeFlag,
           initialTaxPaid: userTaxRate,
           renewalInterval: itemData.renewalInterval,
           renewalType: itemData.renewalType,
