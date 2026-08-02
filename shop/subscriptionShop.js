@@ -375,7 +375,7 @@ function renderUserSubscriptions() {
           Cost: <span style="color: #f1c40f;">$${Number(item.cost).toLocaleString()}</span> every ${subscription.renewalInterval} ${subscription.renewalType}
         </p>
         <p style="margin: 5px 0 0 0; font-size: 0.75rem; color: #888;">
-          Next charge: ${nextBillingDate.toLocaleDateString()} (in ${daysUntilRenewal} days)
+            Next charge: ${nextBillingDate.toLocaleDateString()}${subscription.upcomingFree ? ' <span style="color: #f1c40f; font-weight:800;">(FREE)</span>' : ` (in ${daysUntilRenewal} days)`}
         </p>
         ${couponSectionHTML}
       </div>
