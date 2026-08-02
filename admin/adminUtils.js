@@ -185,14 +185,24 @@ export function getDOMElements() {
     newIncentiveAmount: document.getElementById("new-incentive-amount"),
     addIncentiveBtn: document.getElementById("add-incentive-btn"),
     
-    // Lottery
-    adminLotteryPoolDisplay: document.getElementById("admin-lottery-pool"),
-    adminLotteryBurnDisplay: document.getElementById("admin-lottery-burn"),
-    adminLottoOverride: document.getElementById("admin-lotto-override"),
-    triggerLottoBtn: document.getElementById("admin-trigger-lotto-btn"),
-    adminLottoDate: document.getElementById("admin-lotto-date"),
-    setLottoTimeBtn: document.getElementById("admin-set-lotto-time"),
-    adminLiveTicketsList: document.getElementById("admin-live-tickets-list"),
+    // Games
+    adminGameDay1Money: document.getElementById("admin-game-day-1-money"),
+    adminGameDay1Bps: document.getElementById("admin-game-day-1-bps"),
+    adminGameDay2Money: document.getElementById("admin-game-day-2-money"),
+    adminGameDay2Bps: document.getElementById("admin-game-day-2-bps"),
+    adminGameDay3Money: document.getElementById("admin-game-day-3-money"),
+    adminGameDay3Bps: document.getElementById("admin-game-day-3-bps"),
+    adminGameDay4Money: document.getElementById("admin-game-day-4-money"),
+    adminGameDay4Bps: document.getElementById("admin-game-day-4-bps"),
+    adminGameDay5Money: document.getElementById("admin-game-day-5-money"),
+    adminGameDay5Bps: document.getElementById("admin-game-day-5-bps"),
+    adminGameDay6Money: document.getElementById("admin-game-day-6-money"),
+    adminGameDay6Bps: document.getElementById("admin-game-day-6-bps"),
+    adminGameDay7Money: document.getElementById("admin-game-day-7-money"),
+    adminGameDay7Bps: document.getElementById("admin-game-day-7-bps"),
+    adminGameRecoveryMoney: document.getElementById("admin-game-recovery-money"),
+    adminGameRecoveryBps: document.getElementById("admin-game-recovery-bps"),
+    saveGamesSettingsBtn: document.getElementById("admin-save-games-btn"),
     
     // Fines
     adminFineUsername: document.getElementById("admin-fine-username"),
@@ -244,6 +254,9 @@ export function initAdminUI() {
   // Setup button click listeners
   el.adminGiveBtn?.addEventListener("click", () => executeGive(el.adminGiveUsername, el.adminGiveAmount, el.adminUserInfo, "balance", "money"));
   el.adminGiveBpsBtn?.addEventListener("click", () => executeGive(el.adminGiveBpsUsername, el.adminGiveBpsAmount, el.adminBpsUserInfo, "bpsBalance", "BPS tokens"));
+  el.saveGamesSettingsBtn?.addEventListener("click", () => {
+    import("./adminLottery.js").then(({ saveGamesSettingsFromAdmin }) => saveGamesSettingsFromAdmin());
+  });
 }
 
 // Execute generic give operation

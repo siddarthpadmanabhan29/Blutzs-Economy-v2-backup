@@ -33,9 +33,8 @@ import { getLiveMarketRate } from "./economyUtils.js";
 // Economy logger to archive daily snapshots for real charts
 import { logDailyEconomySnapshot } from "./economyLogger.js";
 
-// --- LOTTERY IMPORTS ---
-import { initLotteryUI } from "./lottery.js";
-import { listenForAdminLottery } from "./admin.refactored.js";
+// --- GAMES IMPORTS ---
+import { initGamesUI, saveGamesSettings, getGamesConfig } from "./games.js";
 
 // --- FINE SYSTEM IMPORT ---
 import { initFineSystem } from "./fines.js";
@@ -280,7 +279,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!listenersInitialized) {
       listenForContractOffers(user.uid);
       listenForAdminRoster(); 
-      initLotteryUI(); 
+      initGamesUI(); 
       initFineSystem(); 
       listenersInitialized = true;
   }
@@ -709,7 +708,7 @@ function updateDashboardUI(user, dynamicRate) {
 
   if (data.isAdmin) {
       openAdminBtn?.classList.remove("hidden");
-      listenForAdminLottery(); 
+      initGamesUI();
   } else {
       openAdminBtn?.classList.add("hidden");
   }

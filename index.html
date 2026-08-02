@@ -79,7 +79,7 @@
                 <li class="nav-item" data-tab="tab-membership">💳 <span>Subscriptions</span></li>
                 <li class="nav-item" data-tab="tab-shop">🛒 <span>Marketplace</span></li>
                 <li class="nav-item" data-tab="tab-stock">📈 <span>Stock Market</span></li>
-                <li class="nav-item" data-tab="tab-lottery">🎰 <span>Mega Lottery</span></li>
+                <li class="nav-item" data-tab="tab-games">🎮 <span>Games</span></li>
                 <li class="nav-item" data-tab="tab-chores">🧹 <span>Chores</span></li>
                 <li class="nav-item" data-tab="tab-history">📜 <span>Activity Log</span></li>
                 <li id="open-admin" class="nav-item hidden" data-tab="tab-admin" style="color: #e74c3c; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 20px;">🔑 <span>Admin Panel</span></li>
@@ -641,75 +641,107 @@
                 </div>
             </section>
 
-            <section id="tab-lottery" class="tab-content">
-    <div class="section-card" style="border: 2px solid #f1c40f; max-width: 600px; margin: 0 auto; background: #1a1a1a;">
-        
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="color: #f1c40f; margin: 0; display: flex; align-items: center; gap: 10px;">
-                <span>🎰</span> Blutz Mega Lottery
-            </h3>
-            <div style="text-align: right;">
-                <span style="font-size: 0.65rem; color: #888; display: block; text-transform: uppercase; font-weight: 800;">Current Jackpot</span>
-                <strong id="lottery-jackpot-display" style="font-size: 1.6rem; color: #2ecc71; text-shadow: 0 0 10px rgba(46, 204, 113, 0.2);">$0</strong>
-            </div>
-        </div>
+            <section id="tab-games" class="tab-content">
+                <div class="section-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                        <div>
+                            <h3 style="color: #8e44ad; margin: 0;">🎮 Games</h3>
+                            <p style="font-size: 0.85rem; color: #aaa; margin: 6px 0 0 0;">Daily login streaks unlock rewards every day. Confirm once per day to keep the streak alive.</p>
+                        </div>
+                        <span style="background: rgba(142, 68, 173, 0.08); color: #8e44ad; border: 1px solid rgba(142, 68, 173, 0.2); border-radius: 999px; padding: 6px 10px; font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Current Streak: <strong id="games-streak-display">Day 1</strong></span>
+                    </div>
+                    <div id="games-layout-grid" style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.85fr); gap: 24px; align-items: start;">
+                        <div>
+                            <div style="background: rgba(142, 68, 173, 0.1); border: 1px solid rgba(142, 68, 173, 0.25); padding: 20px; border-radius: 12px; margin-bottom: 16px;">
+                                <div style="display: flex; justify-content: space-between; gap: 20px; align-items: center;">
+                                    <div>
+                                        <div style="font-size: 0.65rem; color: #a29bfe; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Today</div>
+                                        <div id="games-day-card" style="font-size: 2rem; font-weight: 800; color: #fff; margin-top: 8px;">Day 1</div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800;">Prize</div>
+                                        <div id="games-prize-display" style="font-size: 1.3rem; color: #f1c40f; font-weight: 800; margin-top: 8px;">No prize</div>
+                                    </div>
+                                </div>
+                            </div>
 
-        <div id="lotto-timer-container" class="hidden" style="text-align: center; margin-bottom: 20px; padding: 12px; background: rgba(243, 156, 18, 0.05); border-radius: 10px; border: 1px dashed #f39c12;">
-            <span style="font-size: 0.7rem; color: #f39c12; display: block; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Next Draw In</span>
-            <strong id="lotto-countdown" style="font-family: 'Courier New', monospace; font-size: 1.4rem; color: #eee; letter-spacing: 2px;">00:00:00:00</strong>
-        </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px; margin-bottom: 16px;">
+                                <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 12px;">📅 Days Completed</div>
+                                <div id="games-day-tracker" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;">
+                                    <div class="games-day-item" data-day="1" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 1</div>
+                                    <div class="games-day-item" data-day="2" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 2</div>
+                                    <div class="games-day-item" data-day="3" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 3</div>
+                                    <div class="games-day-item" data-day="4" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 4</div>
+                                    <div class="games-day-item" data-day="5" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 5</div>
+                                    <div class="games-day-item" data-day="6" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 6</div>
+                                    <div class="games-day-item" data-day="7" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 7</div>
+                                </div>
+                            </div>
 
-        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 15px; margin-bottom: 20px;">
-            <p style="font-size: 0.8rem; color: #aaa; margin: 0; align-self: center;">
-                Pick <span style="color:#f1c40f; font-weight: bold;">4 numbers</span> (1-20). Match all to win! <br>
-                <strong>Ticket Cost:</strong> <span style="color: #2ecc71;">$2,500</span>
-            </p>
-            <div style="background: rgba(231, 76, 60, 0.1); border-left: 3px solid #e74c3c; padding: 8px 12px; border-radius: 4px;">
-                <div style="font-size: 0.6rem; color: #e74c3c; font-weight: bold; text-transform: uppercase;">
-                    🏛️ Economy Protocol
+                            <div style="display: grid; gap: 12px; margin-bottom: 18px;">
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px;">
+                                    <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">Status</div>
+                                    <div id="games-status-msg" style="font-size: 0.95rem; color: #f1c40f; font-weight: 700; min-height: 1.2em;">Loading your daily login streak...</div>
+                                </div>
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px;">
+                                    <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">⏱️ Next Claim Available</div>
+                                    <div id="games-timer" style="font-size: 0.9rem; color: #3498db; font-weight: 700; min-height: 1.2em;">Calculating...</div>
+                                </div>
+                                <div id="games-recovery-section" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px; display: block;">
+                                    <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">🔓 Purchase Recovery</div>
+                                    <div id="games-recovery-cost" style="font-size: 0.9rem; color: #2ecc71; font-weight: 700;">Recovery available for $5,000 or 2 BPS.</div>
+                                </div>
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px;">
+                                    <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">Last Confirmed</div>
+                                    <div id="games-last-claim" style="font-size: 0.9rem; color: #aaa;">No confirmation yet.</div>
+                                </div>
+                            </div>
+
+                            <div id="games-action-buttons" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <button id="games-confirm-btn" class="btn-primary" style="padding: 15px; background: linear-gradient(135deg, #8e44ad, #6c5ce7); color: white; font-weight: 900; font-size: 1rem; border-radius: 10px; cursor: pointer; transition: all 0.2s;">
+                                    Confirm Daily Login
+                                </button>
+                                <button id="games-recovery-btn" class="btn-secondary" style="padding: 15px; border-radius: 10px; display: none; cursor: pointer; transition: all 0.2s; opacity: 0.5; cursor: not-allowed;" disabled>
+                                    🔒 Recovery Locked
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="section-card" style="margin: 0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                            <h4 style="margin: 0 0 12px 0; color: #8e44ad;">🎯 Reward Schedule</h4>
+                            <div style="display: grid; gap: 8px; font-size: 0.9rem;">
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
+                                    <span style="font-weight: 600;">Day 1</span>
+                                    <span style="color: #aaa; font-size: 0.85rem;">No prize</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
+                                    <span style="font-weight: 600;">Day 2</span>
+                                    <span style="color: #2ecc71; font-size: 0.85rem;">$500</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
+                                    <span style="font-weight: 600;">Day 3</span>
+                                    <span style="color: #aaa; font-size: 0.85rem;">No prize</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
+                                    <span style="font-weight: 600;">Day 4</span>
+                                    <span style="color: #9b59b6; font-size: 0.85rem;">1 BPS</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
+                                    <span style="font-weight: 600;">Day 5</span>
+                                    <span style="color: #aaa; font-size: 0.85rem;">No prize</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
+                                    <span style="font-weight: 600;">Day 6</span>
+                                    <span style="color: #2ecc71; font-size: 0.85rem;">$5,000</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px; border: 1px solid rgba(52, 152, 219, 0.3); background: rgba(52, 152, 219, 0.1);">
+                                    <span style="font-weight: 600; color: #3498db;">Day 7</span>
+                                    <span style="color: #3498db; font-size: 0.85rem; font-weight: 600;">$1,000 + 5 BPS</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div style="font-size: 0.65rem; color: #ccc; line-height: 1.3;">
-                    Max Cap: $150k <br>
-                    10% Win Tax (Burned)
-                </div>
-            </div>
-        </div>
-
-        <div id="lottery-number-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0;">
-            </div>
-
-        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #333; text-align: center;">
-            <span class="stat-label" style="margin-bottom: 5px;">Your Selection</span>
-            <div id="selected-numbers-display" style="font-size: 1.3rem; font-weight: 800; color: #f1c40f; min-height: 30px; letter-spacing: 3px;">None Selected</div>
-        </div>
-
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px;">
-            <span style="font-size: 0.7rem; color: #888; font-weight: 800; text-transform: uppercase;">Entry Limit</span>
-            <strong id="lotto-quota-display" style="font-size: 0.9rem; color: #3498db;">-- / --</strong>
-        </div>
-        <button id="buy-lotto-btn" class="btn-primary" style="width: 100%; padding: 15px; background: #f1c40f; color: black; font-weight: 900; font-size: 1rem; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.2);" disabled>
-            PURCHASE TICKET ($2,500)
-        </button>
-        <p id="lotto-status-msg" style="text-align: center; font-size: 0.75rem; margin-top: 10px; color: #888; min-height: 1em;"></p>
-
-        <div id="lottery-results-area" style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #333;">
-            <span class="stat-label" style="text-align: center; display: block; margin-bottom: 10px;">Last Draw Results</span>
-            <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 10px;">
-                <div class="result-ball" id="ball-0" style="width: 40px; height: 40px; font-size: 1rem;">-</div>
-                <div class="result-ball" id="ball-1" style="width: 40px; height: 40px; font-size: 1rem;">-</div>
-                <div class="result-ball" id="ball-2" style="width: 40px; height: 40px; font-size: 1rem;">-</div>
-                <div class="result-ball" id="ball-3" style="width: 40px; height: 40px; font-size: 1rem;">-</div>
-            </div>
-            <p id="lotto-winner-msg" style="text-align: center; font-size: 0.8rem; color: #2ecc71; font-weight: bold; margin: 0; min-height: 1.2em;"></p>
-        </div>
-
-        <div id="my-active-tickets-container" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-            <span class="stat-label" style="color: #3498db; margin-bottom: 10px;">Your Active Entries</span>
-            <div id="active-tickets-list" style="display: flex; flex-direction: column; gap: 8px;">
-                <p style="color: gray; font-size: 0.75rem; font-style: italic; text-align: center; padding: 10px;">No tickets for this draw yet.</p>
-            </div>
-        </div>
-    </div>
 </section>
 
             <section id="tab-chores" class="tab-content">
@@ -862,47 +894,57 @@
     <div id="admin-stock-company-list" style="display: grid; gap: 10px; margin-top: 16px;"></div>
 </div>
 
-        <div class="admin-section" style="border: 1px solid #f1c40f; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <div class="admin-section" style="border: 1px solid #8e44ad; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-        <span style="font-size: 1.2rem;">🎰</span>
-        <h3 style="color: #f1c40f; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Lottery Management</h3>
+        <span style="font-size: 1.2rem;">🎮</span>
+        <h3 style="color: #8e44ad; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Games Management</h3>
     </div>
-    <p style="font-size: 0.75rem; color: #888; margin: 0 0 20px 0;">Pick winners, schedule draws, and reset the ticket ledger.</p>
+    <p style="font-size: 0.75rem; color: #888; margin: 0 0 20px 0;">Adjust the daily login rewards and the recovery cost for lost streaks.</p>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-        <div style="background: rgba(46, 204, 113, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(46, 204, 113, 0.2);">
-            <span style="font-size: 0.6rem; color: #888; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Current Prize Pool</span>
-            <strong id="admin-lottery-pool" style="font-size: 1.4rem; color: #2ecc71; font-family: 'Segoe UI', sans-serif;">$0</strong>
+    <div style="display: grid; gap: 12px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 1 Prize ($)</label><input id="admin-game-day-1-money" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 1 Prize (BPS)</label><input id="admin-game-day-1-bps" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
         </div>
-        <div style="background: rgba(231, 76, 60, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(231, 76, 60, 0.2);">
-            <span style="font-size: 0.6rem; color: #e74c3c; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Total Economy Burned</span>
-            <strong id="admin-lottery-burn" style="font-size: 1.4rem; color: #e74c3c; font-family: 'Segoe UI', sans-serif;">$0</strong>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 2 Prize ($)</label><input id="admin-game-day-2-money" type="number" min="0" value="500" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 2 Prize (BPS)</label><input id="admin-game-day-2-bps" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 3 Prize ($)</label><input id="admin-game-day-3-money" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 3 Prize (BPS)</label><input id="admin-game-day-3-bps" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 4 Prize ($)</label><input id="admin-game-day-4-money" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 4 Prize (BPS)</label><input id="admin-game-day-4-bps" type="number" min="0" value="1" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 5 Prize ($)</label><input id="admin-game-day-5-money" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 5 Prize (BPS)</label><input id="admin-game-day-5-bps" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 6 Prize ($)</label><input id="admin-game-day-6-money" type="number" min="0" value="5000" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 6 Prize (BPS)</label><input id="admin-game-day-6-bps" type="number" min="0" value="0" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 7 Prize ($)</label><input id="admin-game-day-7-money" type="number" min="0" value="1000" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
+            <div><label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Day 7 Prize (BPS)</label><input id="admin-game-day-7-bps" type="number" min="0" value="5" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;"></div>
         </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 15px; margin-bottom: 20px;">
-        <div style="background: rgba(255, 255, 255, 0.02); padding: 15px; border-radius: 10px; border: 1px solid #333;">
-            <label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 8px;">Schedule Next Draw</label>
-            <div style="display: flex; gap: 8px;">
-                <input id="admin-lotto-date" type="datetime-local" style="flex: 2; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px;">
-                <button id="admin-set-lotto-time" class="btn-primary" style="flex: 1; font-size: 0.75rem; background: #3498db; border: none; font-weight: bold; height: 40px;">Set Timer</button>
-            </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+        <div>
+            <label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Recovery Cost ($)</label>
+            <input id="admin-game-recovery-money" type="number" min="0" value="5000" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;">
         </div>
-        <div style="background: rgba(255, 255, 255, 0.02); padding: 15px; border-radius: 10px; border: 1px solid #333;">
-            <label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 8px;">Manual Override (Optional)</label>
-            <input id="admin-lotto-override" type="text" placeholder="e.g. 1, 5, 10, 15" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #f1c40f; padding: 0 10px; border-radius: 6px; box-sizing: border-box;">
+        <div>
+            <label style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 6px;">Recovery Cost (BPS)</label>
+            <input id="admin-game-recovery-bps" type="number" min="0" value="2" style="width: 100%; height: 40px; background: #111; border: 1px solid #444; color: #fff; padding: 0 10px; border-radius: 6px; box-sizing: border-box;">
         </div>
     </div>
 
-    <div style="background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 20px;">
-        <span style="font-size: 0.65rem; color: #f1c40f; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 10px; letter-spacing: 1px;">Live Ticket Registry</span>
-        <div id="admin-live-tickets-list" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 5px;">
-            <p style="color: #666; font-size: 0.75rem; font-style: italic; text-align: center; margin: 20px 0;">Waiting for ticket data...</p>
-        </div>
-    </div>
-
-    <button id="admin-trigger-lotto-btn" class="btn-primary" style="width: 100%; height: 50px; background: #f1c40f; color: #000; font-weight: 900; font-size: 0.9rem; border: none; border-radius: 8px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: transform 0.1s active;">
-        Trigger Draw & Distribute Prizes
+    <button id="admin-save-games-btn" class="btn-primary" style="width: 100%; height: 45px; background: #8e44ad; color: #fff; border: none; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer;">
+        Save Games Settings
     </button>
 </div>
 
@@ -1516,6 +1558,42 @@
             transition: 0.15s;
         }
         .key-btn:active { transform: scale(0.9); background: #3d3d3d; }
+
+        /* ---------- Games / Daily Login: mobile responsiveness ---------- */
+        @media (max-width: 900px) {
+            #games-layout-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        @media (max-width: 600px) {
+            #games-day-tracker {
+                grid-template-columns: repeat(4, 1fr) !important;
+            }
+            .games-day-item {
+                font-size: 0.75rem !important;
+                padding: 8px 4px !important;
+            }
+            #games-day-card {
+                font-size: 1.6rem !important;
+            }
+            #games-prize-display {
+                font-size: 1.1rem !important;
+            }
+            #games-action-buttons {
+                grid-template-columns: 1fr !important;
+            }
+            #games-confirm-btn, #games-recovery-btn {
+                font-size: 0.9rem !important;
+                padding: 13px !important;
+            }
+        }
+
+        @media (max-width: 400px) {
+            #games-day-tracker {
+                grid-template-columns: repeat(3, 1fr) !important;
+            }
+        }
     </style>
 
     <script type="module" src="firebaseConfig.js"></script>

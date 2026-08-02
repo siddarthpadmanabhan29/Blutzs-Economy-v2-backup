@@ -381,7 +381,7 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
    }
 
    // --- SPECIALIZED PERK LOGIC ---
-   const specializedPerks = ["taxHoliday", "priceLock", "instantInsurance", "lotteryLimitBypass", "jackpotDouble", "premiumTrial", "interestBoost"];
+   const specializedPerks = ["taxHoliday", "priceLock", "instantInsurance", "premiumTrial", "interestBoost"];
    if (specializedPerks.includes(itemId)) {
        const success = await applyBpsPerk(itemId, finalCost, userData);
        if (!success) return resetBtn(btnElement);

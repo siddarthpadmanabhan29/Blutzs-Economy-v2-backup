@@ -3,12 +3,65 @@ import { doc, getDoc, getDocs, updateDoc, onSnapshot, collection, writeBatch, in
 import { logHistory } from "../historyManager.js";
 import { sendSlackMessage } from "../slackNotifier.js";
 import { getDOMElements } from "./adminUtils.js";
+import { saveGamesSettings } from "../games.js";
+import { getDefaultGamesConfig } from "../gamesLogic.js";
 
 let lotteryPoolListener = null;
 let activeTicketsListener = null;
 let activeAdminListener = null;
 
+export async function loadGamesSettingsIntoAdminForm() {
+  const el = getDOMElements();
+  try {
+    const configDoc = await getDoc(doc(db, "games", "dailyLogin"));
+    const config = configDoc.exists() ? configDoc.data() : getDefaultGamesConfig();
+    const prizes = config.dailyLoginPrizes || getDefaultGamesConfig().dailyLoginPrizes;
+    const recoveryCost = config.recoveryCost || { money: 5000, bps: 2 };
+
+    for (const day of [1, 2, 3, 4, 5, 6, 7]) {
+      const prize = prizes[day] || { money: 0, bps: 0 };
+      const moneyEl = el[`adminGameDay${day}Money`];
+      const bpsEl = el[`adminGameDay${day}Bps`];
+      if (moneyEl) moneyEl.value = prize.money ?? 0;
+      if (bpsEl) bpsEl.value = prize.bps ?? 0;
+    }
+
+    if (el.adminGameRecoveryMoney) el.adminGameRecoveryMoney.value = recoveryCost.money ?? 5000;
+    if (el.adminGameRecoveryBps) el.adminGameRecoveryBps.value = recoveryCost.bps ?? 2;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+export async function saveGamesSettingsFromAdmin() {
+  const el = getDOMElements();
+  const config = {
+    dailyLoginPrizes: {
+      1: { money: Number(el.adminGameDay1Money?.value || 0), bps: Number(el.adminGameDay1Bps?.value || 0) },
+      2: { money: Number(el.adminGameDay2Money?.value || 0), bps: Number(el.adminGameDay2Bps?.value || 0) },
+      3: { money: Number(el.adminGameDay3Money?.value || 0), bps: Number(el.adminGameDay3Bps?.value || 0) },
+      4: { money: Number(el.adminGameDay4Money?.value || 0), bps: Number(el.adminGameDay4Bps?.value || 0) },
+      5: { money: Number(el.adminGameDay5Money?.value || 0), bps: Number(el.adminGameDay5Bps?.value || 0) },
+      6: { money: Number(el.adminGameDay6Money?.value || 0), bps: Number(el.adminGameDay6Bps?.value || 0) },
+      7: { money: Number(el.adminGameDay7Money?.value || 0), bps: Number(el.adminGameDay7Bps?.value || 0) }
+    },
+    recoveryCost: {
+      money: Number(el.adminGameRecoveryMoney?.value || 5000),
+      bps: Number(el.adminGameRecoveryBps?.value || 2)
+    }
+  };
+
+  try {
+    await saveGamesSettings(config);
+    alert("✅ Games settings saved.");
+  } catch (err) {
+    console.error(err);
+    alert("Failed to save games settings.");
+  }
+}
+
 export function listenForAdminLottery() {
+  loadGamesSettingsIntoAdminForm();
   const el = getDOMElements();
   if (!el.adminLotteryPoolDisplay) return;
   if (lotteryPoolListener) lotteryPoolListener();

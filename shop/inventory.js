@@ -224,13 +224,11 @@ async function useItem(itemId, btnElement) {
        return;
    }
 
-   // --- SPECIAL LOGIC: LOTTERY BYPASS ---
+   // --- SPECIAL LOGIC: LEGACY LOTTERY BYPASS ---
    if (itemData.type === "lottery_bypass") {
-       await updateDoc(userRef, { hasLotteryBypass: true });
-       await logHistory(user.uid, `Activated Lottery Bypass`, "usage");
        await deleteDoc(itemRef);
-       alert("🎟️ Bypass Activated! You can now buy one extra ticket in the Lottery.");
-       sendSlackMessage(`🎯 *Item Used!* \n*User:* ${buyerName} \n*Item:* Lottery Bypass`);
+       alert("🎟️ This lottery perk is no longer available in the Games system.");
+       sendSlackMessage(`🎯 *Item Removed!* \n*User:* ${buyerName} \n*Item:* Legacy Lottery Bypass`);
        return;
    }
 

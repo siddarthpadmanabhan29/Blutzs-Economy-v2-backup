@@ -68,6 +68,7 @@ export async function initializeAdminPanel() {
     listenForAppeals();
     listenToAllEscrow();
     loadRenewalRequests();
+    listenForAdminLottery();
 
     console.log("✅ Real-time listeners activated");
     console.log("✅ Admin panel fully initialized!");
