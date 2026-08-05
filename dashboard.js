@@ -96,6 +96,7 @@ const activeLoanSection = document.getElementById("active-loan-info");
 const debtAmountEl = document.getElementById("debt-amount");
 const dailyInterestEl = document.getElementById("daily-interest");
 const timerEl = document.getElementById("interest-timer");
+const loanProtectionStatusEl = document.getElementById("loan-protection-status");
 
 const unifiedHistoryList = document.getElementById("unified-history-list");
 const dateFilterInput = document.getElementById("history-date-filter");
@@ -679,6 +680,30 @@ function updateDashboardUI(user, dynamicRate) {
   if (activeDebt > 0) {
       activeLoanSection?.classList.remove("hidden");
       if (debtAmountEl) debtAmountEl.textContent = `$${activeDebt.toLocaleString()}`;
+
+      const hasShieldB = data.insurance?.activePackages?.includes("blutzs_b");
+      const loanStart = data.loanStartDate ? new Date(data.loanStartDate) : null;
+      const protectionPaid = data.insurance?.loanProtectionLastPaid ? new Date(data.insurance.loanProtectionLastPaid) : null;
+      const protectionActive = hasShieldB && loanStart && protectionPaid && protectionPaid.getTime() >= loanStart.getTime();
+
+      if (loanProtectionStatusEl) {
+          if (protectionActive) {
+              loanProtectionStatusEl.textContent = "🛡️ Shield B Boost Active";
+              loanProtectionStatusEl.style.display = "inline-flex";
+              loanProtectionStatusEl.style.background = "rgba(46, 204, 113, 0.12)";
+              loanProtectionStatusEl.style.color = "#2ecc71";
+              loanProtectionStatusEl.style.border = "1px solid rgba(46, 204, 113, 0.35)";
+          } else if (hasShieldB) {
+              loanProtectionStatusEl.textContent = "🛡️ Shield B Available This Month";
+              loanProtectionStatusEl.style.display = "inline-flex";
+              loanProtectionStatusEl.style.background = "rgba(241, 196, 15, 0.12)";
+              loanProtectionStatusEl.style.color = "#f1c40f";
+              loanProtectionStatusEl.style.border = "1px solid rgba(241, 196, 15, 0.35)";
+          } else {
+              loanProtectionStatusEl.textContent = "";
+              loanProtectionStatusEl.style.display = "none";
+          }
+      }
       
       if (dailyInterestEl) {
           const liveInterest = activeDebt * 0.05;
@@ -703,6 +728,7 @@ function updateDashboardUI(user, dynamicRate) {
       }
   } else {
       activeLoanSection?.classList.add("hidden");
+      if (loanProtectionStatusEl) loanProtectionStatusEl.style.display = "none";
       if (interestTimerInterval) clearInterval(interestTimerInterval);
   }
 

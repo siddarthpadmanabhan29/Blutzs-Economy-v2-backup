@@ -376,6 +376,7 @@
     </div>
 
     <div id="active-loan-info" class="hidden" style="margin-top: 20px; background: rgba(0,0,0,0.25); padding: 20px; border-radius: 12px; border: 1px solid #333; box-shadow: inset 0 0 20px rgba(0,0,0,0.2);">
+        <div id="loan-protection-status" style="display: none; margin-bottom: 15px; padding: 10px 12px; border-radius: 10px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; text-align: center;"></div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 25px;">
             <div class="contract-inner-box" style="padding: 12px; background: rgba(255,255,255,0.01); border-radius: 8px; border: 1px solid #444;">
                 <span class="contract-label" style="font-size: 0.6rem; color: #888; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px;">Total Debt</span>
@@ -490,20 +491,20 @@
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                     <button class="package-option" data-pkg="blutzs_a" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
-                            <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Lawyer A</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">50% Judicial Fine Coverage</p>
+                            <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Layer A</h5>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Cuts judicial fines in half when penalties hit. Best for players who want lighter punishment from legal actions.</p>
                         </div>
                     </button>
                     <button class="package-option" data-pkg="blutzs_b" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
                             <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Shield B</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">24h Loan Grace Period</p>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Reduces the first loan you take each month by 15%. Applies at loan origination and only once per calendar month.</p>
                         </div>
                     </button>
                     <button class="package-option" data-pkg="blutzs_c" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
                             <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Guard C</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">$50k Contract Cut Payout</p>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Adds a $50k payout when a contract is cut or terminated early. Softens the hit when deals fall through.</p>
                         </div>
                     </button>
                 </div>
@@ -518,19 +519,19 @@
                     <button class="package-option" data-pkg="darkblue_a" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
                             <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Lock A</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">Freeze Membership Prices</p>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Freezes your membership price at the current rate. Helps protect you from future subscription increases.</p>
                         </div>
                     </button>
                     <button class="package-option" data-pkg="darkblue_b" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
                             <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Tax B</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">0% BPS Exchange Tax</p>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Drops BPS exchange tax to 0%. Best for users who swap tokens often and want to keep more value.</p>
                         </div>
                     </button>
                     <button class="package-option" data-pkg="darkblue_c" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
                             <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Weekly C</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">+5 BPS Every Monday</p>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Grants +5 BPS every Monday. A steady weekly bonus that keeps your balance growing over time.</p>
                         </div>
                     </button>
                 </div>
@@ -545,19 +546,19 @@
                     <button class="package-option" data-pkg="crossgo_a" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
                             <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Yield A</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">+2% Savings Int. (<$325k)</p>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Adds +2% savings interest on balances under $325k. Ideal for idle cash that you want to keep productive.</p>
                         </div>
                     </button>
                     <button class="package-option" data-pkg="crossgo_b" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
                             <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Theft B</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">Refund on Deleted Items</p>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Refunds the value of deleted items when they are removed from inventory. Useful if you lose assets unexpectedly.</p>
                         </div>
                     </button>
                     <button class="package-option" data-pkg="crossgo_c" style="text-align: left; background: rgba(0,0,0,0.2); border: 1px solid #333; border-radius: 8px; padding: 10px; cursor: pointer; transition: 0.2s;">
                         <div class="package-info">
                             <h5 style="margin: 0; font-size: 0.8rem; color: #eee;">Coupon C</h5>
-                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888;">10% BPS Shop Discount</p>
+                            <p style="margin: 2px 0 0 0; font-size: 0.65rem; color: #888; line-height: 1.35;">Gives a 10% discount in the BPS shop. Best for players who buy tools, perks, or upgrades often.</p>
                         </div>
                     </button>
                 </div>

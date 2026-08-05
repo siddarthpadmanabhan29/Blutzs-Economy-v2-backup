@@ -19,7 +19,7 @@ export function getCreditStatus(score) {
  * applyInterest
  * Logic: 5% interest charged every 24 hours.
  * Penalty: -150 Credit Score if monthly deadline is missed.
- * Insurance: Blutzs Package B provides a 1-day grace period.
+ * Insurance: Blutzs Package B provides a one-time monthly loan discount on loan origination.
  */
 export async function applyInterest(uid, userData) {
     if (!userData.activeLoan || userData.activeLoan <= 0) return;
@@ -33,13 +33,6 @@ export async function applyInterest(uid, userData) {
     if (dueDateEl) {
         const formattedDeadline = deadline.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
         dueDateEl.textContent = `Due: ${formattedDeadline}`;
-    }
-
-    // --- INSURANCE LOGIC: Blutzs Package B (1 Day Grace Period) ---
-    const hasGracePeriod = userData.insurance?.activePackages?.includes("blutzs_b");
-    const effectiveDeadline = new Date(deadline);
-    if (hasGracePeriod) {
-        effectiveDeadline.setDate(effectiveDeadline.getDate() + 1);
     }
 
     const diffInMs = now - lastInterestDate;
@@ -57,7 +50,7 @@ export async function applyInterest(uid, userData) {
         console.log(`System: Applied ${daysElapsed} days of interest.`);
     }
 
-    if (now > effectiveDeadline && !userData.isEconomyPaused) {
+    if (now > deadline && !userData.isEconomyPaused) {
         const currentScore = userData.creditScore || 600;
         await updateDoc(doc(db, "users", uid), { 
             isEconomyPaused: true,
@@ -109,6 +102,15 @@ export async function takeOutLoan(amount) {
         return alert(`Denied. Your ${status.label} status only allows loans up to $${status.max.toLocaleString()}.`);
     }
 
+    const hasLoanProtection = data.insurance?.activePackages?.includes("blutzs_b");
+    const protectionLastPaid = data.insurance?.loanProtectionLastPaid ? new Date(data.insurance.loanProtectionLastPaid) : null;
+    const getMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonthKey = getMonthKey(now);
+    const protectionAlreadyUsedThisMonth = protectionLastPaid ? getMonthKey(protectionLastPaid) === currentMonthKey : false;
+    const protectionApplies = hasLoanProtection && !protectionAlreadyUsedThisMonth;
+    const adjustedLoanAmount = protectionApplies ? Math.round(amount * 0.85) : amount;
+    const protectionSavings = amount - adjustedLoanAmount;
+
     // 30-day fixed window deadline
     const deadline = new Date();
     deadline.setDate(deadline.getDate() + 30);
@@ -116,16 +118,23 @@ export async function takeOutLoan(amount) {
     try {
         await updateDoc(userRef, {
             balance: increment(amount),
-            activeLoan: amount,
+            activeLoan: adjustedLoanAmount,
             loanStartDate: now.toISOString(),
             lastInterestApplied: now.toISOString(),
             loanDeadline: deadline.toISOString(),
             creditScore: currentScore - 15 
+            ,...(protectionApplies ? { "insurance.loanProtectionLastPaid": now.toISOString() } : {})
         });
 
         await logHistory(user.uid, `🏦 Took $${amount.toLocaleString()} loan (${status.label} Tier)`, "admin", now.toISOString());
         const formattedDate = deadline.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
-        alert(`Loan approved! Your payment is due on ${formattedDate}. Score dipped (-15) for taking on debt.`);
+        if (protectionApplies) {
+            alert(`Loan approved! Shield B covered $${protectionSavings.toLocaleString()} of this loan. Your debt is now $${adjustedLoanAmount.toLocaleString()}. Payment due on ${formattedDate}. Score dipped (-15) for taking on debt.`);
+        } else if (hasLoanProtection) {
+            alert(`Loan approved! Shield B was already used this month, so no boost applied. Payment due on ${formattedDate}. Score dipped (-15) for taking on debt.`);
+        } else {
+            alert(`Loan approved! Your payment is due on ${formattedDate}. Score dipped (-15) for taking on debt.`);
+        }
     } catch (error) {
         console.error("Loan Error:", error);
     }
@@ -154,17 +163,10 @@ export async function repayLoan() {
     const now = new Date();
     const loanStart = new Date(data.loanStartDate);
     const deadline = new Date(data.loanDeadline);
-    
-    // --- INSURANCE LOGIC: Blutzs Package B (Grace Period Reward Protection) ---
-    const hasGracePeriod = data.insurance?.activePackages?.includes("blutzs_b");
-    const effectiveDeadline = new Date(deadline);
-    if (hasGracePeriod) {
-        effectiveDeadline.setDate(effectiveDeadline.getDate() + 1);
-    }
 
     const msHeld = now - loanStart;
     const hoursHeld = msHeld / (1000 * 60 * 60);
-    const isOnTime = now <= effectiveDeadline;
+    const isOnTime = now <= deadline;
 
     let reward = 0;
     if (hoursHeld >= 1) {
@@ -187,9 +189,6 @@ export async function repayLoan() {
             alert("Loan repaid, but no credit boost was earned because the loan was held for less than 1 hour.");
         } else {
             let feedback = isOnTime ? `Loan fully repaid on time! Credit score +${reward}.` : `Loan repaid late. Score +${reward}.`;
-            if (hasGracePeriod && now > deadline && now <= effectiveDeadline) {
-                feedback = `🛡️ Insurance Grace Period Applied! Loan counted as On-Time. Credit score +${reward}.`;
-            }
             alert(feedback);
         }
     } catch (error) {
