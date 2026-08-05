@@ -25,6 +25,7 @@ const getMention = (uid, defaultName) => SLACK_MENTIONS[uid] || defaultName;
 // ---------- Elements ----------
 const transferToInput = document.getElementById("transfer-to");
 const transferAmountInput = document.getElementById("transfer-amount");
+const transferMemoInput = document.getElementById("transfer-memo");
 const transferBtn = document.getElementById("transfer-btn");
 const requestBtn = document.getElementById("request-btn"); 
 const protectionCheckbox = document.getElementById("use-protection"); 
@@ -82,6 +83,7 @@ async function handleTransfer() {
 
   const toUsername = transferToInput.value.trim();
   const amount = parseFloat(transferAmountInput.value);
+  const memo = transferMemoInput ? transferMemoInput.value.trim() : "";
   const isProtected = protectionCheckbox ? protectionCheckbox.checked : false;
   const BPS_FEE = 5;
 
@@ -130,6 +132,7 @@ async function handleTransfer() {
           to: recipientUid,
           toName: recipientUsername,    
           amount: amount,
+          memo,
           status: "pending",
           timestamp: serverTimestamp(),
           releaseDate: Date.now() + (2 * 60 * 60 * 1000) // EXACTLY 2 HOURS
@@ -151,17 +154,18 @@ async function handleTransfer() {
     
     let slackMsg = "";
     if (isProtected) {
-        slackMsg = `🔒 *Escrow Initiated:* ${senderMention} sent *$${amount.toLocaleString()}* to ${recipientMention}. (Funds locked for 2h)`;
+      slackMsg = `🔒 *Escrow Initiated:* ${senderMention} sent *$${amount.toLocaleString()}* to ${recipientMention}. (Funds locked for 2h)${memo ? `\n*Memo:* ${memo}` : ""}`;
     } else {
-        slackMsg = `💸 *Money Sent:* ${senderMention} sent *$${amount.toLocaleString()}* directly to ${recipientMention}.`;
+      slackMsg = `💸 *Money Sent:* ${senderMention} sent *$${amount.toLocaleString()}* directly to ${recipientMention}.${memo ? `\n*Memo:* ${memo}` : ""}`;
     }
     sendSlackMessage(slackMsg);
 
     const protectionNote = isProtected ? " (Protected - 5 BPS Fee Applied)" : "";
+    const memoNote = memo ? ` | Memo: ${memo}` : "";
     
     // Log history separately to ensure transfer succeeds even if logs fail
-    logHistory(user.uid, `Sent $${amount.toLocaleString()} to ${recipientUsername}${protectionNote}`, "transfer-out");
-    logHistory(recipientUid, `Received $${amount.toLocaleString()} from ${senderName}`, "transfer-in");
+    logHistory(user.uid, `Sent $${amount.toLocaleString()} to ${recipientUsername}${protectionNote}${memoNote}`, "transfer-out");
+    logHistory(recipientUid, `Received $${amount.toLocaleString()} from ${senderName}${memoNote}`, "transfer-in");
 
     showMessage(isProtected ? "Protected transfer sent to Escrow!" : "Transfer successful!", "success");
     clearInputs();
@@ -184,6 +188,7 @@ async function handleRequest() {
 
   const targetUsernameInput = transferToInput.value.trim();
   const amount = parseFloat(transferAmountInput.value);
+  const memo = transferMemoInput ? transferMemoInput.value.trim() : "";
 
   if (!targetUsernameInput || isNaN(amount) || amount <= 0) {
     return showMessage("Enter recipient and amount to request.", "error");
@@ -213,6 +218,7 @@ async function handleRequest() {
       targetUid: targetUid,
       targetName: targetName,       
       amount: amount,
+      memo,
       status: "unpaid",
       timestamp: serverTimestamp()
     });
@@ -220,7 +226,7 @@ async function handleRequest() {
     // --- SLACK NOTIFICATION FOR REQUEST ---
     const requesterMention = getMention(user.uid, realUsername);
     const targetMention = getMention(targetUid, targetName);
-    sendSlackMessage(`📩 *Payment Request:* ${requesterMention} is requesting *$${amount.toLocaleString()}* from ${targetMention}.`);
+    sendSlackMessage(`📩 *Payment Request:* ${requesterMention} is requesting *$${amount.toLocaleString()}* from ${targetMention}.${memo ? `\n*Memo:* ${memo}` : ""}`);
 
     showMessage(`Request for $${amount.toLocaleString()} sent to ${targetName}`, "success");
     clearInputs();
@@ -245,6 +251,9 @@ function showMessage(msg, type) {
 function clearInputs() {
   transferToInput.value = "";
   transferAmountInput.value = "";
+  if (transferMemoInput) {
+      transferMemoInput.value = "";
+  }
   if (protectionCheckbox) {
       protectionCheckbox.checked = false;
       // Trigger change event to reset the UI styles

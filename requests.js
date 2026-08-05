@@ -75,13 +75,15 @@ function renderRequestItem(requestId, data) {
             <div>
                 <div style="font-weight: bold; color: #e74c3c;">$${data.amount.toLocaleString()}</div>
                 <div style="font-size: 0.8rem; color: #eee;">Requested by: ${data.requesterName}</div>
+                ${data.memo ? `<div style="font-size: 0.78rem; color: #bbb; margin-top: 6px; line-height: 1.35;"><strong style="color:#f1c40f;">Memo:</strong> ${data.memo}</div>` : ""}
             </div>
             <div class="request-actions" style="display: flex; gap: 5px;">
                 <button class="pay-req-btn" 
                     data-id="${requestId}" 
                     data-amount="${data.amount}" 
                     data-from="${data.requesterUid}" 
-                    data-name="${data.requesterName}" 
+                    data-name="${data.requesterName}"
+                    data-memo="${data.memo || ""}" 
                     style="background:#2ecc71; color:white; border:none; padding:6px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">
                     Pay
                 </button>
@@ -90,6 +92,7 @@ function renderRequestItem(requestId, data) {
                     data-from="${data.requesterUid}" 
                     data-name="${data.requesterName}"
                     data-amount="${data.amount}"
+                    data-memo="${data.memo || ""}"
                     style="background:#444; color:#bbb; border:none; padding:6px 10px; border-radius:6px; cursor:pointer;">
                     Decline
                 </button>
@@ -103,7 +106,7 @@ function renderRequestItem(requestId, data) {
 /**
  * LOGIC: Process Payment
  */
-async function payRequest(requestId, amount, requesterUid, requesterName) {
+async function payRequest(requestId, amount, requesterUid, requesterName, requestMemo = "") {
     const user = auth.currentUser;
     if (!user) return;
 
@@ -137,12 +140,12 @@ async function payRequest(requestId, amount, requesterUid, requesterName) {
         // --- Slack Notification ---
         const payerMention = getMention(user.uid, payerName);
         const requesterMention = getMention(requesterUid, requesterName);
-        sendSlackMessage(`✅ *Request Paid:* ${payerMention} paid the *$${amount.toLocaleString()}* requested by ${requesterMention}.`);
+        sendSlackMessage(`✅ *Request Paid:* ${payerMention} paid the *$${amount.toLocaleString()}* requested by ${requesterMention}.${requestMemo ? `\n*Memo:* ${requestMemo}` : ""}`);
 
         // Log History
         await Promise.all([
-            logHistory(user.uid, `Paid Invoice: $${amount.toLocaleString()} to ${requesterName}`, "transfer-out"),
-            logHistory(requesterUid, `Invoice Paid: $${amount.toLocaleString()} from ${payerName}`, "transfer-in")
+            logHistory(user.uid, `Paid Invoice: $${amount.toLocaleString()} to ${requesterName}${requestMemo ? ` | Memo: ${requestMemo}` : ""}`, "transfer-out"),
+            logHistory(requesterUid, `Invoice Paid: $${amount.toLocaleString()} from ${payerName}${requestMemo ? ` | Memo: ${requestMemo}` : ""}`, "transfer-in")
         ]);
 
         alert("Payment successful!");
@@ -155,7 +158,7 @@ async function payRequest(requestId, amount, requesterUid, requesterName) {
 /**
  * LOGIC: Decline Request
  */
-async function declineRequest(requestId, requesterUid, requesterName, amount) {
+async function declineRequest(requestId, requesterUid, requesterName, amount, requestMemo = "") {
     const user = auth.currentUser;
     if (!user) return;
 
@@ -172,7 +175,7 @@ async function declineRequest(requestId, requesterUid, requesterName, amount) {
         // --- Slack Notification ---
         const payerMention = getMention(user.uid, payerName);
         const requesterMention = getMention(requesterUid, requesterName);
-        sendSlackMessage(`❌ *Request Denied:* ${payerMention} declined the request for *$${amount.toLocaleString()}* from ${requesterMention}.`);
+        sendSlackMessage(`❌ *Request Denied:* ${payerMention} declined the request for *$${amount.toLocaleString()}* from ${requesterMention}.${requestMemo ? `\n*Memo:* ${requestMemo}` : ""}`);
 
     } catch (err) {
         console.error("Failed to decline:", err);
@@ -182,11 +185,11 @@ async function declineRequest(requestId, requesterUid, requesterName, amount) {
 // --- Global Event Delegation ---
 document.addEventListener("click", (e) => {
     if (e.target.classList.contains("pay-req-btn")) {
-        const { id, amount, from, name } = e.target.dataset;
-        payRequest(id, parseFloat(amount), from, name);
+        const { id, amount, from, name, memo } = e.target.dataset;
+        payRequest(id, parseFloat(amount), from, name, memo || "");
     }
     if (e.target.classList.contains("decline-req-btn")) {
-        const { id, from, name, amount } = e.target.dataset;
-        declineRequest(id, from, name, parseFloat(amount));
+        const { id, from, name, amount, memo } = e.target.dataset;
+        declineRequest(id, from, name, parseFloat(amount), memo || "");
     }
 });
