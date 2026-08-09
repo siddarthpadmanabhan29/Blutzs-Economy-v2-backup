@@ -122,6 +122,7 @@ export async function takeOutLoan(amount) {
             loanStartDate: now.toISOString(),
             lastInterestApplied: now.toISOString(),
             loanDeadline: deadline.toISOString(),
+            loanDiscountAppliedForLoanStartDate: null,
             creditScore: currentScore - 15 
             ,...(protectionApplies ? { "insurance.loanProtectionLastPaid": now.toISOString() } : {})
         });
@@ -180,7 +181,8 @@ export async function repayLoan() {
             isEconomyPaused: false,
             creditScore: currentScore + reward,
             lastInterestApplied: null,
-            lastRepaymentDate: now.toISOString() 
+            lastRepaymentDate: now.toISOString(),
+            loanDiscountAppliedForLoanStartDate: null
         });
 
         await logHistory(user.uid, `✅ Repaid loan of $${debt.toLocaleString()}`, "transfer-out", now.toISOString());

@@ -12,9 +12,185 @@ import { sendSlackMessage } from "../slackNotifier.js";
 
 const inventoryContainer = document.getElementById("inventory-items");
 const inventoryValueEl = document.getElementById("inventory-value");
+const LOAN_DISCOUNT_TYPE = "loan_discount";
 
 // QUOTA PROTECTION: Store the unsubscribe function globally
 let unsubscribeInventory = null;
+let activeLoanDiscountModal = null;
+
+function closeLoanDiscountModal() {
+  if (activeLoanDiscountModal) {
+    activeLoanDiscountModal.remove();
+    activeLoanDiscountModal = null;
+  }
+}
+
+function resetUseButton(btnElement) {
+  if (!btnElement) return;
+  btnElement.disabled = false;
+  btnElement.textContent = "Use";
+  btnElement.style.opacity = "1";
+}
+
+function getLoanKey(userData) {
+  return userData.loanStartDate || "active-loan";
+}
+
+function getEligibleLoanOptions(userData) {
+  const activeLoan = Number(userData.activeLoan || 0);
+  if (activeLoan <= 0) return [];
+
+  const loanKey = getLoanKey(userData);
+  if (userData.loanDiscountAppliedForLoanStartDate === loanKey) return [];
+
+  return [{
+    loanKey,
+    amount: activeLoan,
+    startDate: userData.loanStartDate || null,
+    deadline: userData.loanDeadline || null
+  }];
+}
+
+function openLoanDiscountModal({ userRef, userData, itemRef, btnElement }) {
+  const eligibleLoans = getEligibleLoanOptions(userData);
+
+  if (eligibleLoans.length === 0) {
+    if ((Number(userData.activeLoan || 0)) <= 0) {
+      alert("No active loans are available right now. Keep this item in your inventory until you take a loan.");
+    } else {
+      alert("This loan already has a 10% off discount applied. Take a new loan before using another one.");
+    }
+
+    resetUseButton(btnElement);
+    return;
+  }
+
+  closeLoanDiscountModal();
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.78);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(6px);
+  `;
+
+  const loanCards = eligibleLoans.map((loan, index) => {
+    const deadlineText = loan.deadline ? new Date(loan.deadline).toLocaleDateString() : "No due date";
+    const startText = loan.startDate ? new Date(loan.startDate).toLocaleDateString() : "Current loan";
+
+    return `
+      <button class="select-loan-option" data-loan-key="${loan.loanKey}"
+        style="width: 100%; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid rgba(241,196,15,0.25); color: #fff; border-radius: 10px; padding: 14px; cursor: pointer; transition: 0.2s;">
+        <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center;">
+          <div>
+            <div style="font-size: 0.75rem; color: #f1c40f; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">Loan ${index + 1}</div>
+            <div style="font-size: 1rem; font-weight: 800; margin-top: 4px;">$${loan.amount.toLocaleString()}</div>
+            <div style="font-size: 0.72rem; color: #aaa; margin-top: 4px;">Started: ${startText}</div>
+            <div style="font-size: 0.72rem; color: #aaa; margin-top: 2px;">Due: ${deadlineText}</div>
+          </div>
+          <div style="font-size: 0.7rem; color: #2ecc71; font-weight: 900; text-transform: uppercase;">Apply 10% Off</div>
+        </div>
+      </button>
+    `;
+  }).join("");
+
+  overlay.innerHTML = `
+    <div style="width: min(520px, 100%); background: linear-gradient(180deg, rgba(18,18,24,0.98), rgba(10,10,14,0.98)); border: 1px solid rgba(241,196,15,0.28); border-radius: 18px; padding: 22px; box-shadow: 0 20px 50px rgba(0,0,0,0.45);">
+      <div style="display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 16px;">
+        <div>
+          <h3 style="margin: 0; color: #f1c40f;">🏦 Apply 10% Off Loan</h3>
+          <p style="margin: 6px 0 0 0; color: #bbb; font-size: 0.85rem; line-height: 1.4;">Select the active loan you want to discount. Once used on this loan, the item cannot be reused until you take a new loan.</p>
+        </div>
+        <button id="close-loan-discount-modal" style="background: transparent; border: none; color: #888; font-size: 1.6rem; cursor: pointer; line-height: 1;">×</button>
+      </div>
+      <div style="display: grid; gap: 10px; margin-bottom: 16px;">
+        ${loanCards}
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="cancel-loan-discount-modal" class="btn-secondary" style="padding: 10px 14px; border-radius: 8px;">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  activeLoanDiscountModal = overlay;
+
+  const teardown = (restoreButton = true) => {
+    closeLoanDiscountModal();
+    if (restoreButton) resetUseButton(btnElement);
+  };
+  overlay.querySelector("#close-loan-discount-modal")?.addEventListener("click", () => teardown(true));
+  overlay.querySelector("#cancel-loan-discount-modal")?.addEventListener("click", () => teardown(true));
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) teardown(true);
+  });
+
+  overlay.querySelectorAll(".select-loan-option").forEach((btn) => {
+    btn.addEventListener("mouseenter", () => {
+      btn.style.transform = "translateY(-2px)";
+      btn.style.borderColor = "rgba(241,196,15,0.55)";
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.transform = "translateY(0)";
+      btn.style.borderColor = "rgba(241,196,15,0.25)";
+    });
+
+    btn.addEventListener("click", async () => {
+      const latestSnap = await getDoc(userRef);
+      if (!latestSnap.exists()) {
+        alert("Your account could not be loaded.");
+        teardown(true);
+        resetUseButton(btnElement);
+        return;
+      }
+
+      const latestUserData = latestSnap.data();
+      const latestActiveLoan = Number(latestUserData.activeLoan || 0);
+      const latestLoanKey = getLoanKey(latestUserData);
+
+      if (latestActiveLoan <= 0) {
+        alert("No active loans are available right now. Keep this item in your inventory until you take a loan.");
+        teardown(true);
+        resetUseButton(btnElement);
+        return;
+      }
+
+      if (latestUserData.loanDiscountAppliedForLoanStartDate === latestLoanKey) {
+        alert("This loan already has a 10% off discount applied. Take a new loan before using another one.");
+        teardown(true);
+        resetUseButton(btnElement);
+        return;
+      }
+
+      const newLoanAmount = Math.max(0, Math.floor(latestActiveLoan * 0.9));
+      const savings = latestActiveLoan - newLoanAmount;
+
+      try {
+        await updateDoc(userRef, {
+          activeLoan: newLoanAmount,
+          loanDiscountAppliedForLoanStartDate: latestLoanKey,
+          loanDiscountAppliedAt: new Date().toISOString()
+        });
+
+        await deleteDoc(itemRef);
+        await logHistory(auth.currentUser.uid, `Applied 10% loan discount to active loan (-$${savings.toLocaleString()})`, "usage");
+        alert(`✅ 10% off applied to your active loan. Saved $${savings.toLocaleString()}.`);
+        teardown(false);
+      } catch (error) {
+        console.error("Loan discount error:", error);
+        alert("Failed to apply the loan discount.");
+        teardown(true);
+        resetUseButton(btnElement);
+      }
+    });
+  });
+}
 
 function loadInventory() {
  auth.onAuthStateChanged(async (user) => {
@@ -55,6 +231,7 @@ function loadInventory() {
        const isLotteryBypass = item.type === 'lottery_bypass';
        const isPremiumTrial = item.type === 'premium_trial';
        const isInterestBoost = item.type === 'interest_boost';
+      const isLoanDiscount = item.type === LOAN_DISCOUNT_TYPE;
        
        const itemCard = document.createElement("div");
        
@@ -79,6 +256,10 @@ function loadInventory() {
            borderStyle = "1px solid #2ecc71";
            bgStyle = "rgba(46, 204, 113, 0.1)";
            accentColor = "#2ecc71";
+         } else if (isLoanDiscount) {
+           borderStyle = "1px solid #f1c40f";
+           bgStyle = "rgba(241, 196, 15, 0.08)";
+           accentColor = "#f1c40f";
        } else if (isFreeItem) { 
            borderStyle = "1px solid #2ecc71"; 
            bgStyle = "rgba(46, 204, 113, 0.03)";
@@ -107,6 +288,7 @@ function loadInventory() {
            if (isCoupon || isLotteryBypass) itemCard.style.borderColor = "#9b59b6";
            if (isPremiumTrial) itemCard.style.borderColor = "#f39c12";
            if (isInterestBoost) itemCard.style.borderColor = "#27ae60";
+             if (isLoanDiscount) itemCard.style.borderColor = "#f1c40f";
        };
        itemCard.onmouseleave = () => {
            itemCard.style.transform = "translateY(0)";
@@ -126,12 +308,14 @@ function loadInventory() {
                   `<span style="color: #f1c40f; font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; background: rgba(241, 196, 15, 0.1); padding: 2px 6px; border-radius: 4px;">Limited Trial</span>` :
                   (isInterestBoost ? 
                     `<span style="color: #2ecc71; font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; background: rgba(46, 204, 113, 0.1); padding: 2px 6px; border-radius: 4px;">Growth Token</span>` :
-                    `<span style="color: #2ecc71; font-size: 0.8rem; font-weight: 800; font-family: monospace;">$${(item.value || 0).toLocaleString()}</span>`)))
+                      (isLoanDiscount ?
+                        `<span style="color: #f1c40f; font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; background: rgba(241, 196, 15, 0.1); padding: 2px 6px; border-radius: 4px;">Loan Discount</span>` :
+                        `<span style="color: #2ecc71; font-size: 0.8rem; font-weight: 800; font-family: monospace;">$${(item.value || 0).toLocaleString()}</span>`))))
            }
          </div>
          <div style="display: flex; gap: 8px; position: relative; z-index: 2;">
            <button class="use-item btn-primary" data-id="${itemDoc.id}" style="flex: 1; font-size: 0.7rem; padding: 6px 0; font-weight: 800; height: 32px; border-radius: 6px; text-transform: uppercase; cursor: pointer; transition: 0.2s;">Use</button>
-           ${(!isFreeItem && !isLotteryBypass && !isPremiumTrial && !isInterestBoost) ? 
+             ${(!isFreeItem && !isLotteryBypass && !isPremiumTrial && !isInterestBoost && !isLoanDiscount) ? 
                `<button class="sell-item btn-secondary" data-id="${itemDoc.id}" style="flex: 1; font-size: 0.7rem; padding: 6px 0; background: rgba(231, 76, 60, 0.1); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.2); font-weight: 800; height: 32px; border-radius: 6px; text-transform: uppercase; cursor: pointer; transition: 0.2s;">Sell</button>` : 
                ''
            }
@@ -232,6 +416,11 @@ async function useItem(itemId, btnElement) {
        return;
    }
 
+     if (itemData.type === LOAN_DISCOUNT_TYPE) {
+       openLoanDiscountModal({ userRef, userData, itemRef, btnElement });
+       return;
+     }
+
    // --- COUPON LOGIC ---
    if (itemData.type === "coupon") {
      const choice = confirm(
@@ -262,7 +451,7 @@ async function useItem(itemId, btnElement) {
    const updates = {};
    let cashbackMsg = "";
 
-   if (itemData.type !== "coupon" && itemData.type !== "lottery_bypass" && itemData.type !== "premium_trial" && itemData.type !== "interest_boost") {
+     if (itemData.type !== "coupon" && itemData.type !== "lottery_bypass" && itemData.type !== "premium_trial" && itemData.type !== "interest_boost" && itemData.type !== LOAN_DISCOUNT_TYPE) {
        if (plan.cashback > 0) {
            const purchasePriceEstimate = itemData.value * 2;
            const cashbackAmount = Math.floor(purchasePriceEstimate * plan.cashback);
@@ -325,7 +514,7 @@ async function sellItem(itemId, btnElement) {
    const userData = userSnap.data();
    const item = itemSnap.data();
 
-   if (item.isFree === true || item.type === "lottery_bypass" || item.type === "premium_trial" || item.type === "interest_boost") {
+     if (item.isFree === true || item.type === "lottery_bypass" || item.type === "premium_trial" || item.type === "interest_boost" || item.type === LOAN_DISCOUNT_TYPE) {
        alert("⛔ Specialized items cannot be sold.");
        if(btnElement) {
            btnElement.disabled = true;

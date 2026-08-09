@@ -162,6 +162,7 @@ function renderBpsShop(externalUserData = null) {
         const finalCost = getEffectiveCost(item.cost);
         const affordable = userBPS >= finalCost;
         const isGiftCard = item.type === "giftcard";
+        const isLoanDiscount = item.type === "loan_discount";
         
         // --- UPDATED GATING LOGIC ---
         // Only the basic 10% coupon and the smallest gift card remain unlocked for non-subscribers.
@@ -185,7 +186,7 @@ function renderBpsShop(externalUserData = null) {
 
         div.style.cssText = `
             background: ${cardBg};
-            border: 1px solid ${isGiftCard ? '#f1c40f' : 'var(--contract-border)'};
+            border: 1px solid ${isGiftCard ? '#f1c40f' : (isLoanDiscount ? '#3a3a3a' : 'var(--contract-border)')};
             border-radius: 14px;
             padding: 18px;
             display: flex;
@@ -203,17 +204,22 @@ function renderBpsShop(externalUserData = null) {
         if (!isDisabled) {
             div.onmouseenter = () => {
                 div.style.transform = "translateY(-5px)";
+                div.style.borderStyle = "solid";
                 div.style.borderColor = isGiftCard ? "#fff" : "#8e44ad";
                 div.style.boxShadow = isGiftCard ? "0 8px 20px rgba(241, 196, 15, 0.3)" : "0 8px 20px rgba(142, 68, 173, 0.2)";
             };
             div.onmouseleave = () => {
                 div.style.transform = "translateY(0)";
-                div.style.borderColor = isGiftCard ? "#f1c40f" : "var(--contract-border)";
+                div.style.borderStyle = "solid";
+                div.style.borderColor = isGiftCard ? "#f1c40f" : (isLoanDiscount ? '#3a3a3a' : "var(--contract-border)");
                 div.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
             };
         }
 
         const priceColor = isGiftCard ? "#fff" : "#a29bfe";
+        const itemBadge = isLoanDiscount
+            ? `<span style="display: inline-block; font-size: 0.6rem; color: #8e44ad; font-weight: 900; text-transform: uppercase; margin-top: 4px; background: rgba(142, 68, 173, 0.12); padding: 2px 6px; border-radius: 4px;">Applies to one active loan</span>`
+            : "";
 
         const priceHTML = hasInsuranceDiscount 
             ? `
@@ -221,10 +227,12 @@ function renderBpsShop(externalUserData = null) {
                 <span style="text-decoration: line-through; color: ${isGiftCard ? '#eee' : '#7f8c8d'}; font-size: 0.8rem; opacity: 0.8;">${item.cost} BPS</span>
                 <div style="color: ${priceColor}; font-weight: 900; font-size: 1.3rem; letter-spacing: -0.5px;">${finalCost} <span style="font-size: 0.7rem; opacity: 0.8;">BPS</span></div>
                 <div style="display: inline-block; font-size: 0.6rem; color: #2ecc71; font-weight: 800; text-transform: uppercase; margin-top: 4px; background: rgba(255, 255, 255, 0.15); padding: 2px 6px; border-radius: 4px;">🛡️ Insurance -10%</div>
+                ${itemBadge}
             </div>`
             : `
             <div style="margin: 10px 0;">
                 <div style="color: ${priceColor}; font-weight: 900; font-size: 1.3rem; letter-spacing: -0.5px;">${item.cost} <span style="font-size: 0.7rem; opacity: 0.8;">BPS</span></div>
+                ${itemBadge}
             </div>`;
 
         div.innerHTML = `
@@ -321,7 +329,11 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
  try {
    const [userSnap, itemSnap] = await Promise.all([getDoc(userRef), getDoc(itemRef)]);
    const userData = userSnap.data();
-   const itemData = itemSnap.data();
+         const itemData = itemSnap.exists() ? itemSnap.data() : null;
+     if (!itemData) {
+             alert("That shop item is unavailable right now.");
+             return resetBtn(btnElement);
+     }
    const senderName = userData.username || userData.displayName || user.uid;
 
    const now = new Date();
@@ -379,6 +391,29 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
        alert(`🎁 GIFT SENT! ${itemData.value} BPS added to ${recipientUsername}.`);
        return renderBpsShop();
    }
+
+     if (itemData.type === "loan_discount") {
+             const inventoryRef = collection(db, "users", user.uid, "inventory");
+
+             await addDoc(inventoryRef, {
+                 name: itemData.name,
+                 type: "loan_discount",
+                 discountValue: itemData.discountValue || 10,
+                 acquiredAt: new Date().toISOString(),
+                 isFree: false,
+                 value: 0
+             });
+
+             await updateDoc(userRef, {
+                 bpsBalance: increment(-finalCost)
+             });
+
+             await logHistory(user.uid, `Purchased ${itemData.name} for ${finalCost} BPS`, "usage");
+             sendSlackMessage(`🛒 *BPS Shop Purchase*\n*User:* ${senderName}\n*Item:* ${itemData.name}\n*Cost:* ${finalCost} BPS\n*Time:* ${timestampStr}`);
+
+             alert(`Transaction Successful: ${itemData.name} added to your inventory!`);
+             return renderBpsShop();
+     }
 
    // --- SPECIALIZED PERK LOGIC ---
    const specializedPerks = ["taxHoliday", "priceLock", "instantInsurance", "premiumTrial", "interestBoost"];

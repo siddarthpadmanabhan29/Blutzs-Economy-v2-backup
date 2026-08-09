@@ -85,6 +85,7 @@ export async function createOrUpdateUserDoc(uid, username, email) {
             employmentStatus: "Unemployed",
             creditScore: 600,
             activeLoan: 0,
+            loanDiscountAppliedForLoanStartDate: null,
             isEconomyPaused: false,
             membershipLevel: "standard",
             shopOrderCount: 0,
