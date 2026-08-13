@@ -608,6 +608,15 @@ async function saveEditedStockCompany(companyId) {
       dividendRate
     });
 
+    await addDoc(collection(db, "stockCompanies", companyId, "priceHistory"), {
+      price: Number(basePrice.toFixed(2)),
+      date: new Date().toISOString().split('T')[0],
+      timestamp: new Date().getTime(),
+      source: "admin-edit",
+      marketTrend,
+      volatility,
+    });
+
     // Log what changed
     const changes = [];
     if (original.name !== name) changes.push(`name: "${original.name}" → "${name}"`);
@@ -646,7 +655,7 @@ async function addStockCompany() {
 
     const ownerDoc = userSnap.docs[0];
 
-    await addDoc(collection(db, "stockCompanies"), {
+    const companyRef = await addDoc(collection(db, "stockCompanies"), {
       name,
       description: description || `${name} is now listed on the stock market.`,
       basePrice,
@@ -657,6 +666,15 @@ async function addStockCompany() {
       volatility: 2,
       dividendRate,
       createdAt: new Date().toISOString()
+    });
+
+    await addDoc(collection(db, "stockCompanies", companyRef.id, "priceHistory"), {
+      price: Number(basePrice.toFixed(2)),
+      date: new Date().toISOString().split('T')[0],
+      timestamp: new Date().getTime(),
+      source: "admin-create",
+      marketTrend: 0,
+      volatility: 2,
     });
 
     await logAdminAction(auth.currentUser.uid, `Added stock company: ${name} for ${ownerDoc.data().username || ownerUsername}`);

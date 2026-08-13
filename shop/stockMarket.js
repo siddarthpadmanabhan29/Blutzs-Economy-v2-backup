@@ -8,6 +8,8 @@ import {
   getDoc,
   getDocs,
   query,
+  orderBy,
+  limit,
   where,
   runTransaction,
   increment,
@@ -33,6 +35,130 @@ const SELL_TAX_RATE = 0.10;       // 10% tax on sell proceeds
 const DIVIDEND_TAX_RATE = 0.15;   // 15% tax on dividend payouts
 const DIVIDEND_INTERVAL_DAYS = 30; // Pay dividends every 30 days
 const MIN_STOCK_PRICE = 0; // allow exact zero so losses can reach -100%
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function getEstDate(value = new Date()) {
+  const now = new Date(value);
+  const estOffset = now.getTime() + (now.getTimezoneOffset() * 60000) - (5 * 3600000);
+  return new Date(estOffset);
+}
+
+function startOfEstDay(value = new Date()) {
+  const estDate = getEstDate(value);
+  estDate.setHours(0, 0, 0, 0);
+  return estDate;
+}
+
+function formatChartDate(value, includeTime = false) {
+  const date = getEstDate(value);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  if (!includeTime) {
+    return `${month}/${day}`;
+  }
+
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 || 12;
+  return `${month}/${day} ${displayHour}:${minutes} ${suffix}`;
+}
+
+function formatMidnightDate(value) {
+  const date = getEstDate(value);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${month}/${day} 12:00 AM`;
+}
+
+function formatDateTimeLabel(value) {
+  const date = getEstDate(value);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 || 12;
+  return `${month}/${day} ${displayHour}:${minutes} ${suffix}`;
+}
+
+function getSnapshotRangeForTimeframe(timeframe) {
+  const now = new Date();
+  const startToday = startOfEstDay(now);
+
+  switch (timeframe) {
+    case 'daily':
+      return { start: startToday, end: new Date(now) };
+    case 'weekly':
+      return { start: new Date(startToday.getTime() - (6 * DAY_MS)), end: new Date(now) };
+    case 'monthly':
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date(now) };
+    case 'yearly':
+      return { start: new Date(now.getFullYear() - 1, now.getMonth(), 1), end: new Date(now) };
+    default:
+      return { start: startToday, end: new Date(now) };
+  }
+}
+
+function isSameEstDay(left, right) {
+  return getEstDate(left).toDateString() === getEstDate(right).toDateString();
+}
+
+function isSameEstMonth(left, right) {
+  const leftDate = getEstDate(left);
+  const rightDate = getEstDate(right);
+  return leftDate.getFullYear() === rightDate.getFullYear() && leftDate.getMonth() === rightDate.getMonth();
+}
+
+function groupHistoryByDay(history) {
+  const grouped = new Map();
+
+  history.forEach((entry) => {
+    const entryDate = getEstDate(entry.timestamp);
+    const key = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(entry);
+  });
+
+  return Array.from(grouped.values()).map((entries) => {
+    const sorted = [...entries].sort((left, right) => left.timestamp - right.timestamp);
+    const first = sorted[0];
+    const closing = sorted[sorted.length - 1]; // last snapshot of the day = closing price
+    return {
+      date: formatMidnightDate(first.timestamp),
+      price: Number(closing.price || 0),
+      timestamp: first.timestamp,
+      tooltipLabel: formatMidnightDate(first.timestamp),
+    };
+  }).sort((left, right) => left.timestamp - right.timestamp);
+}
+
+function groupHistoryByMonth(history) {
+  const grouped = new Map();
+
+  history.forEach((entry) => {
+    const entryDate = getEstDate(entry.timestamp);
+    const key = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(entry);
+  });
+
+  return Array.from(grouped.entries()).map(([key, entries]) => {
+    const [year, month] = key.split('-').map(Number);
+    const sorted = [...entries].sort((left, right) => left.timestamp - right.timestamp);
+    const closing = sorted[sorted.length - 1]; // last snapshot of the month = closing price
+    const monthDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+
+    return {
+      date: `${MONTH_NAMES[month - 1]} 12:00 AM`,
+      price: Number(closing.price || 0),
+      timestamp: monthDate.getTime(),
+      tooltipLabel: `${MONTH_NAMES[month - 1]} ${year} 12:00 AM`,
+    };
+  }).sort((left, right) => left.timestamp - right.timestamp);
+}
 
 // ==================== PRICE LOGIC ====================
 
@@ -60,6 +186,23 @@ function formatDelta(price, base) {
   return { delta, pct };
 }
 
+function syncCompanyState(companyId, updater) {
+  companies = companies.map((company) => {
+    if (company.id !== companyId) return company;
+    return updater(company);
+  });
+}
+
+function syncHoldingState(companyId, updater) {
+  holdings = holdings
+    .map((holding) => {
+      if (holding.companyId !== companyId) return holding;
+      const nextHolding = updater(holding);
+      return nextHolding;
+    })
+    .filter(Boolean);
+}
+
 // ==================== CHART & HISTORY ====================
 
 // Record price snapshot to Firestore whenever price changes
@@ -76,20 +219,17 @@ export async function recordPriceSnapshot(companyId, price) {
   }
 }
 
-// Get all price history from Firestore for a company
 async function getPriceHistoryFromFirestore(companyId) {
   try {
     const historyRef = collection(db, "stockCompanies", companyId, "priceHistory");
-    const q = query(historyRef);
+    const q = query(historyRef, orderBy("timestamp", "asc"), limit(500));
     const snapshot = await getDocs(q);
-    
+
     const history = [];
-    snapshot.forEach((doc) => {
-      history.push(doc.data());
+    snapshot.forEach((docSnap) => {
+      history.push(docSnap.data());
     });
-    
-    // Sort by timestamp ascending
-    history.sort((a, b) => a.timestamp - b.timestamp);
+
     return history;
   } catch (err) {
     console.error("Failed to fetch price history:", err);
@@ -97,139 +237,40 @@ async function getPriceHistoryFromFirestore(companyId) {
   }
 }
 
-// Get aggregated history for timeframe with date ranges
 async function getHistoryByTimeframe(company, timeframe = 'daily') {
   const history = await getPriceHistoryFromFirestore(company.id);
-  if (!history || history.length === 0) {
-    // Return empty array if no data
-    return [];
-  }
-
   const now = new Date();
+  const range = getSnapshotRangeForTimeframe(timeframe);
+
+  const filtered = history.filter((entry) => {
+    const timestamp = new Date(entry.timestamp);
+    return timestamp >= range.start && timestamp <= range.end;
+  });
 
   switch (timeframe) {
     case 'daily':
-      // Last 30 days - group by day
-      const dailyData = [];
-      const dayGroups = new Map();
-      
-      history.forEach(h => {
-        const date = h.date; // YYYY-MM-DD format
-        if (!dayGroups.has(date)) {
-          dayGroups.set(date, []);
-        }
-        dayGroups.get(date).push(h.price);
-      });
-      
-      dayGroups.forEach((prices, date) => {
-        const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
-        dailyData.push({
-          date: date,
-          price: Number(avg.toFixed(2)),
-          timestamp: new Date(date).getTime()
-        });
-      });
-      
-      return dailyData.slice(-30);
+      return filtered
+        .filter((entry) => isSameEstDay(entry.timestamp, now))
+        .map((entry) => ({
+          date: formatDateTimeLabel(entry.timestamp),
+          price: Number(entry.price || 0),
+          timestamp: entry.timestamp,
+          tooltipLabel: formatDateTimeLabel(entry.timestamp),
+        }));
 
     case 'weekly':
-      // Group by week with date range (e.g., "Jan 15-22")
-      const weeklyData = [];
-      const weekGroups = new Map();
-      
-      history.forEach(h => {
-        const date = new Date(h.date);
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6); // End of week (Saturday)
-        
-        const weekKey = weekStart.toISOString().split('T')[0];
-        if (!weekGroups.has(weekKey)) {
-          weekGroups.set(weekKey, { prices: [], start: weekStart, end: weekEnd });
-        }
-        weekGroups.get(weekKey).prices.push(h.price);
-      });
-      
-      const sortedWeeks = Array.from(weekGroups.entries()).sort((a, b) => 
-        new Date(a[0]).getTime() - new Date(b[0]).getTime()
-      );
-      
-      sortedWeeks.forEach(([weekKey, data]) => {
-        const avg = data.prices.reduce((a, b) => a + b, 0) / data.prices.length;
-        const startDate = data.start;
-        const endDate = data.end;
-        const dateLabel = `${(startDate.getMonth() + 1).toString().padStart(2, '0')}-${startDate.getDate().toString().padStart(2, '0')} to ${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}`;
-        
-        weeklyData.push({
-          date: dateLabel,
-          price: Number(avg.toFixed(2)),
-          timestamp: endDate.getTime()
-        });
-      });
-      
-      return weeklyData.slice(-52);
+      return filtered.map((entry) => ({
+        date: formatDateTimeLabel(entry.timestamp),
+        price: Number(entry.price || 0),
+        timestamp: entry.timestamp,
+        tooltipLabel: formatDateTimeLabel(entry.timestamp),
+      }));
 
     case 'monthly':
-      // Group by month with date range (e.g., "Jan 1-31")
-      const monthlyData = [];
-      const monthGroups = new Map();
-      
-      history.forEach(h => {
-        const date = new Date(h.date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        if (!monthGroups.has(monthKey)) {
-          monthGroups.set(monthKey, { prices: [], dates: [] });
-        }
-        monthGroups.get(monthKey).prices.push(h.price);
-        monthGroups.get(monthKey).dates.push(date);
-      });
-      
-      const sortedMonths = Array.from(monthGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-      
-      sortedMonths.forEach(([monthKey, data]) => {
-        const avg = data.prices.reduce((a, b) => a + b, 0) / data.prices.length;
-        const [year, month] = monthKey.split('-');
-        const monthDate = new Date(parseInt(year), parseInt(month) - 1);
-        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const dateLabel = `${monthNames[parseInt(month) - 1]} 1-${lastDay}`;
-        
-        monthlyData.push({
-          date: dateLabel,
-          price: Number(avg.toFixed(2)),
-          timestamp: monthDate.getTime()
-        });
-      });
-      
-      return monthlyData.slice(-12);
+      return groupHistoryByDay(filtered.filter((entry) => isSameEstMonth(entry.timestamp, now)));
 
     case 'yearly':
-      // Group by year with date range (e.g., "2024 Jan-Dec")
-      const yearlyData = [];
-      const yearGroups = new Map();
-      
-      history.forEach(h => {
-        const date = new Date(h.date);
-        const year = date.getFullYear().toString();
-        if (!yearGroups.has(year)) {
-          yearGroups.set(year, []);
-        }
-        yearGroups.get(year).push(h.price);
-      });
-      
-      const sortedYears = Array.from(yearGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-      
-      sortedYears.forEach(([year, prices]) => {
-        const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
-        yearlyData.push({
-          date: year,
-          price: Number(avg.toFixed(2)),
-          timestamp: new Date(year, 0, 1).getTime()
-        });
-      });
-      
-      return yearlyData.slice(-5);
+      return groupHistoryByMonth(filtered);
 
     default:
       return [];
@@ -255,6 +296,8 @@ function calculateChartStats(data) {
   };
 }
 
+const chartInstancesByContainer = new Map();
+
 function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -267,21 +310,18 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
 
     const labels = data.map(d => d.date);
     const prices = data.map(d => d.price);
+    const tooltipLabels = data.map(d => d.tooltipLabel || d.date);
 
     if (labels.length === 0) {
       container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px; font-size: 0.75rem;">No price data yet. Check back after trading begins.</p>';
       return;
     }
 
-    // Destroy existing chart if it exists
-    const existingCanvas = container.querySelector('canvas');
-    if (existingCanvas) {
-      const charts = Chart.instances || [];
-      charts.forEach(chart => {
-        if (chart && chart.canvas === existingCanvas) {
-          chart.destroy();
-        }
-      });
+    // Destroy the chart instance previously attached to this container, if any
+    const existingChart = chartInstancesByContainer.get(containerId);
+    if (existingChart) {
+      existingChart.destroy();
+      chartInstancesByContainer.delete(containerId);
     }
 
     const canvas = document.createElement('canvas');
@@ -289,7 +329,7 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
     container.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
-    new Chart(ctx, {
+    const chartInstance = new Chart(ctx, {
       type: 'line',
       data: {
         labels: labels,
@@ -323,6 +363,7 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
             padding: 8,
             displayColors: false,
             callbacks: {
+              title: (context) => tooltipLabels[context[0].dataIndex] || context[0].label,
               label: (context) => `$${Number(context.parsed.y).toFixed(2)}`
             }
           }
@@ -340,6 +381,8 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
         }
       }
     });
+
+    chartInstancesByContainer.set(containerId, chartInstance);
   })();
 }
 
@@ -632,6 +675,38 @@ async function tradeShares(companyId, quantity, price, action) {
         }, { merge: true });
       });
 
+      syncCompanyState(companyId, (company) => ({
+        ...company,
+        availableShares: willBankrupt ? 0 : Math.max(0, Number(company.availableShares || 0) - quantity),
+        basePrice: willBankrupt ? MIN_STOCK_PRICE : newBasePrice,
+        isBankrupt: willBankrupt,
+      }));
+
+      const existingHolding = holdings.find((holding) => holding.companyId === companyId);
+      if (existingHolding) {
+        syncHoldingState(companyId, (holding) => ({
+          ...holding,
+          shares: Number(holding.shares || 0) + quantity,
+          avgCost: Number(((Number(holding.avgCost || 0) * Number(holding.shares || 0)) + totalCost) / (Number(holding.shares || 0) + quantity)).toFixed(2),
+          lastUpdatedAt: new Date().toISOString(),
+        }));
+      } else {
+        holdings = [
+          ...holdings,
+          {
+            id: companyId,
+            companyId,
+            companyName: companyData.name,
+            shares: quantity,
+            avgCost: Number(livePrice.toFixed(2)),
+            lastUpdatedAt: new Date().toISOString(),
+          },
+        ];
+      }
+
+      renderStockMarket();
+      renderPortfolio();
+
       await recordPriceSnapshot(companyId, newBasePrice);
       await logHistory(user.uid, `Bought ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each`, "stock");
       if (willBankrupt) {
@@ -694,6 +769,26 @@ async function tradeShares(companyId, quantity, price, action) {
           });
         }
       });
+
+      syncCompanyState(companyId, (company) => ({
+        ...company,
+        availableShares: willBankrupt ? 0 : Number(company.availableShares || 0) + quantity,
+        basePrice: willBankrupt ? MIN_STOCK_PRICE : newBasePrice,
+        isBankrupt: willBankrupt,
+      }));
+
+      syncHoldingState(companyId, (holding) => {
+        const nextShares = Number(holding.shares || 0) - quantity;
+        if (nextShares <= 0) return null;
+        return {
+          ...holding,
+          shares: nextShares,
+          lastUpdatedAt: new Date().toISOString(),
+        };
+      });
+
+      renderStockMarket();
+      renderPortfolio();
 
       await recordPriceSnapshot(companyId, newBasePrice);
       await logHistory(
@@ -804,37 +899,32 @@ async function processDividends(userId) {
 export function initStockMarketUI() {
   if (!stockMarketList || !stockPortfolioList) return;
 
-  if (companyUnsubscribe) companyUnsubscribe();
-  if (portfolioUnsubscribe) portfolioUnsubscribe();
   if (authUnsubscribe) authUnsubscribe(); // added — cleans up previous auth listener
 
-  companyUnsubscribe = onSnapshot(collection(db, "stockCompanies"), (snapshot) => {
-    companies = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-    renderStockMarket();
-    renderPortfolio();
-  }, (err) => console.error("Failed to load stock companies:", err));
-
-  authUnsubscribe = auth.onAuthStateChanged((user) => { // stored at module level now
-    if (portfolioUnsubscribe) portfolioUnsubscribe();
+  authUnsubscribe = auth.onAuthStateChanged(async (user) => { // stored at module level now
     if (!user) {
+      companies = [];
       holdings = [];
+      renderStockMarket();
       renderPortfolio();
       return;
     }
 
-    processDividends(user.uid);
+    const [companySnapshot, holdingSnapshot] = await Promise.all([
+      getDocs(collection(db, "stockCompanies")),
+      getDocs(query(collection(db, "users", user.uid, "shares"))),
+    ]);
 
-    const q = query(collection(db, "users", user.uid, "shares"));
-    portfolioUnsubscribe = onSnapshot(q, (snapshot) => {
-      holdings = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      renderPortfolio();
-    }, (err) => console.error("Failed to load stock portfolio:", err));
+    companies = companySnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    holdings = holdingSnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    renderStockMarket();
+    renderPortfolio();
+
+    processDividends(user.uid);
   });
 
   return () => {
     if (authUnsubscribe) authUnsubscribe(); // updated to use module-level var
-    if (companyUnsubscribe) companyUnsubscribe();
-    if (portfolioUnsubscribe) portfolioUnsubscribe();
   };
 }
 
