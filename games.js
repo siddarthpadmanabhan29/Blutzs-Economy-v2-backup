@@ -333,8 +333,9 @@ export async function initGamesUI() {
       return;
     }
 
-    const prize = getPrizeForDay(gamesConfig, Number(userData.dailyLoginDay || 1));
     const recoveryCost = gamesConfig.recoveryCost || { money: 5000, bps: 2 };
+    const claimDay = Number(claimState.dayToClaim || 1);
+    const prize = getPrizeForDay(gamesConfig, claimDay);
 
     if (claimState.status === "recoverable-miss") {
       const hasMoney = Number(userData.balance || 0) >= Number(recoveryCost.money || 0);
@@ -376,23 +377,19 @@ export async function initGamesUI() {
       return;
     }
 
-    const todayKey = getTodayKey();
-    const nextDay = Math.min(Number(userData.dailyLoginDay || 1) + 1, 7);
-    const newDay = Number(userData.dailyLoginDay || 1) >= 7 ? 1 : Number(userData.dailyLoginDay || 1);
-    const targetDay = claimState.status === "missed" ? 1 : Number(userData.dailyLoginDay || 1);
     const payout = prize || { money: 0, bps: 0 };
 
     const updates = {
       lastDailyLoginDate: new Date().toISOString(),
-      dailyLoginDay: targetDay + 1 > 7 ? 1 : targetDay + 1
+      dailyLoginDay: Number(claimState.nextDay || (claimDay + 1 > 7 ? 1 : claimDay + 1))
     };
 
     if (payout.money) updates.balance = increment(payout.money);
     if (payout.bps) updates.bpsBalance = increment(payout.bps);
 
     await updateDoc(userRef, updates);
-    await logHistory(user.uid, `Confirmed daily login Day ${targetDay}${payout.money || payout.bps ? ` and received ${formatPrize(payout)}` : ""}`, "transfer-in");
-    setStatus(`Confirmed Day ${targetDay}. ${payout.money || payout.bps ? `You received ${formatPrize(payout)}.` : "No prize this time."}`, "#2ecc71");
+    await logHistory(user.uid, `Confirmed daily login Day ${claimDay}${payout.money || payout.bps ? ` and received ${formatPrize(payout)}` : ""}`, "transfer-in");
+    setStatus(`Confirmed Day ${claimDay}. ${payout.money || payout.bps ? `You received ${formatPrize(payout)}.` : "No prize this time."}`, "#2ecc71");
   };
 
   recoveryBtn.onclick = async () => {
