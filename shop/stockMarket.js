@@ -35,6 +35,7 @@ const SELL_TAX_RATE = 0.10;       // 10% tax on sell proceeds
 const DIVIDEND_TAX_RATE = 0.15;   // 15% tax on dividend payouts
 const DIVIDEND_INTERVAL_DAYS = 30; // Pay dividends every 30 days
 const MIN_STOCK_PRICE = 0; // allow exact zero so losses can reach -100%
+const MIN_BUY_PRICE = 100; // live price must be at least this much to allow buying
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -453,11 +454,13 @@ function renderStockMarket() {
           <input id="stock-qty-${company.id}" type="number" min="1" max="${availableShares}" value="1"
             style="flex: 1; min-width: 70px; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; box-sizing: border-box;" />
           <button class="stock-buy-btn" data-company-id="${company.id}" data-price="${livePrice}"
-            ${company.isBankrupt ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}
-            style="background: #2ecc71; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;">Buy</button>
+            ${company.isBankrupt ? 'data-blocked-reason="bankrupt"' : (livePrice < MIN_BUY_PRICE ? 'data-blocked-reason="price"' : '')}
+            ${company.isBankrupt ? 'disabled' : ''}
+            style="background: #2ecc71; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;${(company.isBankrupt || livePrice < MIN_BUY_PRICE) ? ' opacity:0.5; cursor:not-allowed;' : ''}">Buy</button>
           <button class="stock-sell-btn" data-company-id="${company.id}" data-price="${livePrice}"
             style="background: #e74c3c; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;">Sell</button>
         </div>
+
       </article>
     `;
   }).join("");
@@ -596,6 +599,11 @@ function attachTradeButtons() {
     btn.addEventListener("click", async () => {
       const companyId = btn.dataset.companyId;
       const price = Number(btn.dataset.price || 0);
+
+      if (btn.dataset.blockedReason === "price") {
+        return alert(`🚫 This stock can't be bought right now.\n\nThe live price ($${price.toLocaleString()}) is below the $${MIN_BUY_PRICE.toLocaleString()} minimum required to buy — this usually happens when the market has crashed hard. Wait for the price to recover to at least $${MIN_BUY_PRICE.toLocaleString()} before purchasing.`);
+      }
+
       const qtyInput = document.getElementById(`stock-qty-${companyId}`);
       const qty = Math.max(1, parseInt(qtyInput?.value || "1", 10) || 1);
       await tradeShares(companyId, qty, price, "buy");
@@ -641,6 +649,7 @@ async function tradeShares(companyId, quantity, price, action) {
     // ── BUY ──
     if (action === "buy") {
       if (companyData.isBankrupt) return alert("Cannot buy shares: company is bankrupt/delisted.");
+      if (livePrice < MIN_BUY_PRICE) return alert(`Cannot buy shares: live price must be at least $${MIN_BUY_PRICE.toLocaleString()} (currently $${livePrice.toLocaleString()}).`);
       if (Number(companyData.availableShares || 0) < quantity) return alert("Not enough shares available.");
       if (Number(userData.balance || 0) < totalCost) return alert("Insufficient funds for this trade.");
 
@@ -651,6 +660,8 @@ async function tradeShares(companyId, quantity, price, action) {
 
         if (!freshCompany.exists()) throw new Error("Company not found.");
         if (!freshUser.exists()) throw new Error("User not found.");
+        if (freshCompany.data().isBankrupt) throw new Error("Company is bankrupt/delisted.");
+        if (livePrice < MIN_BUY_PRICE) throw new Error(`Live price must be at least $${MIN_BUY_PRICE.toLocaleString()} to buy.`);
         if (Number(freshUser.data().balance || 0) < livePrice * quantity) throw new Error("Insufficient funds.");
         if (Number(freshCompany.data().availableShares || 0) < quantity) throw new Error("Not enough shares available.");
 
