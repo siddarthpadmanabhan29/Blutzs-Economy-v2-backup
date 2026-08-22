@@ -15,8 +15,9 @@ let pendingAction = null;
  * @param {string} mode - 'register' or 'verify'
  * @param {function} callback - Function to run on success (receives pin string)
  * @param {string} customTitle - Optional custom text for the title
+ * @param {string} customDesc - Optional custom HTML for the description (supports <br>)
  */
-export function openPinModal(mode, callback, customTitle = null) {
+export function openPinModal(mode, callback, customTitle = null, customDesc = null) {
     currentInput = "";
     
     // Update labels based on mode or custom title
@@ -28,9 +29,13 @@ export function openPinModal(mode, callback, customTitle = null) {
         modalTitle.innerText = "SECURITY PIN";
     }
 
-    modalDesc.innerText = mode === 'register' 
-        ? "Choose a 4-digit code for your wallet" 
-        : "Authorize Transaction";
+    if (customDesc) {
+        modalDesc.innerHTML = customDesc;
+    } else {
+        modalDesc.innerText = mode === 'register' 
+            ? "Choose a 4-digit code for your wallet" 
+            : "Authorize Transaction";
+    }
 
     updateDisplay();
     pendingAction = { mode, callback };

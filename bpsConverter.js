@@ -4,6 +4,7 @@ import { doc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.
 import { logHistory } from "./historyManager.js";
 import { PLANS } from "./membership_plans.js"; 
 import { sendSlackMessage } from "./slackNotifier.js";
+import { openPinModal } from "./securityModal.js";
 
 // NEW: Shared Source of Truth for Rate Math
 import { getLiveMarketRate } from "./economyUtils.js";
@@ -169,12 +170,16 @@ async function handleConversion() {
         return alert(`Limit reached. You can only convert ${weeklyLimit - convertedThisWeek} more BPS this week.`);
     }
 
-    let confirmMsg = `Confirm: Convert ${amount} BPS into $${cashValue.toLocaleString()}?\n(Market Rate: $${liveRate.toLocaleString()}/BPS)`;
-    if (taxAmount > 0) confirmMsg += `\nIncludes 20% Economy Tax: -$${taxAmount.toLocaleString()}`;
-    else confirmMsg += `\n🛡️ Tax Waived by Dark Blue Insurance!`;
+    let confirmMsg = `Convert ${amount} BPS into $${cashValue.toLocaleString()}?<br><span style="opacity:0.8;">Market Rate: $${liveRate.toLocaleString()}/BPS</span>`;
+    if (taxAmount > 0) confirmMsg += `<br>Includes 20% Economy Tax: -$${taxAmount.toLocaleString()}`;
+    else confirmMsg += `<br>🛡️ Tax Waived by Dark Blue Insurance!`;
 
-    if (!confirm(confirmMsg)) return;
+    openPinModal('verify', async () => {
+        await executeConversion({ amount, cashValue, taxAmount, liveRate, tier, hasTaxWaiver, convertedThisWeek, input });
+    }, "Confirm Exchange", confirmMsg);
+}
 
+async function executeConversion({ amount, cashValue, taxAmount, liveRate, tier, hasTaxWaiver, convertedThisWeek, input }) {
     try {
         const userRef = doc(db, "users", auth.currentUser.uid);
         const updates = {
