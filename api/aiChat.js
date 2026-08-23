@@ -6,7 +6,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 const MAX_MESSAGES = 20; // cap conversation length sent per request
 const MAX_MESSAGE_LENGTH = 2000; // cap characters per message
 
