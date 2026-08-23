@@ -1552,6 +1552,27 @@
             </div>
         </div>
     </div>
+    <div id="retirement-withdraw-modal" class="hidden" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center;">
+        <div style="background:#1a1a1a; padding:30px; border-radius:24px; border:2px solid #2ecc71; width:320px; max-width:90vw; text-align:center; box-shadow:0 0 30px rgba(46,204,113,0.3);">
+            <h4 style="color:#2ecc71; margin: 0 0 5px 0; font-weight:800; text-transform:uppercase;">Confirm Withdrawal</h4>
+            <p style="color:gray; font-size:0.7rem; margin-bottom:20px; font-weight: 600;">Review the details before confirming</p>
+
+            <div style="text-align:left; background:rgba(255,255,255,0.04); border-radius:12px; padding:15px; margin-bottom:15px; font-size:0.85rem; color:#eee; line-height:1.8;">
+                <div>Withdrawal Amount: <strong id="rw-modal-amount" style="float:right; color:#fff;">$0.00</strong></div>
+                <div>Employment Status: <strong id="rw-modal-status" style="float:right; color:#fff;">-</strong></div>
+                <div id="rw-modal-tax-row" class="hidden">Tax Withheld (75%): <strong id="rw-modal-tax" style="float:right; color:#e74c3c;">$0.00</strong></div>
+                <div style="clear:both; border-top:1px solid rgba(255,255,255,0.1); margin-top:8px; padding-top:8px;">You Receive: <strong id="rw-modal-received" style="float:right; color:#2ecc71;">$0.00</strong></div>
+            </div>
+
+            <p id="rw-modal-tax-notice" class="hidden" style="color:#e74c3c; font-size:0.7rem; margin-bottom:15px; text-align:left;">⚠️ Your employment status is not "Retired", so a 75% tax applies to early withdrawals from retirement savings.</p>
+            <p id="rw-modal-retired-notice" class="hidden" style="color:#2ecc71; font-size:0.7rem; margin-bottom:15px; text-align:left;">✅ You are Retired, so no tax applies to this withdrawal.</p>
+
+            <div style="display:flex; gap:10px;">
+                <button id="rw-modal-cancel-btn" class="btn-secondary" style="flex:1;">Cancel</button>
+                <button id="rw-modal-confirm-btn" class="btn-primary" style="flex:1;">Confirm</button>
+            </div>
+        </div>
+    </div>
     <style>
         .key-btn {
             background: #2c2c2c;

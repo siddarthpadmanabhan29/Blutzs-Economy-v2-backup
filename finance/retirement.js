@@ -17,11 +17,27 @@ const withdrawInput = document.getElementById("retirement-withdraw");
 const withdrawBtn = document.getElementById("retirement-withdraw-btn");
 const messageEl = document.getElementById("retirement-message");
 
+// Withdrawal confirmation modal elements
+const withdrawModal = document.getElementById("retirement-withdraw-modal");
+const rwModalAmount = document.getElementById("rw-modal-amount");
+const rwModalStatus = document.getElementById("rw-modal-status");
+const rwModalTaxRow = document.getElementById("rw-modal-tax-row");
+const rwModalTax = document.getElementById("rw-modal-tax");
+const rwModalReceived = document.getElementById("rw-modal-received");
+const rwModalTaxNotice = document.getElementById("rw-modal-tax-notice");
+const rwModalRetiredNotice = document.getElementById("rw-modal-retired-notice");
+const rwModalCancelBtn = document.getElementById("rw-modal-cancel-btn");
+const rwModalConfirmBtn = document.getElementById("rw-modal-confirm-btn");
+
+// Tax applied to retirement withdrawals when employment status is not "Retired"
+const EARLY_WITHDRAWAL_TAX_RATE = 0.75;
+
 // --- LOCAL STATE ---
 let cachedUserData = null; 
 let retirementBusy = false; 
 let retirementChart = null; 
 let catchUpAttemptedThisSession = false; // QUOTA PROTECTION: Prevents infinite recursion loop
+let pendingWithdrawAmount = null;
 
 // ---------- Helper: Calculate Remaining Boost Days ----------
 function getRemainingBoostDays(expiryDateString) {
@@ -98,21 +114,15 @@ function renderSavings(userData) {
     // Update Visual Chart
     renderGrowthChart(savings, activeInterestRate);
 
-    // Button states based on employment
+    // Button states based on employment: deposits require employment, withdrawals are always allowed
     if (retirementBusy) {
         toggleInputs(true);
-    } else if (status === "Employed") {
-        if (depositBtn) depositBtn.disabled = false;
-        if (withdrawBtn) withdrawBtn.disabled = true;
-        if (depositInput) depositInput.disabled = false;
-        if (withdrawInput) withdrawInput.disabled = true;
-    } else if (status === "Retired") {
-        if (depositBtn) depositBtn.disabled = true;
-        if (withdrawBtn) withdrawBtn.disabled = false;
-        if (depositInput) depositInput.disabled = true;
-        if (withdrawInput) withdrawInput.disabled = false;
     } else {
-        toggleInputs(true); 
+        const canDeposit = status === "Employed";
+        if (depositBtn) depositBtn.disabled = !canDeposit;
+        if (depositInput) depositInput.disabled = !canDeposit;
+        if (withdrawBtn) withdrawBtn.disabled = false;
+        if (withdrawInput) withdrawInput.disabled = false;
     }
     
     // QUOTA PROTECTION: Only trigger catch up if not already attempted in this session
@@ -224,7 +234,7 @@ depositBtn?.addEventListener("click", async () => {
 });
 
 // ---------- Withdrawal Logic ----------
-withdrawBtn?.addEventListener("click", async () => {
+withdrawBtn?.addEventListener("click", () => {
     if (retirementBusy || !auth.currentUser || !cachedUserData) {
         return showMsg("⚠️ System initializing...", "error");
     }
@@ -240,15 +250,64 @@ withdrawBtn?.addEventListener("click", async () => {
         return showMsg(`❌ Daily limit exceeded. Remaining: $${(DAILY_LIMIT - dailyUsed).toLocaleString()}`, "error");
     }
 
-    if (cachedUserData.employmentStatus !== "Retired") return showMsg("❌ Only retired users can withdraw", "error");
     if ((cachedUserData.retirementSavings || 0) < amount) return showMsg("❌ Insufficient retirement savings", "error");
+
+    pendingWithdrawAmount = amount;
+    openWithdrawModal(amount, cachedUserData.employmentStatus || "Unemployed");
+});
+
+// ---------- Withdrawal Confirmation Modal ----------
+function openWithdrawModal(amount, status) {
+    if (!withdrawModal) return;
+
+    const isRetired = status === "Retired";
+    const tax = isRetired ? 0 : amount * EARLY_WITHDRAWAL_TAX_RATE;
+    const received = amount - tax;
+
+    if (rwModalAmount) rwModalAmount.textContent = `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (rwModalStatus) rwModalStatus.textContent = status;
+    if (rwModalTax) rwModalTax.textContent = `$${tax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (rwModalReceived) rwModalReceived.textContent = `$${received.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    rwModalTaxRow?.classList.toggle("hidden", isRetired);
+    rwModalTaxNotice?.classList.toggle("hidden", isRetired);
+    rwModalRetiredNotice?.classList.toggle("hidden", !isRetired);
+
+    withdrawModal.classList.remove("hidden");
+    withdrawModal.style.display = "flex";
+}
+
+function closeWithdrawModal() {
+    if (!withdrawModal) return;
+    withdrawModal.style.display = "none";
+    withdrawModal.classList.add("hidden");
+    pendingWithdrawAmount = null;
+}
+
+rwModalCancelBtn?.addEventListener("click", closeWithdrawModal);
+
+rwModalConfirmBtn?.addEventListener("click", async () => {
+    const amount = pendingWithdrawAmount;
+    closeWithdrawModal();
+
+    if (retirementBusy || !auth.currentUser || !cachedUserData) {
+        return showMsg("⚠️ System initializing...", "error");
+    }
+    if (!amount || (cachedUserData.retirementSavings || 0) < amount) {
+        return showMsg("❌ Insufficient retirement savings", "error");
+    }
+
+    const dailyUsed = getTodayLimitUsed(cachedUserData);
+    const isRetired = cachedUserData.employmentStatus === "Retired";
+    const tax = isRetired ? 0 : amount * EARLY_WITHDRAWAL_TAX_RATE;
+    const received = amount - tax;
 
     retirementBusy = true;
     showMsg("Processing withdrawal...", "success");
 
     try {
         const userRef = doc(db, "users", auth.currentUser.uid);
-        const newBalance = cachedUserData.balance + amount;
+        const newBalance = cachedUserData.balance + received;
         const newSavings = cachedUserData.retirementSavings - amount;
 
         await updateDoc(userRef, {
@@ -258,10 +317,18 @@ withdrawBtn?.addEventListener("click", async () => {
             lastRetirementDate: new Date().toISOString()
         });
 
-        await logHistory(auth.currentUser.uid, `Retirement Withdrawal: $${amount.toLocaleString()}`, "transfer-in");
+        const historyMsg = isRetired
+            ? `Retirement Withdrawal: $${amount.toLocaleString()}`
+            : `Retirement Withdrawal: $${amount.toLocaleString()} (75% early withdrawal tax: -$${tax.toLocaleString(undefined, {maximumFractionDigits: 2})}, received $${received.toLocaleString(undefined, {maximumFractionDigits: 2})})`;
+        await logHistory(auth.currentUser.uid, historyMsg, "transfer-in");
 
         withdrawInput.value = "";
-        showMsg(`✅ Successfully withdrew $${amount.toLocaleString()}`, "success");
+        showMsg(
+            isRetired
+                ? `✅ Successfully withdrew $${amount.toLocaleString()}`
+                : `✅ Withdrew $${amount.toLocaleString()} — received $${received.toLocaleString(undefined, {maximumFractionDigits: 2})} after 75% tax`,
+            "success"
+        );
     } catch (err) {
         console.error(err);
         showMsg("Withdrawal failed: " + err.message, "error");
