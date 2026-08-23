@@ -14,8 +14,8 @@ onAuthStateChanged(auth, async (user) => {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         const userData = userDoc.data();
 
-        if (!userData || userData.membershipLevel === "standard") {
-            alert("Access Denied: Membership required.");
+        if (!userData) {
+            alert("Access Denied.");
             window.close();
             return;
         }

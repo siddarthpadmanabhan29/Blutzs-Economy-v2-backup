@@ -90,6 +90,9 @@ const employmentStatusEl = document.getElementById("employment-status");
 
 const displayCreditScore = document.getElementById("display-credit-score");
 const loanAmountSelect = document.getElementById("loan-amount-select");
+const loanSelectTrigger = document.getElementById("loan-select-trigger");
+const loanSelectTriggerLabel = document.getElementById("loan-select-trigger-label");
+const loanSelectPanel = document.getElementById("loan-select-panel");
 const takeLoanBtn = document.getElementById("take-loan-btn");
 const repayLoanBtn = document.getElementById("repay-loan-btn");
 const activeLoanSection = document.getElementById("active-loan-info");
@@ -768,7 +771,11 @@ function updateDashboardUI(user, dynamicRate) {
   const employmentStatus = data.employmentStatus || "Unemployed";
   if (employmentStatusEl) {
     employmentStatusEl.textContent = employmentStatus;
-    employmentStatusEl.style.color = employmentStatus === "Employed" ? "green" : "red";
+    employmentStatusEl.style.color = employmentStatus === "Employed"
+      ? "green"
+      : employmentStatus === "Retired"
+        ? "#3498db"
+        : "red";
   }
 }
 
@@ -836,6 +843,48 @@ themeToggleBtn?.addEventListener("click", async () => {
 
 takeLoanBtn?.addEventListener("click", () => takeOutLoan(parseInt(loanAmountSelect.value)));
 repayLoanBtn?.addEventListener("click", () => repayLoan());
+
+/* ---------- LOAN AMOUNT: CUSTOM DROPDOWN ---------- */
+if (loanSelectTrigger && loanSelectPanel && loanAmountSelect) {
+    const loanOptionEls = loanSelectPanel.querySelectorAll(".loan-select-option");
+
+    const closeLoanPanel = () => {
+        loanSelectPanel.classList.remove("open");
+        loanSelectTrigger.setAttribute("aria-expanded", "false");
+    };
+
+    const selectLoanOption = (optionEl) => {
+        loanAmountSelect.value = optionEl.dataset.value;
+        loanOptionEls.forEach(el => {
+            const isSelected = el === optionEl;
+            el.classList.toggle("selected", isSelected);
+            el.setAttribute("aria-selected", String(isSelected));
+        });
+        loanSelectTriggerLabel.innerHTML = `${optionEl.querySelector(".loan-opt-amount").textContent} <em>${optionEl.querySelector(".loan-opt-tag").textContent}</em>`;
+        loanAmountSelect.dispatchEvent(new Event("change"));
+    };
+
+    loanSelectTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = loanSelectPanel.classList.toggle("open");
+        loanSelectTrigger.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    loanOptionEls.forEach(optionEl => {
+        optionEl.addEventListener("click", () => {
+            selectLoanOption(optionEl);
+            closeLoanPanel();
+        });
+    });
+
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest("#loan-select")) closeLoanPanel();
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeLoanPanel();
+    });
+}
 
 logoutBtn?.addEventListener("click", async () => { 
     if (unsubUser) unsubUser(); 

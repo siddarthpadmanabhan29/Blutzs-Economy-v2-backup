@@ -83,7 +83,7 @@ export async function takeOutLoan(amount) {
     const lastRepay = data.lastRepaymentDate ? new Date(data.lastRepaymentDate) : null;
     
     if (lastRepay) {
-        const cooldownMs = 0;
+        const cooldownMs = 24 * 60 * 60 * 1000;
         const timePassed = now - lastRepay;
 
         if (timePassed < cooldownMs) {

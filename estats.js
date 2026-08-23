@@ -6,24 +6,7 @@ const statsTeaserUI = document.getElementById("estats-lock-ui");
 export async function renderStatsTeaser(userData) {
     if (!statsTeaserUI) return;
 
-    const tier = userData.membershipLevel || "standard";
-    const isMember = tier !== "standard";
-
-    // 1. LOCKED STATE (Standard Users)
-    if (!isMember) {
-        statsTeaserUI.innerHTML = `
-            <p style="font-size: 0.85rem; color: #888; margin-bottom: 12px; line-height: 1.4;">
-                Unlock deep market insights, resistance tracking, and personal spending DNA.
-            </p>
-            <div style="margin-bottom: 15px; opacity: 0.4; filter: grayscale(1); font-size: 1.5rem; letter-spacing: 10px;">
-                📈 🥧 📉
-            </div>
-            <button onclick="scrollToPlans()" class="btn-secondary" style="font-size: 0.75rem; font-weight: bold; padding: 8px 16px;">
-                🔒 Unlock with Membership
-            </button>
-        `;
-        return;
-    }
+    // Market Insights is free for all users; no membership gate.
 
     // 2. LOADING STATE
     statsTeaserUI.innerHTML = `<p style="font-size: 0.85rem; color: #555;">Syncing Intelligence...</p>`;
