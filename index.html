@@ -115,7 +115,10 @@
                         <span id="status-text" style="font-size: 0.6rem; font-weight: 800; color: #888;">SYNCING</span>
                     </div>
                 </div>
-                <button id="theme-toggle-btn" class="btn-secondary" style="border-radius: 50%; width: 35px; height: 35px; padding: 0;">🌙</button>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button id="theme-toggle-btn" class="btn-secondary" style="border-radius: 50%; width: 35px; height: 35px; padding: 0;">🌙</button>
+                    <button id="ai-chat-toggle-btn" class="btn-secondary" style="border-radius: 50%; width: 35px; height: 35px; padding: 0;" type="button" aria-expanded="false" aria-controls="ai-chat-panel" title="Ask the Blutz Assistant">🤖</button>
+                </div>
             </header>
 
             <section id="tab-overview" class="tab-content active">
@@ -1559,7 +1562,21 @@
 </section>
 
         </main>
-    </div> <div id="bps-pin-modal" class="hidden" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center;">
+    </div>
+
+    <div id="ai-chat-panel" class="hidden">
+        <div id="ai-chat-header">
+            <span id="ai-chat-title">🤖 Blutz Assistant</span>
+            <button id="ai-chat-close-btn" type="button" title="Close">✕</button>
+        </div>
+        <div id="ai-chat-messages"></div>
+        <form id="ai-chat-form">
+            <input id="ai-chat-input" type="text" maxlength="1000" placeholder="Ask about loans, BPS, subscriptions..." autocomplete="off">
+            <button id="ai-chat-send-btn" type="submit" title="Send">➤</button>
+        </form>
+    </div>
+
+    <div id="bps-pin-modal" class="hidden" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center;">
         <div style="background:#1a1a1a; padding:30px; border-radius:24px; border:2px solid #9b59b6; width:280px; text-align:center; box-shadow:0 0 30px rgba(155,89,182,0.3);">
             <h4 id="pin-modal-title" style="color:#9b59b6; margin: 0 0 5px 0; font-weight:800; text-transform:uppercase;">Security PIN</h4>
             <p id="pin-modal-desc" style="color:gray; font-size:0.7rem; margin-bottom:20px; font-weight: 600;">Authorize Transaction</p>
@@ -1675,6 +1692,7 @@
     <script type="module" src="finance/insurance.js"></script>
     <script type="module" src="bpsManager.js"></script>
     <script type="module" src="securityModal.js"></script>
+    <script type="module" src="aiChat.js"></script>
     <script type="module" src="main.js"></script>
     <script type="module" src="shop/subscriptionShop.js"></script>
 
