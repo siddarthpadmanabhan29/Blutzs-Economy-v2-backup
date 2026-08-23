@@ -95,6 +95,7 @@ const repayLoanBtn = document.getElementById("repay-loan-btn");
 const activeLoanSection = document.getElementById("active-loan-info");
 const debtAmountEl = document.getElementById("debt-amount");
 const dailyInterestEl = document.getElementById("daily-interest");
+const dailyInterestLabelEl = document.getElementById("daily-interest-label");
 const timerEl = document.getElementById("interest-timer");
 const loanProtectionStatusEl = document.getElementById("loan-protection-status");
 
@@ -705,9 +706,13 @@ function updateDashboardUI(user, dynamicRate) {
           }
       }
       
+      const interestRate = [750000, 1000000].includes(data.originalLoanAmount) ? 0.02 : 0.05;
       if (dailyInterestEl) {
-          const liveInterest = activeDebt * 0.05;
+          const liveInterest = activeDebt * interestRate;
           dailyInterestEl.textContent = `$${liveInterest.toLocaleString()}`;
+      }
+      if (dailyInterestLabelEl) {
+          dailyInterestLabelEl.textContent = `Daily Interest (${interestRate * 100}%)`;
       }
 
       if (data.lastInterestApplied) {

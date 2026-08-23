@@ -17,7 +17,7 @@ export function getCreditStatus(score) {
 
 /**
  * applyInterest
- * Logic: 5% interest charged every 24 hours.
+ * Logic: 5% interest charged every 24 hours, except $750,000 and $1,000,000 loans which accrue at 2%.
  * Penalty: -150 Credit Score if monthly deadline is missed.
  * Insurance: Blutzs Package B provides a one-time monthly loan discount on loan origination.
  */
@@ -40,7 +40,8 @@ export async function applyInterest(uid, userData) {
     const daysElapsed = Math.floor(diffInMs / msInDay);
 
     if (daysElapsed > 0) {
-        const interestPerDay = userData.activeLoan * 0.05;
+        const interestRate = [750000, 1000000].includes(userData.originalLoanAmount) ? 0.02 : 0.05;
+        const interestPerDay = userData.activeLoan * interestRate;
         const totalInterestToAdd = interestPerDay * daysElapsed;
         
         await updateDoc(doc(db, "users", uid), {
@@ -82,7 +83,7 @@ export async function takeOutLoan(amount) {
     const lastRepay = data.lastRepaymentDate ? new Date(data.lastRepaymentDate) : null;
     
     if (lastRepay) {
-        const cooldownMs = 24 * 60 * 60 * 1000;
+        const cooldownMs = 0;
         const timePassed = now - lastRepay;
 
         if (timePassed < cooldownMs) {
@@ -119,6 +120,7 @@ export async function takeOutLoan(amount) {
         await updateDoc(userRef, {
             balance: increment(amount),
             activeLoan: adjustedLoanAmount,
+            originalLoanAmount: amount,
             loanStartDate: now.toISOString(),
             lastInterestApplied: now.toISOString(),
             loanDeadline: deadline.toISOString(),
@@ -178,6 +180,7 @@ export async function repayLoan() {
         await updateDoc(userRef, {
             balance: increment(-debt),
             activeLoan: 0,
+            originalLoanAmount: null,
             isEconomyPaused: false,
             creditScore: currentScore + reward,
             lastInterestApplied: null,
