@@ -10,6 +10,13 @@ const adminRosterContainer = document.getElementById("admin-active-contracts-lis
 
 let activeContractListener = null;
 let activeAdminListener = null;
+let cachedContracts = []; // live copy of the current user's contract doc(s), for read-only reuse elsewhere
+
+// Read-only accessor so other modules (e.g. aiChat.js) can reuse this listener's data
+// instead of issuing their own extra Firestore reads.
+export function getCachedContracts() {
+    return cachedContracts;
+}
 
 /**
  * USER DASHBOARD LOGIC
@@ -30,6 +37,7 @@ export function listenForContractOffers(userUID, userData) {
 
     activeContractListener = onSnapshot(q, (snap) => {
         contractSection.innerHTML = "";
+        cachedContracts = snap.docs.map((contractDoc) => ({ id: contractDoc.id, ...contractDoc.data() }));
         if (snap.empty) {
             contractSection.innerHTML = `<p style="color: gray; font-style: italic;">No active contract or pending offers.</p>`;
             return;

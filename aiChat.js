@@ -1,11 +1,21 @@
 // ---------- aiChat.js ----------
 // Frontend AI assistant widget ("Blutz Assistant").
-// - Read-only guide: cannot see live user data and never performs actions.
+// - Read-only: can view the logged-in user's own live account data (balance, BPS,
+//   membership, insurance, loan, fine, retirement, credit score, stock portfolio,
+//   contracts, recent activity) to answer questions/give advice, but never performs
+//   any action (no transfers, purchases, approvals, writes of any kind).
 // - Chat history lives only in memory for this page session; closing the panel
 //   clears it, so reopening always starts a fresh conversation (no Firestore,
 //   no localStorage).
 // - Calls a secure serverless proxy (Vercel) that holds the Gemini API key and
 //   the knowledge-base markdown server-side, so no secret ever reaches the browser.
+
+import { auth, db } from "./firebaseConfig.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getCurrentDashboardData, getCachedHistory } from "./dashboard.js";
+import { getPortfolioSnapshot } from "./shop/stockMarket.js";
+import { getCachedContracts } from "./contracts.js";
+import { getCreditStatus } from "./finance/loan.js";
 
 const AI_CHAT_ENDPOINT = "https://slack-webhook-lyart.vercel.app/api/aiChat";
 const MAX_INPUT_LENGTH = 1000;
@@ -214,9 +224,66 @@ function showWelcome() {
   appendBubble(
     "assistant",
     markdownToSafeHtml(
-      "Hi! I'm the **Blutz Assistant** 🤖 — ask me how anything on this site works (loans, subscriptions, BPS, chores, etc). I can't see your personal balance or perform any actions, just guide you."
+      "Hi! I'm the **Blutz Assistant** 🤖 — ask me how anything on this site works (loans, subscriptions, BPS, chores, etc), or ask about your own balance, BPS, membership, insurance, contracts, stock portfolio, or recent activity. I can't perform any actions (no transfers, purchases, or edits) — just answer questions and give advice."
     )
   );
+}
+
+/* =========================================================
+    LIVE USER CONTEXT (read-only)
+    Reuses data other modules already keep live via onSnapshot,
+    so sending a chat message costs 0 extra Firestore reads in
+    the common case (only falls back to a single getDoc if the
+    dashboard listener hasn't populated its cache yet).
+========================================================= */
+async function buildUserContext() {
+  const user = auth.currentUser;
+  if (!user) return null;
+
+  let data = getCurrentDashboardData();
+  if (!data) {
+    try {
+      const snap = await getDoc(doc(db, "users", user.uid));
+      if (snap.exists()) data = snap.data();
+    } catch (err) {
+      console.warn("aiChat: fallback user fetch failed", err);
+    }
+  }
+  if (!data) return null;
+
+  const creditScore = data.creditScore ?? 600;
+  const stockPortfolio = getPortfolioSnapshot().filter((p) => p.shares > 0);
+  const contracts = getCachedContracts().map((c) => ({
+    status: c.status,
+    terms: c.terms || null,
+    signingBonus: c.signingBonus || 0,
+  }));
+  const recentActivity = getCachedHistory()
+    .slice(0, 15)
+    .map((h) => ({ message: h.message, timestamp: h.timestamp }));
+
+  return {
+    username: data.username || user.email?.split("@")[0] || "user",
+    balance: data.balance ?? 0,
+    bpsBalance: data.bpsBalance ?? 0,
+    membershipLevel: data.membershipLevel || "standard",
+    employmentStatus: data.employmentStatus || null,
+    creditScore,
+    creditTier: getCreditStatus(creditScore)?.label || null,
+    insurance: { activePackages: data.insurance?.activePackages || [] },
+    loan: data.activeLoan > 0
+      ? {
+          activeLoan: data.activeLoan,
+          originalLoanAmount: data.originalLoanAmount ?? null,
+          loanDeadline: data.loanDeadline ?? null,
+        }
+      : null,
+    activeFine: data.activeFine || null,
+    retirementSavings: data.retirementSavings ?? 0,
+    stockPortfolio,
+    contracts,
+    recentActivity,
+  };
 }
 
 function setTypingIndicator(show) {
@@ -268,10 +335,11 @@ async function sendMessage(text) {
   setTypingIndicator(true);
 
   try {
+    const userContext = await buildUserContext();
     const response = await fetch(AI_CHAT_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: conversation }),
+      body: JSON.stringify({ messages: conversation, userContext }),
     });
 
     const data = await response.json().catch(() => ({}));
