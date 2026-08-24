@@ -122,6 +122,15 @@ let currentDashboardData = null;
 let interestTimerInterval = null; 
 let cachedHistory = []; 
 
+// Read-only accessors so other modules (e.g. aiChat.js) can reuse the already-live
+// snapshot data instead of issuing their own extra Firestore reads.
+export function getCurrentDashboardData() {
+  return currentDashboardData;
+}
+export function getCachedHistory() {
+  return cachedHistory;
+}
+
 /* =========================================================
     ANTI-FLICKER: PREVIOUS DATA CACHE
     Tracks last-rendered values so we only call expensive

@@ -907,6 +907,27 @@ async function processDividends(userId) {
 
 // ==================== INIT ====================
 
+// Read-only accessor so other modules (e.g. aiChat.js) can reuse the already-live
+// holdings/companies data instead of issuing their own extra Firestore reads.
+export function getPortfolioSnapshot() {
+  return holdings.map((item) => {
+    const company = companies.find((c) => c.id === item.companyId) || {};
+    const livePrice = (company.isBankrupt || Number(company.basePrice || 0) <= MIN_STOCK_PRICE) ? 0 : getLivePrice(company);
+    const avgCost = Number(item.avgCost || 0);
+    const sharesOwned = Number(item.shares || 0);
+    return {
+      companyId: item.companyId,
+      name: company.name || item.companyId,
+      shares: sharesOwned,
+      avgCost,
+      livePrice,
+      marketValue: Number((livePrice * sharesOwned).toFixed(2)),
+      profit: Number(((livePrice - avgCost) * sharesOwned).toFixed(2)),
+      isBankrupt: !!company.isBankrupt,
+    };
+  });
+}
+
 export function initStockMarketUI() {
   if (!stockMarketList || !stockPortfolioList) return;
 
