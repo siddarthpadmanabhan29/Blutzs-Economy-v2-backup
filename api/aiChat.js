@@ -76,7 +76,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemInstructionText }] },
           contents,
-          generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
+          generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
         }),
       }
     );
@@ -95,7 +95,11 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: "AI returned an empty response" });
     }
 
-    return res.status(200).json({ reply });
+    // Flag responses cut off by the token limit so the frontend can show a hint
+    // instead of silently displaying a mid-sentence/mid-number reply.
+    const truncated = data?.candidates?.[0]?.finishReason === "MAX_TOKENS";
+
+    return res.status(200).json({ reply, truncated });
   } catch (error) {
     console.error("aiChat handler error:", error);
     return res.status(500).json({ error: "Internal server error" });
