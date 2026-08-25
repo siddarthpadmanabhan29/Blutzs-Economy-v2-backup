@@ -1400,6 +1400,11 @@ html {
     opacity: 0.85;
 }
 .ai-chat-bubble a { color: inherit; text-decoration: underline; }
+.ai-chat-bubble hr {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    margin: 10px 0;
+}
 .ai-chat-table {
     border-collapse: collapse;
     width: 100%;

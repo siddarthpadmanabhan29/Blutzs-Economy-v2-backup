@@ -159,6 +159,14 @@ function markdownToSafeHtml(raw) {
       continue;
     }
 
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      flushPara();
+      flushList();
+      html += "<hr>";
+      i++;
+      continue;
+    }
+
     const ulMatch = /^[-*]\s+(.*)$/.exec(trimmed);
     if (ulMatch) {
       flushPara();
