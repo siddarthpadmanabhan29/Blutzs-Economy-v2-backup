@@ -356,9 +356,10 @@ async function sendMessage(text) {
       throw new Error(data.error || "The assistant is unavailable right now.");
     }
 
+    const replyText = data.truncated ? `${data.reply}\n\n*(cut short — ask "continue" for the rest)*` : data.reply;
     conversation.push({ role: "assistant", content: data.reply });
     setTypingIndicator(false);
-    appendAssistantMessage(data.reply);
+    appendAssistantMessage(replyText);
   } catch (err) {
     console.error("AI chat error:", err);
     setTypingIndicator(false);
