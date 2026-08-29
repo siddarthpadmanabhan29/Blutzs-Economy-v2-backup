@@ -299,27 +299,23 @@ export function listenForAdminRoster() {
       `;
       el.adminRosterContainer.appendChild(div);
 
-      // Check for pending actions
-      getDoc(doc(db, "users", data.playerUID)).then(uSnap => {
-        if (!uSnap.exists()) return;
-        const uData = uSnap.data();
-        const alertContainer = document.getElementById(`admin-alert-area-${data.playerUID}`);
-        if (alertContainer && (uData.tradePending || uData.releasePending)) {
-          const isTrade = uData.tradePending;
-          alertContainer.innerHTML = `
-            <div style="border: 2px solid #e74c3c; background: rgba(231, 76, 60, 0.05); padding: 12px; border-radius: 8px; margin: 15px 0;">
-              <div style="color: #e74c3c; font-weight: 900; font-size: 0.75rem; margin-bottom: 10px; text-transform: uppercase;">
-                🚨 PLAYER REQUEST: ${isTrade ? 'TRADE' : 'RELEASE'}
-              </div>
-              <div style="display: flex; gap: 8px;">
-                ${isTrade ? `<button onclick="window.handleAdminDecision('${docId}', '${data.playerUID}', 'looking')" style="flex:1; background: #f39c12; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">LOOKING</button>` : ''}
-                <button onclick="window.handleAdminDecision('${docId}', '${data.playerUID}', 'approve')" style="flex:1; background: #2ecc71; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">APPROVE</button>
-                <button onclick="window.handleAdminDecision('${docId}', '${data.playerUID}', 'reject')" style="flex:1; background: #e74c3c; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">REJECT</button>
-              </div>
+      // Check for pending actions on this specific contract document.
+      const alertContainer = document.getElementById(`admin-alert-area-${data.playerUID}`);
+      if (alertContainer && (data.tradePending || data.releasePending)) {
+        const isTrade = data.tradePending;
+        alertContainer.innerHTML = `
+          <div style="border: 2px solid #e74c3c; background: rgba(231, 76, 60, 0.05); padding: 12px; border-radius: 8px; margin: 15px 0;">
+            <div style="color: #e74c3c; font-weight: 900; font-size: 0.75rem; margin-bottom: 10px; text-transform: uppercase;">
+              🚨 PLAYER REQUEST: ${isTrade ? 'TRADE' : 'RELEASE'}
             </div>
-          `;
-        }
-      });
+            <div style="display: flex; gap: 8px;">
+              ${isTrade ? `<button onclick="window.handleAdminDecision('${docId}', '${data.playerUID}', 'looking')" style="flex:1; background: #f39c12; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">LOOKING</button>` : ''}
+              <button onclick="window.handleAdminDecision('${docId}', '${data.playerUID}', 'approve')" style="flex:1; background: #2ecc71; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">APPROVE</button>
+              <button onclick="window.handleAdminDecision('${docId}', '${data.playerUID}', 'reject')" style="flex:1; background: #e74c3c; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">REJECT</button>
+            </div>
+          </div>
+        `;
+      }
     });
   });
 }

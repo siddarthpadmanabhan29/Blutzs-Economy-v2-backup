@@ -54,6 +54,7 @@ export async function handleUserLookup(inputEl, infoEl, btnEl, type) {
         const userRef = doc(db, "users", userDoc.id);
         if(btnEl) btnEl.disabled = false;
 
+        let empContractUnsubscribe = null;
         const unsubscribe = onSnapshot(userRef, (docSnap) => {
           if (!docSnap.exists()) return;
           const data = docSnap.data();
@@ -67,11 +68,31 @@ export async function handleUserLookup(inputEl, infoEl, btnEl, type) {
             infoEl.textContent = `${displayName} — ${(data.bpsBalance || 0)} BPS`;
             infoEl.style.color = "#8e44ad";
           } else if (type === "emp") {
-            let statusText = `${displayName} → ${data.employmentStatus || "Unemployed"}`;
-            if (data.tradePending) statusText += " (PENDING: trade)";
-            if (data.releasePending) statusText += " (PENDING: release)";
-            infoEl.textContent = statusText;
-            infoEl.style.color = (data.tradePending || data.releasePending) ? "orange" : "green";
+            const userId = userDoc.id;
+            const employmentStatus = data.employmentStatus || "Unemployed";
+
+            if (empContractUnsubscribe) {
+              empContractUnsubscribe();
+              empContractUnsubscribe = null;
+            }
+
+            const contractQuery = query(collection(db, "contracts"), where("playerUID", "==", userId));
+            empContractUnsubscribe = onSnapshot(contractQuery, (contractSnap) => {
+              let hasTradePending = false;
+              let hasReleasePending = false;
+
+              contractSnap.forEach((contractDoc) => {
+                const contractData = contractDoc.data();
+                if (contractData.tradePending) hasTradePending = true;
+                if (contractData.releasePending) hasReleasePending = true;
+              });
+
+              let statusText = `${displayName} → ${employmentStatus}`;
+              if (hasTradePending) statusText += " (PENDING: trade)";
+              if (hasReleasePending) statusText += " (PENDING: release)";
+              infoEl.textContent = statusText;
+              infoEl.style.color = (hasTradePending || hasReleasePending) ? "orange" : "green";
+            });
           } else if (type === "cosmetic") {
             infoEl.textContent = `${displayName}`;
             infoEl.style.color = "green";
@@ -102,7 +123,10 @@ export async function handleUserLookup(inputEl, infoEl, btnEl, type) {
         // Store listener for cleanup
         if (type === "money") listeners.balance = unsubscribe;
         else if (type === "bps") listeners.bps = unsubscribe;
-        else if (type === "emp") listeners.emp = unsubscribe;
+        else if (type === "emp") listeners.emp = () => {
+          unsubscribe();
+          if (empContractUnsubscribe) empContractUnsubscribe();
+        };
         else if (type === "cosmetic") listeners.cosmetics = unsubscribe;
         else if (type === "contract") listeners.contract = unsubscribe;
         else if (type === "membership") listeners.membership = unsubscribe;

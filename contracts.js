@@ -113,19 +113,16 @@ function renderActiveContract(docId, data, userData) {
     const gPay = terms.guaranteedPay || 0;
     const bPay = terms.nonGuaranteedPay || 0;
     const sBonus = data.signingBonus || 0;
-    
+
     const paidGuaranteed = Number(data.paidGuaranteed) || 0;
     const paidBonuses = Number(data.paidBonuses) || 0;
     const seasonPaidG = Number(data.seasonPaidG) || 0;
     const seasonPaidB = Number(data.seasonPaidB) || 0;
 
     const totalWorth = ((gPay + bPay) * initialSeasons) + sBonus;
-    
     const totalProgress = Math.min(100, Math.max(0, Math.round(((initialSeasons - seasonsRemaining) / initialSeasons) * 100)));
-    
     const completedSeasons = initialSeasons - seasonsRemaining;
     const currentSeasonNum = Math.max(1, Math.ceil(completedSeasons + 0.001));
-    
     const currentSeasonProgressRaw = completedSeasons % 1;
     let seasonProgressPercent = Math.round(currentSeasonProgressRaw * 100);
 
@@ -133,12 +130,12 @@ function renderActiveContract(docId, data, userData) {
         if (currentSeasonProgressRaw < 0.01 && completedSeasons > 0.1) seasonProgressPercent = 100;
     }
 
-    let statusBadge = '';
-    if (data.tradeStatus === 'looking') {
+    let statusBadge = "";
+    if (data.tradeStatus === "looking") {
         statusBadge = `<div style="background: #f39c12; color: white; padding: 10px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 15px; font-weight: 900; text-align: center; text-transform: uppercase;">🔍 Team is actively looking for trade partners</div>`;
-    } else if (userData?.releasePending || userData?.tradePending) {
-        const type = userData.releasePending ? 'Release' : 'Trade';
-        statusBadge = `<div style="background: #e74c3c; color: white; padding: 10px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 15px; font-weight: 900; text-align: center; text-transform: uppercase; animation: pulse-red 2s infinite;">⏳ ${type} Request Pending <button onclick="cancelContractRequest()" style="margin-left:10px; background:white; color:#e74c3c; border:none; padding:2px 8px; border-radius:4px; font-size:0.6rem; cursor:pointer;">CANCEL</button></div>`;
+    } else if (data.releasePending || data.tradePending) {
+        const type = data.releasePending ? "Release" : "Trade";
+        statusBadge = `<div style="background: #e74c3c; color: white; padding: 10px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 15px; font-weight: 900; text-align: center; text-transform: uppercase; animation: pulse-red 2s infinite;">⏳ ${type} Request Pending <button onclick="cancelContractRequest('${docId}')" style="margin-left:10px; background:white; color:#e74c3c; border:none; padding:2px 8px; border-radius:4px; font-size:0.6rem; cursor:pointer;">CANCEL</button></div>`;
     }
 
     div.innerHTML = `
@@ -199,31 +196,29 @@ function renderActiveContract(docId, data, userData) {
         </div>
 
         <div style="display: flex; gap: 10px;">
-            <button id="request-trade-btn" class="btn-secondary" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;" ${userData?.tradePending ? 'disabled' : ''}>REQUEST TRADE</button>
-            <button id="request-release-btn" class="btn-danger" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;" ${userData?.releasePending ? 'disabled' : ''}>REQUEST RELEASE</button>
+            <button id="request-trade-btn-${docId}" class="btn-secondary" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;" ${data.tradePending ? 'disabled' : ''}>REQUEST TRADE</button>
+            <button id="request-release-btn-${docId}" class="btn-danger" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;" ${data.releasePending ? 'disabled' : ''}>REQUEST RELEASE</button>
         </div>
     `;
     contractSection.appendChild(div);
 
-    // Add event listeners for request buttons
-    const tradeBtn = document.getElementById("request-trade-btn");
-    const releaseBtn = document.getElementById("request-release-btn");
+    const tradeBtn = document.getElementById(`request-trade-btn-${docId}`);
+    const releaseBtn = document.getElementById(`request-release-btn-${docId}`);
 
     if (tradeBtn) {
         tradeBtn.addEventListener("click", async () => {
             if (!auth.currentUser) return;
-            if (userData?.tradePending) return alert("You already have a trade request pending.");
+            if (data.tradePending) return alert("You already have a trade request pending.");
             if (!confirm("Request a trade? Your team will be notified.")) return;
             try {
-                await updateDoc(doc(db, "users", auth.currentUser.uid), { tradePending: true });
+                await updateDoc(doc(db, "contracts", docId), { tradePending: true, releasePending: false });
                 await logHistory(auth.currentUser.uid, "📢 Trade Request Submitted.", "contract");
-                
-                // Send Slack notification
+
                 const timestamp = new Date().toLocaleString();
                 const username = userData?.username || auth.currentUser.email.split('@')[0];
                 const teamName = data.team || 'Unknown Team';
                 await sendSlackMessage(`🏀 TRADE REQUEST: ${username} from ${teamName} has requested a trade (${timestamp})`);
-                
+
                 alert("✅ Trade request submitted!");
             } catch (err) {
                 console.error("Trade request error:", err);
@@ -235,18 +230,17 @@ function renderActiveContract(docId, data, userData) {
     if (releaseBtn) {
         releaseBtn.addEventListener("click", async () => {
             if (!auth.currentUser) return;
-            if (userData?.releasePending) return alert("You already have a release request pending.");
+            if (data.releasePending) return alert("You already have a release request pending.");
             if (!confirm("Request release from contract? This will end your employment.")) return;
             try {
-                await updateDoc(doc(db, "users", auth.currentUser.uid), { releasePending: true });
+                await updateDoc(doc(db, "contracts", docId), { releasePending: true, tradePending: false });
                 await logHistory(auth.currentUser.uid, "📢 Release Request Submitted.", "contract");
-                
-                // Send Slack notification
+
                 const timestamp = new Date().toLocaleString();
                 const username = userData?.username || auth.currentUser.email.split('@')[0];
                 const teamName = data.team || 'Unknown Team';
                 await sendSlackMessage(`🏀 RELEASE REQUEST: ${username} from ${teamName} has requested to be released (${timestamp})`);
-                
+
                 alert("✅ Release request submitted!");
             } catch (err) {
                 console.error("Release request error:", err);
@@ -344,16 +338,13 @@ export function listenForAdminRoster() {
             `;
             adminRosterContainer.appendChild(div);
 
-            const userRef = doc(db, "users", data.playerUID);
-            onSnapshot(userRef, (uSnap) => {
-                const uData = uSnap.exists() ? uSnap.data() : {};
-                const alertContainer = document.getElementById(`admin-alert-area-${data.playerUID}`);
-                if (!alertContainer) return;
-                if (uData.tradePending || uData.releasePending) {
-                    const isTrade = uData.tradePending;
-                    alertContainer.innerHTML = `<div style="border: 2px solid #e74c3c; background: rgba(231, 76, 60, 0.05); padding: 12px; border-radius: 8px; margin: 15px 0;"><div style="color: #e74c3c; font-weight: 900; font-size: 0.75rem; margin-bottom: 10px; text-transform: uppercase;">🚨 PLAYER REQUEST: ${isTrade ? 'TRADE' : 'RELEASE'}</div><div style="display: flex; gap: 8px;">${isTrade ? `<button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'looking')" style="flex:1; background: #f39c12; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">LOOKING</button>` : ''}<button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'approve')" style="flex:1; background: #2ecc71; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">APPROVE</button><button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'reject')" style="flex:1; background: #e74c3c; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">REJECT</button></div></div>`;
-                } else { alertContainer.innerHTML = ""; }
-            });
+            const alertContainer = document.getElementById(`admin-alert-area-${data.playerUID}`);
+            if (alertContainer && (data.tradePending || data.releasePending)) {
+                const isTrade = data.tradePending;
+                alertContainer.innerHTML = `<div style="border: 2px solid #e74c3c; background: rgba(231, 76, 60, 0.05); padding: 12px; border-radius: 8px; margin: 15px 0;"><div style="color: #e74c3c; font-weight: 900; font-size: 0.75rem; margin-bottom: 10px; text-transform: uppercase;">🚨 PLAYER REQUEST: ${isTrade ? 'TRADE' : 'RELEASE'}</div><div style="display: flex; gap: 8px;">${isTrade ? `<button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'looking')" style="flex:1; background: #f39c12; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">LOOKING</button>` : ''}<button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'approve')" style="flex:1; background: #2ecc71; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">APPROVE</button><button onclick="handleAdminDecision('${docId}', '${data.playerUID}', 'reject')" style="flex:1; background: #e74c3c; color:white; border:none; border-radius:6px; padding:10px; font-weight:bold; font-size:0.7rem; cursor:pointer;">REJECT</button></div></div>`;
+            } else if (alertContainer) {
+                alertContainer.innerHTML = "";
+            }
         });
     });
 }
@@ -573,20 +564,20 @@ window.respondToExtension = async (docId, choice) => {
  * ADMIN DECISION & UTILITIES
  */
 window.handleAdminDecision = async (contractId, playerUID, decision) => {
-    const userRef = doc(db, "users", playerUID);
     const contractRef = doc(db, "contracts", contractId);
-    const userSnap = await getDoc(userRef);
-    const userData = userSnap.data();
+    const contractSnap = await getDoc(contractRef);
+    if (!contractSnap.exists()) return;
+    const contractData = contractSnap.data();
+    const userRef = doc(db, "users", playerUID);
 
     if (decision === 'approve') {
-        if (userData.releasePending) {
+        if (contractData.releasePending) {
             await deleteDoc(contractRef);
-            await updateDoc(userRef, { employmentStatus: "Unemployed", releasePending: false });
+            await updateDoc(userRef, { employmentStatus: "Unemployed" });
             await logHistory(playerUID, "✅ Release Approved.", "contract");
             alert("Player Released.");
-        } else if (userData.tradePending) {
-            await updateDoc(userRef, { tradePending: false });
-            await updateDoc(contractRef, { tradeStatus: null });
+        } else if (contractData.tradePending) {
+            await updateDoc(contractRef, { tradePending: false, releasePending: false, tradeStatus: null });
             await logHistory(playerUID, "📢 Trade Approved.", "contract");
             alert("Trade request cleared.");
         }
@@ -595,8 +586,7 @@ window.handleAdminDecision = async (contractId, playerUID, decision) => {
         await logHistory(playerUID, "🔍 Team is looking for trade partners.", "contract");
         alert("Marked as 'Looking for Trades'.");
     } else {
-        await updateDoc(userRef, { tradePending: false, releasePending: false });
-        await updateDoc(contractRef, { tradeStatus: null });
+        await updateDoc(contractRef, { tradePending: false, releasePending: false, tradeStatus: null });
         await logHistory(playerUID, "❌ Trade/Release request REJECTED.", "contract");
         alert("Request Rejected.");
     }
@@ -611,9 +601,7 @@ window.tradePlayer = async (docId) => {
     const data = snap.data();
     try {
         const oldTeam = data.team;
-        await updateDoc(contractRef, { team: newTeam, tradeStatus: null });
-        const userRef = doc(db, "users", data.playerUID);
-        await updateDoc(userRef, { tradePending: false });
+        await updateDoc(contractRef, { team: newTeam, tradeStatus: null, tradePending: false, releasePending: false });
         await logHistory(data.playerUID, `🤝 Traded to ${newTeam}!`, "contract");
         
         // Send Slack notification for trade
@@ -645,11 +633,11 @@ window.offerExtension = async (docId) => {
     alert("Extension Sent!");
 };
 
-window.cancelContractRequest = async () => {
+window.cancelContractRequest = async (docId) => {
     const user = auth.currentUser;
     if (!user || !confirm("Withdraw your pending request?")) return;
     try {
-        await updateDoc(doc(db, "users", user.uid), { tradePending: false, releasePending: false });
+        await updateDoc(doc(db, "contracts", docId), { tradePending: false, releasePending: false });
         await logHistory(user.uid, "↩️ Request Withdrawn.", "contract");
         alert("✅ Request withdrawn.");
     } catch (err) { console.error(err); }
