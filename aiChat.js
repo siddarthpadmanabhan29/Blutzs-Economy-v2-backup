@@ -16,6 +16,7 @@ import { getCurrentDashboardData, getCachedHistory } from "./dashboard.js";
 import { getPortfolioSnapshot } from "./shop/stockMarket.js";
 import { getCachedContracts } from "./contracts.js";
 import { getCreditStatus } from "./finance/loan.js";
+import { getDebtLedger } from "./debtManager.js";
 
 const AI_CHAT_ENDPOINT = "https://slack-webhook-lyart.vercel.app/api/aiChat";
 const MAX_INPUT_LENGTH = 1000;
@@ -232,7 +233,7 @@ function showWelcome() {
   appendBubble(
     "assistant",
     markdownToSafeHtml(
-      "Hi! I'm the **Blutz Assistant** 🤖 — ask me how anything on this site works (loans, subscriptions, BPS, chores, etc), or ask about your own balance, BPS, membership, insurance, contracts, stock portfolio, or recent activity. I can't perform any actions (no transfers, purchases, or edits) — just answer questions and give advice."
+      "Hi! I'm the **Blutz Assistant** 🤖 — ask me how anything on this site works (loans, subscriptions, BPS, chores, debt, fines, etc), or ask about your own balance, BPS, membership, insurance, contracts, stock portfolio, recent activity, or debt ledger. I can't perform any actions (no transfers, purchases, approvals, or edits) — just answer questions and give advice."
     )
   );
 }
@@ -266,11 +267,44 @@ async function buildUserContext() {
     terms: c.terms || null,
     signingBonus: c.signingBonus || 0,
   }));
+  const debtLedger = getDebtLedger(data);
   const recentActivity = getCachedHistory()
     .slice(0, 15)
     .map((h) => ({ message: h.message, timestamp: h.timestamp }));
 
+  const debtBreakdown = {
+    fineDebt: debtLedger.fineDebt ? {
+      amount: debtLedger.fineDebt.amount,
+      originalAmount: debtLedger.fineDebt.originalAmount,
+      coveredAmount: debtLedger.fineDebt.coveredAmount,
+      remainingDue: debtLedger.fineDebt.remainingDue,
+      insuranceCoverageRate: debtLedger.fineDebt.insuranceCoverageRate,
+      insuranceActive: debtLedger.fineDebt.insuranceActive,
+      reason: debtLedger.fineDebt.reason,
+      dueDate: debtLedger.fineDebt.dueDate,
+      appealPending: debtLedger.fineDebt.appealPending,
+      appealStatus: debtLedger.fineDebt.appealStatus,
+      appealReason: debtLedger.fineDebt.appealReason,
+    } : null,
+    adminDebts: debtLedger.adminDebts.map((debt) => ({
+      id: debt.id,
+      amount: debt.amount,
+      remaining: debt.remaining,
+      reason: debt.reason,
+      dueDate: debt.dueDate,
+      status: debt.status,
+    })),
+    totals: {
+      fineTotal: debtLedger.fineTotal,
+      adminTotal: debtLedger.adminTotal,
+      loanTotal: debtLedger.loanTotal,
+      totalDebt: debtLedger.totalDebt,
+      globalDebt: debtLedger.globalDebt,
+    },
+  };
+
   return {
+    debtLedger: debtBreakdown,
     username: data.username || user.email?.split("@")[0] || "user",
     balance: data.balance ?? 0,
     bpsBalance: data.bpsBalance ?? 0,
