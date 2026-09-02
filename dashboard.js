@@ -7,6 +7,8 @@ import { doc, onSnapshot, updateDoc, collection, query, orderBy, limit, getDoc, 
 import { logHistory } from "./historyManager.js";
 import { renderSavings } from "./finance/retirement.js"; 
 import { applyInterest, takeOutLoan, repayLoan, getCreditStatus } from "./finance/loan.js"; 
+import { applyFineInterestIfNeeded, buildDebtPaymentPreview, getDebtLedger, payDebtChunk } from "./debtManager.js";
+import { sendSlackMessage } from "./slackNotifier.js";
 
 // --- NEW CONTRACT IMPORTS ---
 import { listenForContractOffers, listenForAdminRoster, renderUserContract } from "./contracts.js";
@@ -101,6 +103,16 @@ const dailyInterestEl = document.getElementById("daily-interest");
 const dailyInterestLabelEl = document.getElementById("daily-interest-label");
 const timerEl = document.getElementById("interest-timer");
 const loanProtectionStatusEl = document.getElementById("loan-protection-status");
+const debtSectionEl = document.getElementById("debt-section");
+const debtFinesTotalEl = document.getElementById("debt-fines-total");
+const debtAdminTotalEl = document.getElementById("debt-admin-total");
+const debtGrandTotalEl = document.getElementById("debt-grand-total");
+const debtListEl = document.getElementById("debt-list");
+const debtOverdueBadgeEl = document.getElementById("debt-overdue-badge");
+const debtInsuranceNoteEl = document.getElementById("debt-insurance-note");
+const debtPaymentAmountEl = document.getElementById("debt-payment-amount");
+const payDebtBtn = document.getElementById("pay-debt-btn");
+const payFullDebtBtn = document.getElementById("pay-full-debt-btn");
 
 const unifiedHistoryList = document.getElementById("unified-history-list");
 const dateFilterInput = document.getElementById("history-date-filter");
@@ -121,6 +133,7 @@ const walletSecurityStatus = document.getElementById("wallet-security-status");
 let currentDashboardData = null;
 let interestTimerInterval = null; 
 let cachedHistory = []; 
+let debtCountdownInterval = null;
 
 // Read-only accessors so other modules (e.g. aiChat.js) can reuse the already-live
 // snapshot data instead of issuing their own extra Firestore reads.
@@ -143,6 +156,7 @@ let _prevBpsShopKey = null;       // tracks bpsBalance changes for bps shop
 let _prevCosmeticsKey = null;     // tracks cosmeticsOwned changes
 let _prevBpsConverterKey = null;  // tracks bpsBalance + volatilityIndex
 let _prevContractKey = null;      // tracks contract-relevant fields
+let _prevDebtKey = null;          // tracks debt ledger changes
 let _cachedLiveRate = null;       // cached market rate to avoid redundant fetches
 let _lastRateFetchTime = 0;       // timestamp of last rate fetch
 const RATE_FETCH_INTERVAL_MS = 60000; // re-fetch market rate at most once per minute
@@ -217,6 +231,162 @@ function getESTDate(offsetDays = 0) {
     estDate.setDate(estDate.getDate() + offsetDays);
     return estDate.toISOString().split('T')[0];
 }
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function formatCountdown(targetDate, now = new Date()) {
+    if (!targetDate) return "No due date";
+
+    const diffMs = targetDate.getTime() - now.getTime();
+    const isOverdue = diffMs < 0;
+    const absMs = Math.abs(diffMs);
+    const totalMinutes = Math.max(0, Math.floor(absMs / 60000));
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    const parts = [];
+
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (days === 0 && hours === 0) parts.push(`${minutes}m`);
+
+    const label = parts.join(" ") || "0m";
+    return isOverdue ? `Overdue by ${label}` : `Due in ${label}`;
+}
+
+function buildDebtPaymentModalHtml(preview) {
+    const lines = preview.breakdown.map((item) => {
+        if (item.type === "fine") {
+            const insured = Boolean(item.insuranceActive);
+            const originalAmount = Number(item.originalAmount || item.amount || 0);
+            const cutAmount = Number(item.coveredAmount || 0);
+            const payableAmount = Number(item.amount || 0);
+
+            return `
+                <div style="background: rgba(231, 76, 60, 0.08); border: 1px solid rgba(231, 76, 60, 0.16); border-radius: 12px; padding: 12px; display: grid; gap: 6px;">
+                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                        <strong style="color:#fff; text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;">Judicial Fine</strong>
+                        <strong style="color:#e74c3c;">$${payableAmount.toLocaleString()}</strong>
+                    </div>
+                    ${insured ? `<div style="font-size:0.68rem; color:#d4af37; font-weight:900; text-transform:uppercase; letter-spacing:1px;">🛡️ 50% Covered by Blutzs Insurance</div>` : ``}
+                    <div style="font-size:0.72rem; color:#cfcfcf; line-height:1.7;">${insured ? `<span style="color:#e74c3c; text-decoration:line-through; font-weight:800;">Original fine: $${originalAmount.toLocaleString()}</span> <span style="color:#d4af37; font-weight:900; margin:0 6px;">•</span> <span style="color:#2ecc71; font-weight:900;">Due: $${payableAmount.toLocaleString()}</span> <span style="color:#888;">(Insurance cut: $${cutAmount.toLocaleString()})</span>` : `No fee applied because this amount is going to a judicial fine.`}</div>
+                </div>
+            `;
+        }
+
+        const dueDate = item.dueDate ? new Date(item.dueDate) : null;
+        const dueLabel = dueDate ? formatCountdown(dueDate) : "No due date";
+        const feeBits = [];
+        if (item.fee > 0) feeBits.push(`5% admin fee: $${item.fee.toLocaleString()}`);
+        if (item.lateFee > 0) feeBits.push(`5% late fee: $${item.lateFee.toLocaleString()}`);
+
+        return `
+            <div style="background: rgba(52, 152, 219, 0.08); border: 1px solid rgba(52, 152, 219, 0.16); border-radius: 12px; padding: 12px; display: grid; gap: 6px;">
+                <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                    <strong style="color:#fff; text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;">Admin Debt</strong>
+                    <strong style="color:#3498db;">$${item.amount.toLocaleString()}</strong>
+                </div>
+                <div style="font-size:0.72rem; color:#cfcfcf; line-height:1.5;">${escapeHtml(item.reason || "Admin-issued debt")}</div>
+                <div style="font-size:0.68rem; color:${item.overdue ? '#e74c3c' : '#f1c40f'}; font-weight:800; text-transform:uppercase; letter-spacing:1px;">${escapeHtml(dueLabel)}</div>
+                <div style="font-size:0.72rem; color:#cfcfcf; line-height:1.5;">${feeBits.length ? feeBits.join(" · ") : "No admin fee applied on this slice."}</div>
+            </div>
+        `;
+    }).join("");
+
+    return `
+        <div style="display:grid; gap:14px; max-width: 640px; width: min(92vw, 640px); background: linear-gradient(180deg, #151515 0%, #111 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 20px; box-shadow: 0 25px 80px rgba(0,0,0,0.55);">
+            <div>
+                <div style="font-size:0.72rem; color:#888; font-weight:900; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:6px;">Confirm debt payment</div>
+                <h3 style="margin:0; color:#fff; font-size:1.2rem;">Judicial fines are paid first, then admin debt</h3>
+                <p style="margin:8px 0 0 0; color:#aaa; font-size:0.8rem; line-height:1.5;">Review the breakdown below before confirming. Judicial fine amounts do not get the 5% admin fee, and if insurance is active it cuts judicial fines by 50% before you pay. Admin debt can carry a 5% fee for partial payments and a 5% late fee when overdue.</p>
+            </div>
+
+            <div style="display:grid; gap:10px;">
+                ${lines || `<div style="color:#888; font-style:italic;">No payable debt found.</div>`}
+            </div>
+
+            <div style="display:grid; gap:8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 14px;">
+                <div style="display:flex; justify-content:space-between; gap:10px; font-size:0.82rem; color:#ddd;"><span>Judicial paid</span><strong>$${preview.finePaid.toLocaleString()}</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:10px; font-size:0.82rem; color:#ddd;"><span>Judicial original</span><strong>$${(preview.ledger.fineDebt?.originalAmount || 0).toLocaleString()}</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:10px; font-size:0.82rem; color:#ddd;"><span>Insurance cut</span><strong>$${(preview.ledger.fineDebt?.coveredAmount || 0).toLocaleString()}</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:10px; font-size:0.82rem; color:#ddd;"><span>Admin paid</span><strong>$${preview.adminPaid.toLocaleString()}</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:10px; font-size:0.82rem; color:#ddd;"><span>Admin fees</span><strong>$${(preview.adminPartialFee + preview.adminLateFee).toLocaleString()}</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:10px; font-size:0.9rem; color:#fff; border-top:1px solid rgba(255,255,255,0.08); padding-top:8px;"><span>Total charge</span><strong>$${preview.balanceCost.toLocaleString()}</strong></div>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+                <button id="debt-confirm-cancel" class="btn-secondary" style="min-width: 140px;">Cancel</button>
+                <button id="debt-confirm-accept" class="btn-primary" style="min-width: 140px; background:#2ecc71;">Confirm Payment</button>
+            </div>
+        </div>
+    `;
+}
+
+function showDebtPaymentConfirmationModal(preview) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.id = "debt-payment-confirm-overlay";
+        overlay.style.cssText = "position:fixed; inset:0; z-index:10001; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,0.82); backdrop-filter: blur(8px);";
+        overlay.innerHTML = buildDebtPaymentModalHtml(preview);
+
+        const close = (result) => {
+            overlay.remove();
+            resolve(result);
+        };
+
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) close(false);
+        });
+
+        overlay.querySelector("#debt-confirm-cancel")?.addEventListener("click", () => close(false));
+        overlay.querySelector("#debt-confirm-accept")?.addEventListener("click", () => close(true));
+
+        document.body.appendChild(overlay);
+    });
+}
+
+window.requestFineAppeal = async () => {
+    if (!auth.currentUser || !currentDashboardData?.activeFine) return;
+
+    if (currentDashboardData.activeFine.appealStatus === "denied") {
+        return alert("This appeal was already denied. You can't appeal it again.");
+    }
+
+    if (currentDashboardData.activeFine.appealPending) {
+        return alert("This fine is already under appeal.");
+    }
+
+    const reason = prompt("Enter your appeal reason for this judicial fine:");
+    if (!reason || !reason.trim()) return;
+
+    try {
+        await updateDoc(doc(db, "users", auth.currentUser.uid), {
+            "activeFine.appealPending": true,
+            "activeFine.appealStatus": "pending",
+            "activeFine.appealReason": reason.trim(),
+            "activeFine.appealSubmittedAt": new Date().toISOString()
+        });
+
+        await logHistory(auth.currentUser.uid, `Appealed judicial fine: ${reason.trim()}`, "admin");
+        sendSlackMessage(
+            `📨 *JUDICIAL FINE APPEAL REQUESTED*\n` +
+            `👤 *User:* ${currentDashboardData.username || auth.currentUser.uid}\n` +
+            `💰 *Fine Due:* $${Number(currentDashboardData.activeFine.remainingDue ?? currentDashboardData.activeFine.amount ?? 0).toLocaleString()}\n` +
+            `📝 *Reason:* ${currentDashboardData.activeFine.reason || "Judicial fine"}\n` +
+            `📣 *Appeal Reason:* ${reason.trim()}`
+        );
+        alert("Your appeal was submitted for admin review.");
+    } catch (err) {
+        alert(err.message || "Unable to submit appeal right now.");
+    }
+};
 
 function applyTheme(theme) {
   if (theme === "light") {
@@ -323,6 +493,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     await applyInterest(user.uid, currentDashboardData);
+    await applyFineInterestIfNeeded(userRef, currentDashboardData);
 
     if (!themeAppliedOnce) {
         const theme = currentDashboardData.cosmeticsOwned?.darkMode
@@ -365,6 +536,8 @@ onAuthStateChanged(auth, async (user) => {
         if (typeof renderSavings === "function") renderSavings(currentDashboardData);
         _prevSavingsKey = savingsKey;
     }
+
+    renderDebtPanel(currentDashboardData);
 
     // BPS Converter: depends on bpsBalance and volatilityIndex
     const bpsConverterKey = `${currentDashboardData.bpsBalance}|${currentDashboardData.volatilityIndex}`;
@@ -788,6 +961,140 @@ function updateDashboardUI(user, dynamicRate) {
   }
 }
 
+function renderDebtPanel(data, forceRefresh = false) {
+    if (!debtSectionEl) return;
+
+    const ledger = getDebtLedger(data);
+    const debtKey = JSON.stringify({
+        fine: data.activeFine || null,
+        admin: data.adminDebts || {},
+        loan: data.activeLoan || 0
+    });
+
+    if (!forceRefresh && debtKey === _prevDebtKey) return;
+    _prevDebtKey = debtKey;
+
+    if (ledger.adminDebts.length > 0 && !debtCountdownInterval) {
+        debtCountdownInterval = setInterval(() => {
+            if (currentDashboardData) {
+                renderDebtPanel(currentDashboardData, true);
+            }
+        }, 1000);
+    } else if (ledger.adminDebts.length === 0 && debtCountdownInterval) {
+        clearInterval(debtCountdownInterval);
+        debtCountdownInterval = null;
+    }
+
+    if (debtFinesTotalEl) debtFinesTotalEl.textContent = `$${ledger.fineTotal.toLocaleString()}`;
+    if (debtAdminTotalEl) debtAdminTotalEl.textContent = `$${ledger.adminTotal.toLocaleString()}`;
+    if (debtGrandTotalEl) debtGrandTotalEl.textContent = `$${ledger.totalDebt.toLocaleString()}`;
+
+    const now = new Date();
+    const entries = [];
+
+    if (ledger.fineDebt) {
+        const fineDueDate = ledger.fineDebt.dueDate ? new Date(ledger.fineDebt.dueDate) : null;
+        const fineOverdue = fineDueDate ? now > fineDueDate : false;
+        const appealPending = Boolean(ledger.fineDebt.appealPending);
+        const insuranceLabel = ledger.fineDebt.insuranceActive
+            ? ` · 🛡️ 50% Covered by Blutzs Insurance`
+            : "";
+        entries.push({
+            key: "fine",
+            title: "Judicial Fine",
+            amount: ledger.fineTotal,
+            originalAmount: ledger.fineDebt.originalAmount,
+            coveredAmount: ledger.fineDebt.coveredAmount,
+            insuranceActive: ledger.fineDebt.insuranceActive,
+            appealPending,
+            appealStatus: ledger.fineDebt.appealStatus,
+            reason: ledger.fineDebt.reason || "Judicial penalty",
+            appealReason: ledger.fineDebt.appealReason || "",
+            insuranceText: ledger.fineDebt.insuranceActive
+                ? `🛡️ 50% Covered by Blutzs Insurance`
+                : "",
+            meta: `${ledger.fineDebt.reason || "Judicial penalty"}${insuranceLabel}`,
+            dueLabel: fineDueDate ? `${fineDueDate.toLocaleDateString()} · ${formatCountdown(fineDueDate, now)}` : "No due date",
+            status: fineOverdue ? "Overdue - 1% daily interest" : "Open"
+        });
+    }
+
+    ledger.adminDebts.forEach((debt, index) => {
+        const dueDate = debt.dueDate ? new Date(debt.dueDate) : null;
+        const overdue = dueDate ? now > dueDate : false;
+        entries.push({
+            key: debt.id || `admin-${index}`,
+            title: "Admin Debt",
+            amount: debt.remaining,
+            reason: debt.reason || "Admin-issued debt",
+            meta: debt.reason || "Admin-issued debt",
+            dueLabel: dueDate ? `${dueDate.toLocaleDateString()} · ${formatCountdown(dueDate, now)}` : "No due date",
+            status: overdue ? "Overdue - 5% late fee" : "Open"
+        });
+    });
+
+    if (debtOverdueBadgeEl) {
+        const overdueCount = entries.filter((entry) => entry.status.startsWith("Overdue")).length;
+        debtOverdueBadgeEl.textContent = `${overdueCount} overdue`;
+        debtOverdueBadgeEl.style.opacity = overdueCount > 0 ? "1" : "0.7";
+    }
+
+    if (debtInsuranceNoteEl) {
+        if (ledger.fineDebt?.insuranceActive) {
+            debtInsuranceNoteEl.textContent = `🛡️ 50% Covered by Blutzs Insurance`;
+            debtInsuranceNoteEl.style.display = "inline-flex";
+        } else {
+            debtInsuranceNoteEl.style.display = "none";
+        }
+    }
+
+    if (debtListEl) {
+        if (entries.length === 0) {
+            debtListEl.innerHTML = `<p style="color: #666; font-style: italic; margin: 0;">No active debt entries.</p>`;
+        } else {
+            debtListEl.innerHTML = entries.map((entry) => `
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 14px; border-radius: 12px; display: grid; gap: 8px;">
+                    <div style="display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <div>
+                            <div style="font-size: 0.85rem; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: 0.6px;">${entry.title}</div>
+                            <div style="font-size: 0.72rem; color: #aaa; margin-top: 2px; line-height: 1.35;">
+                                <span>${entry.reason || entry.meta}</span>
+                                ${entry.insuranceText ? `<span style="color:#d4af37; font-weight:900; text-transform:uppercase; letter-spacing:0.5px;"> · ${entry.insuranceText}</span>` : ``}
+                            </div>
+                        </div>
+                        ${entry.insuranceActive
+                            ? `
+                                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px; line-height:1;">
+                                    <span style="font-size:0.82rem; font-weight:900; color:#e74c3c; text-decoration:line-through; text-decoration-thickness: 2px;">$${Number(entry.originalAmount || entry.amount || 0).toLocaleString()}</span>
+                                    <strong style="font-size:1.1rem; color:#2ecc71;">$${entry.amount.toLocaleString()}</strong>
+                                </div>
+                            `
+                            : `<strong style="font-size: 1.05rem; color: ${entry.status.startsWith("Overdue") ? "#e74c3c" : "#2ecc71"};">$${entry.amount.toLocaleString()}</strong>`
+                        }
+                    </div>
+                    ${entry.title === "Judicial Fine"
+                        ? `
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-start;">
+                                ${entry.appealPending
+                                    ? `<span style="background: rgba(52,152,219,0.12); color:#3498db; border:1px solid rgba(52,152,219,0.25); padding:4px 8px; border-radius:999px; font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.8px;">Appeal Pending</span>`
+                                    : entry.appealStatus === "denied"
+                                        ? `<span style="background: rgba(231,76,60,0.12); color:#e74c3c; border:1px solid rgba(231,76,60,0.25); padding:4px 8px; border-radius:999px; font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.8px;">Appeal Denied</span>`
+                                        : `<button type="button" onclick="window.requestFineAppeal()" style="background: rgba(241,196,15,0.15); color:#f1c40f; border:1px solid rgba(241,196,15,0.35); padding:6px 10px; border-radius:8px; font-size:0.65rem; font-weight:900; text-transform:uppercase; letter-spacing:1px; cursor:pointer;">Appeal Fine</button>`
+                                }
+                                ${entry.appealReason ? `<span style="font-size:0.65rem; color:#888;">Reason: ${escapeHtml(entry.appealReason)}</span>` : ``}
+                            </div>
+                        `
+                        : ``}
+                    <div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; color: #888;">
+                        <span>Status: ${entry.status}</span>
+                                <span>Due: ${entry.dueLabel}</span>
+                    </div>
+                </div>
+            `).join("");
+        }
+    }
+}
+
 /* =========================================================
     MEMBERSHIP HANDLERS
 ========================================================= */
@@ -852,6 +1159,87 @@ themeToggleBtn?.addEventListener("click", async () => {
 
 takeLoanBtn?.addEventListener("click", () => takeOutLoan(parseInt(loanAmountSelect.value)));
 repayLoanBtn?.addEventListener("click", () => repayLoan());
+
+payDebtBtn?.addEventListener("click", async () => {
+    if (!auth.currentUser || !currentDashboardData) return;
+    const amount = parseFloat(debtPaymentAmountEl?.value || "0");
+    if (!amount || amount <= 0) return alert("Enter a valid debt payment amount.");
+
+    try {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const preview = buildDebtPaymentPreview(currentDashboardData, amount);
+        const confirmed = await showDebtPaymentConfirmationModal(preview);
+        if (!confirmed) return;
+
+        const result = await payDebtChunk(userRef, currentDashboardData, amount);
+        const historyBits = [`Paid debt chunk of $${result.paid.toLocaleString()}`];
+        if (result.fineOriginalPaid > 0 && result.fineCoveredPaid > 0) {
+            historyBits.push(`judicial original $${result.fineOriginalPaid.toLocaleString()} → covered $${result.fineCoveredPaid.toLocaleString()}`);
+        }
+        if (result.finePaid > 0) historyBits.push(`judicial $${result.finePaid.toLocaleString()}`);
+        if (result.adminPaid > 0) historyBits.push(`admin $${result.adminPaid.toLocaleString()}`);
+        if (result.penalty > 0) historyBits.push(`fees $${result.penalty.toLocaleString()}`);
+        await logHistory(auth.currentUser.uid, historyBits.join(" · "), "transfer-out");
+        debtPaymentAmountEl.value = "";
+        if (result.remainingDebt === 0) {
+            currentDashboardData = {
+                ...currentDashboardData,
+                activeFine: null,
+                adminDebts: {}
+            };
+        }
+        renderDebtPanel(currentDashboardData, true);
+        sendSlackMessage(
+            `💸 *DEBT REPAYMENT COMPLETED*\n` +
+            `👤 *User:* ${auth.currentUser.displayName || currentDashboardData.username || auth.currentUser.uid}\n` +
+            `📌 *Type:* ${result.adminPaid > 0 && result.finePaid > 0 ? "Judicial + Admin" : result.adminPaid > 0 ? "Admin Debt" : "Judicial Fine"}\n` +
+            `💰 *Paid:* $${result.paid.toLocaleString()}\n` +
+            `🧾 *Judicial Paid:* $${result.finePaid.toLocaleString()}\n` +
+            `🏛️ *Admin Paid:* $${result.adminPaid.toLocaleString()}\n` +
+            `💸 *Fees:* $${result.penalty.toLocaleString()}`
+        );
+        const fineMessage = result.fineOriginalPaid > 0 && result.fineCoveredPaid > 0
+            ? `Judicial original: $${result.fineOriginalPaid.toLocaleString()}, Insurance cut: $${result.fineCoveredPaid.toLocaleString()}, Judicial paid: $${result.finePaid.toLocaleString()}`
+            : `Judicial paid: $${result.finePaid.toLocaleString()}`;
+        alert(result.penalty > 0
+            ? `Debt payment processed. ${fineMessage}, Admin: $${result.adminPaid.toLocaleString()}, Fees: $${result.penalty.toLocaleString()}.`
+            : `Debt payment processed. ${fineMessage}, Admin: $${result.adminPaid.toLocaleString()}.`);
+    } catch (err) {
+        alert(err.message || "Unable to pay debt right now.");
+    }
+});
+
+payFullDebtBtn?.addEventListener("click", async () => {
+    if (!auth.currentUser || !currentDashboardData) return;
+    const debtLedger = getDebtLedger(currentDashboardData);
+    if (debtLedger.totalDebt <= 0) return alert("You have no active debt to pay.");
+
+    try {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const result = await payDebtChunk(userRef, currentDashboardData, debtLedger.totalDebt);
+        await logHistory(auth.currentUser.uid, `Paid full debt of $${result.paid.toLocaleString()}`, "transfer-out");
+        debtPaymentAmountEl.value = "";
+        if (result.remainingDebt === 0) {
+            currentDashboardData = {
+                ...currentDashboardData,
+                activeFine: null,
+                adminDebts: {}
+            };
+        }
+        renderDebtPanel(currentDashboardData, true);
+        sendSlackMessage(
+            `💸 *FULL DEBT REPAYMENT COMPLETED*\n` +
+            `👤 *User:* ${auth.currentUser.displayName || currentDashboardData.username || auth.currentUser.uid}\n` +
+            `💰 *Paid:* $${result.paid.toLocaleString()}\n` +
+            `🧾 *Judicial Paid:* $${result.finePaid.toLocaleString()}\n` +
+            `🏛️ *Admin Paid:* $${result.adminPaid.toLocaleString()}\n` +
+            `💸 *Fees:* $${result.penalty.toLocaleString()}`
+        );
+        alert("Debt cleared from the selected ledger.");
+    } catch (err) {
+        alert(err.message || "Unable to pay full debt right now.");
+    }
+});
 
 /* ---------- LOAN AMOUNT: CUSTOM DROPDOWN ---------- */
 if (loanSelectTrigger && loanSelectPanel && loanAmountSelect) {

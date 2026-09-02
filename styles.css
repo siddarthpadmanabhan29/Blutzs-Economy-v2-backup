@@ -1663,6 +1663,51 @@ html {
         font-size: 1rem !important;
         padding: 10px !important;
     }
+
+    /* Debt ledger: stack the side-by-side panels on smaller screens */
+    #debt-section > div:nth-of-type(3) {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    #debt-section > div:nth-of-type(3) > div {
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    #debt-section h3 {
+        font-size: 1.05rem !important;
+        line-height: 1.2 !important;
+    }
+
+    #debt-section h4 {
+        font-size: 0.95rem !important;
+        line-height: 1.2 !important;
+    }
+
+    #debt-section p {
+        font-size: 0.72rem !important;
+        line-height: 1.45 !important;
+    }
+
+    #debt-section .stat-label,
+    #debt-section #debt-loan-note {
+        font-size: 0.55rem !important;
+        line-height: 1.25 !important;
+        letter-spacing: 0.8px !important;
+    }
+
+    #debt-section #debt-list {
+        max-height: none !important;
+    }
+
+    #debt-section #pay-debt-btn,
+    #debt-section #pay-full-debt-btn {
+        min-height: 48px !important;
+        font-size: 0.78rem !important;
+        letter-spacing: 0.6px !important;
+        white-space: normal !important;
+    }
     
     /* Stock action row adaptations */
     .stock-action-row {

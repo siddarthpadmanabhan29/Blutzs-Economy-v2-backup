@@ -7,6 +7,16 @@ import { getMarketHistory } from "./economyLogger.js";
 
 let currentBpsMarketRate = 200; 
 
+function formatCompactCurrency(amount) {
+    const value = Number(amount || 0);
+    const absValue = Math.abs(value);
+
+    if (absValue >= 1000000000) return `$${(value / 1000000000).toFixed(1)}B`;
+    if (absValue >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (absValue >= 1000) return `$${(value / 1000).toFixed(1)}K`;
+    return `$${value.toLocaleString()}`;
+}
+
 onAuthStateChanged(auth, async (user) => {
     if (!user) return window.close();
 
@@ -75,6 +85,8 @@ function updateStressMeter(adminIndex) {
 function populateSummaryBar(userData, econData) {
     document.getElementById("stat-total-wealth").textContent = `$${(econData.globalSupply / 1000000).toFixed(1)}M`;
     document.getElementById("stat-bps-rate").textContent = `$${currentBpsMarketRate.toLocaleString()}`;
+    const globalDebtEl = document.getElementById("stat-global-debt");
+    if (globalDebtEl) globalDebtEl.textContent = formatCompactCurrency(econData.globalDebt);
     document.getElementById("stat-bps-total").textContent = `${econData.totalBps.toLocaleString()} BPS`;
 }
 
@@ -212,7 +224,7 @@ async function initWealthChart(currentWealth, historyDocs) {
     // Keep the "Tip" logic to help explain the Wealth/BPS relationship
     const tipText = document.getElementById("market-tip-text");
     if (tipText) {
-        tipText.textContent = "Global wealth directly influences BPS value. As liquidity rises, BPS growth potential increases.";
+        tipText.textContent = "Global debt is subtracted from wealth before the BPS rate is calculated. Lower debt raises net wealth, and repaying debt strengthens the economy.";
     }
 }
 

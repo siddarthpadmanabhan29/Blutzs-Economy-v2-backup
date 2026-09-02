@@ -3,9 +3,11 @@ import { collection, doc, getDoc, getDocs, updateDoc, query, where, onSnapshot }
 import { logHistory } from "../historyManager.js";
 import { sendSlackMessage } from "../slackNotifier.js";
 import { getDOMElements, handleUserLookup } from "./adminUtils.js";
+import { buildAdminDebtRecord } from "../debtManager.js";
 
 let fineLookupListener = null;
 let appealsListener = null;
+const ENABLE_DEBT_SLACK_NOTIFICATIONS = true;
 
 export function initFinesUI() {
   const el = getDOMElements();
@@ -27,12 +29,14 @@ async function issueJudicialFine() {
   const amount = parseFloat(el.adminFineAmount.value);
   const reason = el.adminFineReason.value.trim();
   const dueDate = el.adminFineDue.value;
+  const debtType = el.adminDebtType?.value || "fine";
 
-  if (!username || isNaN(amount) || amount <= 0 || !reason || !dueDate) {
-    return alert("⚠️ Please fill in all fine details (Username, Amount, Reason, Due Date).");
+  if (!username || isNaN(amount) || amount <= 0 || !reason || (debtType === "fine" && !dueDate)) {
+    return alert("⚠️ Please fill in all required debt details (Username, Amount, Reason, and Due Date for fines).");
   }
 
-  if (!confirm(`Issue a judicial fine of $${amount.toLocaleString()} to ${username}? This will LOCK their account.`)) return;
+  const confirmLabel = debtType === "admin" ? "admin debt" : "judicial fine";
+  if (!confirm(`Issue a ${confirmLabel} of $${amount.toLocaleString()} to ${username}? It will stay visible in the debt ledger and can be paid in chunks.`)) return;
 
   try {
     const q = query(collection(db, "users"), where("username", "==", username));
@@ -41,29 +45,74 @@ async function issueJudicialFine() {
 
     const userDoc = snap.docs[0];
     const userRef = doc(db, "users", userDoc.id);
+    const userData = userDoc.data();
+    const issuedAt = new Date().toISOString();
+    const normalizedDueDate = debtType === "admin"
+      ? new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)).toISOString()
+      : new Date(dueDate).toISOString();
 
-    await updateDoc(userRef, {
-      activeFine: {
-        amount: amount,
-        reason: reason,
-        dueDate: new Date(dueDate).toISOString(),
-        lastInterestDate: new Date().toISOString(),
-        appealPending: false
+    if (debtType === "admin") {
+      const adminDebt = buildAdminDebtRecord({
+        amount,
+        reason,
+        issuedAt,
+        dueDate: normalizedDueDate,
+        createdBy: "admin"
+      });
+
+      await updateDoc(userRef, {
+        [`adminDebts.${adminDebt.id}`]: adminDebt
+      });
+
+      await logHistory(userDoc.id, `🏛️ ADMIN DEBT ISSUED: $${amount.toLocaleString()} for "${reason}"`, "admin");
+      if (ENABLE_DEBT_SLACK_NOTIFICATIONS) {
+        sendSlackMessage(
+          `🏛️ *ADMIN DEBT ISSUED*\n` +
+          `👤 *User:* ${userData.username || username}\n` +
+          `💰 *Amount:* $${amount.toLocaleString()}\n` +
+          `📅 *Due Date:* ${new Date(normalizedDueDate).toLocaleDateString()}\n` +
+          `📝 *Reason:* ${reason}`
+        );
       }
-    });
+    } else {
+      const hasLayerAInsurance = userData.insurance?.activePackages?.includes("blutzs_a");
+      const insuranceCoverageRate = hasLayerAInsurance ? 0.5 : 0;
+      const insuranceCoveredAmount = hasLayerAInsurance ? Math.max(0, Math.min(Math.max(0, amount - 1), Math.ceil(amount * insuranceCoverageRate))) : 0;
+      const remainingDue = Math.max(0, amount - insuranceCoveredAmount);
 
-    await logHistory(userDoc.id, `🚨 JUDICIAL FINE ISSUED: $${amount.toLocaleString()} for "${reason}"`, "admin");
+      await updateDoc(userRef, {
+        activeFine: {
+          amount: amount,
+          remainingDue,
+          insuranceCoveredAmount,
+          insuranceCoverageRate,
+          reason: reason,
+          dueDate: normalizedDueDate,
+          issuedAt,
+          lastInterestDate: issuedAt,
+          appealPending: false,
+          appealStatus: "none",
+          appealReason: null,
+          appealSubmittedAt: null,
+          type: "fine"
+        }
+      });
 
-    const timestamp = new Date().toLocaleString();
-    sendSlackMessage(
-      `⚖️ *CBA FINE:* CBA has fined *${username}*.\n` + 
-      `💰 *Amount:* $${amount.toLocaleString()}\n` +
-      `📝 *Reason:* ${reason}\n` +
-      `📅 *Due Date:* ${new Date(dueDate).toLocaleDateString()}\n` +
-      `⚠️ *Status:* Account LOCKED until payment.`
-    );
+      await logHistory(userDoc.id, `🚨 JUDICIAL FINE ISSUED: $${amount.toLocaleString()} for "${reason}"`, "admin");
+      if (ENABLE_DEBT_SLACK_NOTIFICATIONS) {
+        sendSlackMessage(
+          `⚖️ *JUDICIAL FINE ISSUED*\n` +
+          `👤 *User:* ${userData.username || username}\n` +
+          `💰 *Original Amount:* $${amount.toLocaleString()}\n` +
+          `🛡️ *Insurance Covered:* $${insuranceCoveredAmount.toLocaleString()}\n` +
+          `💵 *Due Now:* $${remainingDue.toLocaleString()}\n` +
+          `📅 *Due Date:* ${new Date(normalizedDueDate).toLocaleDateString()}\n` +
+          `📝 *Reason:* ${reason}`
+        );
+      }
+    }
 
-    alert(`✅ Fine issued to ${username}. Account locked.`);
+    alert(`✅ ${debtType === "admin" ? "Debt" : "Fine"} issued to ${username}.`);
     el.adminFineUsername.value = "";
     el.adminFineAmount.value = "";
     el.adminFineReason.value = "";
@@ -115,15 +164,40 @@ window.handleAppeal = async (userId, decision) => {
   const userRef = doc(db, "users", userId);
   const userSnap = await getDoc(userRef);
   if (!userSnap.exists()) return;
-  const username = userSnap.data().username;
+  const userData = userSnap.data();
+  const username = userData.username;
+  const fine = userData.activeFine;
 
   if (decision === 'grant') {
-    await updateDoc(userRef, { activeFine: null });
-    sendSlackMessage(`👨‍⚖️ *APPEAL GRANTED:* Admin has waived the fine for *${username}*. Account unlocked.`);
+    await updateDoc(userRef, {
+      activeFine: null
+    });
+    if (ENABLE_DEBT_SLACK_NOTIFICATIONS) {
+      sendSlackMessage(
+        `✅ *JUDICIAL FINE APPEAL GRANTED*\n` +
+        `👤 *User:* ${username}\n` +
+        `💰 *Fine Amount:* $${Number(fine?.amount || 0).toLocaleString()}\n` +
+        `📝 *Reason:* ${fine?.reason || "Judicial fine"}\n` +
+        `📣 *Appeal Reason:* ${fine?.appealReason || "No reason provided"}\n` +
+        `🏁 *Outcome:* Fine waived`
+      );
+    }
     alert("Fine waived.");
   } else {
-    await updateDoc(userRef, { "activeFine.appealPending": false });
-    sendSlackMessage(`👨‍⚖️ *APPEAL DENIED:* Admin has rejected the appeal from *${username}*. The fine remains.`);
+    await updateDoc(userRef, {
+      "activeFine.appealPending": false,
+      "activeFine.appealStatus": "denied"
+    });
+    if (ENABLE_DEBT_SLACK_NOTIFICATIONS) {
+      sendSlackMessage(
+        `❌ *JUDICIAL FINE APPEAL DENIED*\n` +
+        `👤 *User:* ${username}\n` +
+        `💰 *Fine Amount:* $${Number(fine?.amount || 0).toLocaleString()}\n` +
+        `📝 *Reason:* ${fine?.reason || "Judicial fine"}\n` +
+        `📣 *Appeal Reason:* ${fine?.appealReason || "No reason provided"}\n` +
+        `🏁 *Outcome:* Appeal denied, fine remains active`
+      );
+    }
     alert("Appeal denied.");
   }
 };
