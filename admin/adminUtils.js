@@ -1,5 +1,6 @@
 import { db, auth } from "../firebaseConfig.js";
 import { collection, doc, getDocs, getDoc, query, where, onSnapshot, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getDebtLedger } from "../debtManager.js";
 
 // Global listener cleanup state
 export const listeners = {
@@ -114,9 +115,11 @@ export async function handleUserLookup(inputEl, infoEl, btnEl, type) {
             infoEl.textContent = `Target: ${displayName} | Plan: ${tier.toUpperCase()}${isTrial}`;
             infoEl.style.color = "#2ecc71";
           } else if (type === "fine") {
-            const fineData = data.activeFine ? `$${data.activeFine.amount.toLocaleString()}` : "None";
-            infoEl.textContent = `Target: ${displayName} | Fine: ${fineData}`;
-            infoEl.style.color = data.activeFine ? "#e74c3c" : "#2ecc71";
+            const debtLedger = getDebtLedger(data);
+            const fineData = debtLedger.fineTotal > 0 ? `$${debtLedger.fineTotal.toLocaleString()}` : "None";
+            const adminDebtData = debtLedger.adminTotal > 0 ? `$${debtLedger.adminTotal.toLocaleString()}` : "None";
+            infoEl.textContent = `Target: ${displayName} | Fine: ${fineData} | Admin Debt: ${adminDebtData} | Total Debt: $${debtLedger.globalDebt.toLocaleString()}`;
+            infoEl.style.color = debtLedger.hasDebt ? "#e74c3c" : "#2ecc71";
           }
         });
 
@@ -233,6 +236,7 @@ export function getDOMElements() {
     adminFineAmount: document.getElementById("admin-fine-amount"),
     adminFineReason: document.getElementById("admin-fine-reason"),
     adminFineDue: document.getElementById("admin-fine-due"),
+    adminDebtType: document.getElementById("admin-debt-type"),
     adminFineInfo: document.getElementById("admin-fine-info"),
     issueFineBtn: document.getElementById("admin-issue-fine-btn"),
     adminAppealsList: document.getElementById("admin-appeals-list"),

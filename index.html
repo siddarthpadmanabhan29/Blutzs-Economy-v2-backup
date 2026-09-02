@@ -12,14 +12,14 @@
     <div id="sidebar-overlay"></div>
 
     <div id="fine-lockdown-overlay" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;">
-        <h1 style="color: #e74c3c; font-size: 3rem; margin-bottom: 10px;">🚨 ACCOUNT LOCKED</h1>
+        <h1 style="color: #e74c3c; font-size: 3rem; margin-bottom: 10px;">⚖️ DEBT NOTICE</h1>
         <div style="background: #1a1a1a; border: 2px solid #e74c3c; padding: 30px; border-radius: 15px; margin: 20px 0; min-width: 300px;">
             <h2 id="lockdown-fine-amount" style="color: #e74c3c; font-size: 2.5rem; margin: 10px 0;">$0</h2>
-            <p id="lockdown-fine-reason" style="color: #aaa; font-style: italic;"></p>
+            <p id="lockdown-fine-reason" style="color: #aaa; font-style: italic;">Review the debt ledger in Banking & Loans.</p>
         </div>
         <div style="display: flex; gap: 10px;">
-            <button id="pay-fine-btn" class="btn-primary" style="background: #2ecc71;">PAY FINE NOW</button>
-            <button id="appeal-fine-btn" class="btn-secondary">APPEAL</button>
+            <button id="pay-fine-btn" class="btn-primary" style="background: #2ecc71;">OPEN DEBT LEDGER</button>
+            <button id="appeal-fine-btn" class="btn-secondary">DISMISS</button>
         </div>
     </div>
 
@@ -94,6 +94,7 @@
 
         <main class="main-content">
             
+
             <header class="top-stats-bar">
                 <button id="mobile-menu-btn" style="display: flex; flex-direction: column; gap: 4px; padding: 5px; justify-content: center;">
                     <span style="width: 20px; height: 2px; background: var(--text-main); display: block;"></span>
@@ -194,6 +195,58 @@
 </section>
 
             <section id="tab-banking" class="tab-content">
+    <div id="debt-section" class="section-card" style="margin-bottom: 20px; border-top: 4px solid #e74c3c; background: var(--card-bg); border-radius: 15px; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 15px;">
+            <div>
+                <h3 style="margin: 0; color: #e74c3c;">⚖️ Debt Ledger</h3>
+                <p style="margin: 6px 0 0 0; font-size: 0.8rem; color: #aaa; max-width: 760px;">Judicial fines are paid first and do not get the 5% chunk fee. Admin debt can carry a 5% fee for partial payments and a 5% late fee when it is overdue. Loan balances still count toward market-wide debt, but the ledger itself lives on its own.</p>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <span id="debt-overdue-badge" style="background: rgba(231, 76, 60, 0.12); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.25); padding: 6px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 900; text-transform: uppercase;">0 overdue</span>
+                <span id="debt-penalty-note" style="background: rgba(241, 196, 15, 0.1); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.2); padding: 6px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 900; text-transform: uppercase;">5% admin fee</span>
+                <span id="debt-insurance-note" style="display:none; background: rgba(212, 175, 55, 0.16); color: #d4af37; border: 1px solid rgba(212, 175, 55, 0.35); padding: 6px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 900; text-transform: uppercase;">🛡️ 50% Covered by Blutzs Insurance</span>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px;">
+            <div style="padding: 14px; background: rgba(231, 76, 60, 0.06); border: 1px solid rgba(231, 76, 60, 0.15); border-radius: 12px;">
+                <span class="stat-label" style="display: block; margin-bottom: 6px;">Judicial Fines</span>
+                <strong id="debt-fines-total" style="font-size: 1.35rem; color: #e74c3c;">$0</strong>
+            </div>
+            <div style="padding: 14px; background: rgba(52, 152, 219, 0.06); border: 1px solid rgba(52, 152, 219, 0.15); border-radius: 12px;">
+                <span class="stat-label" style="display: block; margin-bottom: 6px;">Admin Debt</span>
+                <strong id="debt-admin-total" style="font-size: 1.35rem; color: #3498db;">$0</strong>
+            </div>
+            <div style="padding: 14px; background: rgba(241, 196, 15, 0.06); border: 1px solid rgba(241, 196, 15, 0.15); border-radius: 12px;">
+                <span class="stat-label" style="display: block; margin-bottom: 6px;">Total Debt</span>
+                <strong id="debt-grand-total" style="font-size: 1.45rem; color: #f1c40f;">$0</strong>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.55fr); gap: 16px; align-items: start;">
+            <div style="background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                    <h4 style="margin: 0; color: #fff;">Open Debt Entries</h4>
+                    <span id="debt-loan-note" style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Loan balance counted in market debt</span>
+                </div>
+                <div id="debt-list" style="display: grid; gap: 10px; max-height: 330px; overflow-y: auto; padding-right: 6px;">
+                    <p style="color: #666; font-style: italic; margin: 0;">No active debt entries.</p>
+                </div>
+            </div>
+
+            <div style="background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px;">
+                <h4 style="margin: 0 0 10px 0; color: #f1c40f;">Pay Debt</h4>
+                <p style="margin: 0 0 12px 0; font-size: 0.78rem; color: #aaa; line-height: 1.5;">Judicial fines are paid first. Partial admin debt payments add a 5% fee, and overdue admin debt adds a 5% late fee. The amount you enter will be broken down before you confirm.</p>
+                <label style="display: block; font-size: 0.6rem; color: #888; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px;">Payment Amount</label>
+                <input id="debt-payment-amount" type="number" min="1" placeholder="Enter amount" style="width: 100%; height: 42px; background: #111; border: 1px solid #333; color: #fff; padding: 0 12px; border-radius: 8px; box-sizing: border-box; margin-bottom: 10px;">
+                <div style="display: grid; gap: 8px;">
+                    <button id="pay-debt-btn" class="btn-primary" style="width: 100%; height: 44px; background: #e67e22; color: #fff; border: none; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer;">Pay Entered Amount</button>
+                    <button id="pay-full-debt-btn" class="btn-danger" style="width: 100%; height: 44px; background: #e74c3c; color: #fff; border: none; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer;">Pay Full Debt</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
         
         <div class="section-card" style="border-top: 4px solid #3498db;">
@@ -991,9 +1044,17 @@
         <div class="admin-section" style="border: 1px solid #e74c3c; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
         <span style="font-size: 1.2rem;">⚖️</span>
-        <h3 style="color: #e74c3c; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Judicial Fines & Lockdown</h3>
+            <h3 style="color: #e74c3c; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Judicial Fines & Debt Issuance</h3>
     </div>
-    <p style="font-size: 0.75rem; color: #888; margin: 0 0 20px 0;">Issue a formal fine. Accounts are locked until the balance is settled.</p>
+        <p style="font-size: 0.75rem; color: #888; margin: 0 0 20px 0;">Issue a fine or admin debt entry. Debts remain visible in the user debt ledger and no longer lock the account.</p>
+
+        <div style="margin-bottom: 12px;">
+            <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Debt Type</label>
+            <select id="admin-debt-type" style="width: 100%; height: 40px; background: #111; border: 1px solid #333; color: #fff; padding: 0 12px; border-radius: 8px; box-sizing: border-box; outline: none;">
+                <option value="fine">Judicial Fine</option>
+                <option value="admin">Admin Debt</option>
+            </select>
+        </div>
 
     <div style="margin-bottom: 12px;">
         <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Target Username</label>
@@ -1027,7 +1088,7 @@
 
     <button id="admin-issue-fine-btn" class="btn-danger" 
             style="width: 100%; height: 45px; background: #e74c3c; color: #fff; border: none; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: 0.2s;">
-        Issue Fine & Lock Account
+        Issue Debt
     </button>
 </div>
 

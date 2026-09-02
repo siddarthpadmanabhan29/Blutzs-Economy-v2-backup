@@ -26,12 +26,13 @@ export async function logDailyEconomySnapshot() {
         }
 
         // Fetch the REAL math from our centralized source of truth
-        const { rate, globalSupply, totalBps, volatilityIndex } = await getLiveMarketRate();
+        const { rate, globalSupply, globalDebt, totalBps, volatilityIndex } = await getLiveMarketRate();
 
         await setDoc(snapshotRef, {
             date: today,
             bpsRate: rate,
             liquidity: globalSupply,
+            globalDebt: globalDebt,
             volatilityIndex: volatilityIndex, // Synced Resistance Index
             circulation: totalBps,
             timestamp: new Date().getTime() // Stored for accurate chronological sorting

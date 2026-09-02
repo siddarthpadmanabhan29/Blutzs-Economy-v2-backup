@@ -1,6 +1,7 @@
 // ---------- economyUtils.js ----------
 import { db, auth } from "./firebaseConfig.js";
 import { collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getDebtLedger } from "./debtManager.js";
 
 /**
  * CALIBRATION CONSTANTS
@@ -22,6 +23,7 @@ export async function getLiveMarketRate() {
         let totalCash = 0;
         let totalRetirement = 0;
         let totalBpsInCirculation = 0;
+        let totalDebt = 0;
         let adminIndex = 34000000; // Default Resistance Baseline
 
         usersSnap.forEach(uDoc => {
@@ -29,6 +31,7 @@ export async function getLiveMarketRate() {
             totalCash += (u.balance || 0);
             totalRetirement += (u.retirementSavings || 0);
             totalBpsInCirculation += (u.bpsBalance || 0);
+            totalDebt += getDebtLedger(u).globalDebt;
             
             // Capture the volatility index from the Admin user as the Resistance Factor
             if (u.isAdmin === true) {
@@ -36,8 +39,8 @@ export async function getLiveMarketRate() {
             }
         });
 
-        // Global Wealth (Strength) = Liquid Cash + Savings
-        const realGlobalWealth = totalCash + totalRetirement;
+        // Global Wealth (Strength) = Liquid Cash + Savings - Outstanding Debt
+        const realGlobalWealth = Math.max(0, totalCash + totalRetirement - totalDebt);
         
         /* =========================================================
             RESISTANCE ENGINE: (Strength / Resistance)
@@ -62,12 +65,13 @@ export async function getLiveMarketRate() {
             rate,
             rawRate, 
             globalSupply: realGlobalWealth,
+            globalDebt: totalDebt,
             volatilityIndex: adminIndex,
             totalBps: totalBpsInCirculation
         };
     } catch (err) {
         console.error("Economy Aggregation Error:", err);
         // Fallback to floor if network fails
-        return { rate: 200, rawRate: 200, globalSupply: 0, volatilityIndex: 34000000, totalBps: 0 }; 
+        return { rate: 200, rawRate: 200, globalSupply: 0, globalDebt: 0, volatilityIndex: 34000000, totalBps: 0 }; 
     }
 }
