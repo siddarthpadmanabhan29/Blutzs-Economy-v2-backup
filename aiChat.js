@@ -11,7 +11,7 @@
 //   the knowledge-base markdown server-side, so no secret ever reaches the browser.
 
 import { auth, db } from "./firebaseConfig.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getCurrentDashboardData, getCachedHistory } from "./dashboard.js";
 import { getPortfolioSnapshot } from "./shop/stockMarket.js";
 import { getCachedContracts } from "./contracts.js";
@@ -261,6 +261,22 @@ async function buildUserContext() {
   if (!data) return null;
 
   const creditScore = data.creditScore ?? 600;
+  let inventoryItems = [];
+  try {
+    const inventorySnap = await getDocs(collection(db, "users", user.uid, "inventory"));
+    inventoryItems = inventorySnap.docs.map((itemDoc) => ({ id: itemDoc.id, ...itemDoc.data() }));
+  } catch (err) {
+    console.warn("aiChat: inventory fetch failed", err);
+  }
+
+  let choresItems = [];
+  try {
+    const choresSnap = await getDocs(collection(db, "chores"));
+    choresItems = choresSnap.docs.map((choreDoc) => ({ id: choreDoc.id, ...choreDoc.data() }));
+  } catch (err) {
+    console.warn("aiChat: chores fetch failed", err);
+  }
+
   const stockPortfolio = getPortfolioSnapshot().filter((p) => p.shares > 0);
   const contracts = getCachedContracts().map((c) => ({
     status: c.status,
@@ -271,6 +287,61 @@ async function buildUserContext() {
   const recentActivity = getCachedHistory()
     .slice(0, 15)
     .map((h) => ({ message: h.message, timestamp: h.timestamp }));
+
+  const now = Date.now();
+  const inventoryWithExpiry = inventoryItems
+    .map((item) => {
+      const expiresAt = item.expiresAt ? new Date(item.expiresAt) : null;
+      const expiresInMs = expiresAt ? expiresAt.getTime() - now : null;
+      return {
+        id: item.id,
+        name: item.name || null,
+        type: item.type || null,
+        acquiredAt: item.acquiredAt || null,
+        expiresAt: item.expiresAt || null,
+        expiresInMs,
+        isExpired: Boolean(expiresAt && expiresAt.getTime() <= now),
+      };
+    })
+    .sort((a, b) => (a.expiresInMs ?? Number.POSITIVE_INFINITY) - (b.expiresInMs ?? Number.POSITIVE_INFINITY));
+
+  const expiringInventory = inventoryWithExpiry
+    .filter((item) => item.expiresAt)
+    .slice(0, 12);
+
+  const expiringSoonCount = inventoryWithExpiry.filter((item) => item.expiresInMs !== null && item.expiresInMs <= 30 * 24 * 60 * 60 * 1000 && item.expiresInMs > 0).length;
+  const expiredInventoryCount = inventoryWithExpiry.filter((item) => item.isExpired).length;
+
+  const choreSummary = choresItems.reduce((summary, chore) => {
+    const isMine = chore.assignedTo === user.uid;
+    const isCreatedByMe = chore.createdBy === user.uid;
+    summary.total += 1;
+    if (chore.status === "open") summary.open += 1;
+    if (chore.status === "assigned") summary.assigned += 1;
+    if (chore.status === "in_progress") summary.inProgress += 1;
+    if (chore.status === "pending_review") summary.pendingReview += 1;
+    if (chore.status === "completed") summary.completed += 1;
+    if (isMine) summary.mine += 1;
+    if (isCreatedByMe) summary.createdByMe += 1;
+    return summary;
+  }, { total: 0, open: 0, assigned: 0, inProgress: 0, pendingReview: 0, completed: 0, mine: 0, createdByMe: 0 });
+
+  const activeChores = choresItems
+    .filter((chore) => chore.status === "open" || chore.status === "assigned" || chore.status === "in_progress" || chore.status === "pending_review")
+    .map((chore) => ({
+      id: chore.id,
+      title: chore.title || null,
+      status: chore.status || null,
+      reward: Number(chore.reward || 0),
+      deadline: chore.deadline || null,
+      assignmentMode: chore.assignmentMode || null,
+      assignedTo: chore.assignedTo || null,
+      createdBy: chore.createdBy || null,
+      isMine: chore.assignedTo === user.uid,
+      isCreatedByMe: chore.createdBy === user.uid,
+    }))
+    .sort((a, b) => new Date(a.deadline || 0) - new Date(b.deadline || 0))
+    .slice(0, 12);
 
   const debtBreakdown = {
     fineDebt: debtLedger.fineDebt ? {
@@ -308,6 +379,11 @@ async function buildUserContext() {
     username: data.username || user.email?.split("@")[0] || "user",
     balance: data.balance ?? 0,
     bpsBalance: data.bpsBalance ?? 0,
+    bpsDecay: {
+      expiryAt: data.bpsExpiryAt || null,
+      decayStartedAt: data.bpsDecayStartedAt || null,
+      atRiskAmount: Math.min(10, Number(data.bpsBalance || 0)),
+    },
     membershipLevel: data.membershipLevel || "standard",
     employmentStatus: data.employmentStatus || null,
     creditScore,
@@ -323,6 +399,21 @@ async function buildUserContext() {
     activeFine: data.activeFine || null,
     retirementSavings: data.retirementSavings ?? 0,
     stockPortfolio,
+    inventory: {
+      totalItems: inventoryWithExpiry.length,
+      expiringSoonCount,
+      expiredCount: expiredInventoryCount,
+      items: expiringInventory,
+    },
+    chores: {
+      summary: choreSummary,
+      active: activeChores,
+      guidance: {
+        canAnswerGeneralQuestions: true,
+        canGiveAdvice: true,
+        canExplainStatus: true,
+      },
+    },
     contracts,
     recentActivity,
   };

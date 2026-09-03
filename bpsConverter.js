@@ -8,6 +8,7 @@ import { openPinModal } from "./securityModal.js";
 
 // NEW: Shared Source of Truth for Rate Math
 import { getLiveMarketRate } from "./economyUtils.js";
+import { buildBpsBalanceUpdate } from "./expirationUtils.js";
 
 const converterSection = document.getElementById("bps-converter-section");
 const converterUI = document.getElementById("bps-converter-ui"); 
@@ -183,10 +184,10 @@ async function executeConversion({ amount, cashValue, taxAmount, liveRate, tier,
     try {
         const userRef = doc(db, "users", auth.currentUser.uid);
         const updates = {
-            bpsBalance: increment(-amount),
             balance: increment(cashValue),
             bpsConvertedThisWeek: increment(amount)
         };
+        Object.assign(updates, buildBpsBalanceUpdate(currentData, -amount, new Date()));
 
         if (convertedThisWeek === 0) {
             updates.lastBpsConversionDate = new Date().toISOString();

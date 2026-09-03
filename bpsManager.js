@@ -5,6 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { sendSlackMessage } from "./slackNotifier.js";
 import { PLANS } from "./membership_plans.js"; 
+import { buildBpsBalanceUpdate, getThirtyDayExpiryIso } from "./expirationUtils.js";
 
 /**
  * CHANGE PIN: Securely updates the 4-digit code
@@ -72,7 +73,7 @@ export async function joinRewardsProgram() {
             isRewardsActive: true,
             rewardsLastPaid: new Date().toISOString(),
             rewardsRenewalDate: renewalDate.toISOString(),
-            bpsBalance: increment(welcomeBonus),
+            ...buildBpsBalanceUpdate(data, welcomeBonus, new Date()),
             bpsLifetimeEarnings: increment(welcomeBonus)
         });
 
@@ -169,7 +170,7 @@ export async function registerLoyalty(pin) {
             isLoyaltyRegistered: true,
             isRewardsActive: true, 
             rewardsRenewalDate: renewalDate.toISOString(),
-            bpsBalance: increment(welcomeBonus),
+            ...buildBpsBalanceUpdate({}, welcomeBonus, new Date()),
             bpsLifetimeEarnings: increment(welcomeBonus),
             activeBoosts: {
                 taxHoliday: false,
@@ -227,7 +228,7 @@ export async function applyBpsPerk(perkId, cost, userData) {
     const buyerName = userData.username || userData.displayName || user.uid;
 
     try {
-        const updates = { bpsBalance: increment(-cost) };
+        const updates = buildBpsBalanceUpdate(userData, -cost, new Date());
 
         switch (perkId) {
             case "taxHoliday": 
@@ -247,6 +248,7 @@ export async function applyBpsPerk(perkId, cost, userData) {
                     type: "lottery_bypass",
                     description: "Bypass your daily limit to purchase one extra ticket.",
                     acquiredAt: new Date().toISOString(),
+                    expiresAt: getThirtyDayExpiryIso(),
                     isFree: false
                 });
                 break;
@@ -259,6 +261,7 @@ export async function applyBpsPerk(perkId, cost, userData) {
                     type: "premium_trial",
                     description: "Activate to instantly upgrade to Premium for 7 days.",
                     acquiredAt: new Date().toISOString(),
+                    expiresAt: getThirtyDayExpiryIso(),
                     isFree: false
                 });
                 break;
@@ -268,6 +271,7 @@ export async function applyBpsPerk(perkId, cost, userData) {
                     type: "interest_boost",
                     description: "Activate to increase retirement interest by 1% for 30 days.",
                     acquiredAt: new Date().toISOString(),
+                    expiresAt: getThirtyDayExpiryIso(),
                     isFree: false
                 });
                 break;

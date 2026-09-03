@@ -10,6 +10,7 @@ import { PLANS, isNextItemFree } from "../membership_plans.js";
 import { sendSlackMessage } from "../slackNotifier.js";
 // NEW: Import the central source of truth for economy math
 import { getLiveMarketRate } from "../economyUtils.js";
+import { buildBpsBalanceUpdate, getThirtyDayExpiryIso } from "../expirationUtils.js";
 
 const shopItemsContainer = document.getElementById("shop-items");
 
@@ -342,9 +343,9 @@ async function buyItem(itemId, btnElement) {
     // --- UPDATE USER OBJECT ---
     const updates = {
       balance: increment(-totalCost),
-      bpsBalance: increment(plan.bpsPerPurchase),
       activeDiscount: 0
     };
+    Object.assign(updates, buildBpsBalanceUpdate(userData, plan.bpsPerPurchase, new Date()));
 
     if (isFree) {
         updates.shopOrderCount = 0;
@@ -372,6 +373,7 @@ async function buyItem(itemId, btnElement) {
       value: isFree ? 0 : Math.floor(basePrice / 2),
       originalId: itemId,
       acquiredAt: new Date().toISOString(),
+      expiresAt: getThirtyDayExpiryIso(),
       isFree: isFree 
     });
 
