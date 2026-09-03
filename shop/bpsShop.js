@@ -10,6 +10,7 @@ import { openPinModal } from "../securityModal.js";
 import { applyBpsPerk, joinRewardsProgram, cancelRewardsProgram } from "../bpsManager.js";
 import { sendSlackMessage } from "../slackNotifier.js";
 import { logHistory } from "../historyManager.js";
+import { buildBpsBalanceUpdate, getThirtyDayExpiryIso } from "../expirationUtils.js";
 
 const bpsContainer = document.getElementById("bps-shop-items");
 
@@ -374,14 +375,14 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
 
        // 1. Update Recipient
        await updateDoc(recipientRef, {
-           bpsBalance: increment(itemData.value),
+           ...buildBpsBalanceUpdate(recipientData, Number(itemData.value || 0), new Date()),
            bpsLifetimeEarnings: increment(itemData.value)
        });
        await logHistory(recipientDoc.id, `Received BPS Gift: ${itemData.value} BPS from ${senderName}`, "transfer-in");
 
        // 2. Update Sender
        await updateDoc(userRef, {
-           bpsBalance: increment(-finalCost)
+           ...buildBpsBalanceUpdate(userData, -finalCost, new Date())
        });
        await logHistory(user.uid, `Sent BPS Gift: ${itemData.value} BPS to ${recipientUsername}`, "transfer-out");
 
@@ -400,13 +401,12 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
                  type: "loan_discount",
                  discountValue: itemData.discountValue || 10,
                  acquiredAt: new Date().toISOString(),
+                 expiresAt: getThirtyDayExpiryIso(),
                  isFree: false,
                  value: 0
              });
 
-             await updateDoc(userRef, {
-                 bpsBalance: increment(-finalCost)
-             });
+             await updateDoc(userRef, buildBpsBalanceUpdate(userData, -finalCost, new Date()));
 
              await logHistory(user.uid, `Purchased ${itemData.name} for ${finalCost} BPS`, "usage");
              sendSlackMessage(`🛒 *BPS Shop Purchase*\n*User:* ${senderName}\n*Item:* ${itemData.name}\n*Cost:* ${finalCost} BPS\n*Time:* ${timestampStr}`);
@@ -431,6 +431,7 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
          type: "coupon", 
          discountValue: itemData.value || 0, 
          acquiredAt: new Date().toISOString(),
+                 expiresAt: getThirtyDayExpiryIso(),
          isFree: false 
        });
 

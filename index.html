@@ -184,6 +184,35 @@
             </div>
             <p id="volatility-display" style="font-size: 0.65rem; color: #888; margin-top: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Real-Time Economy Tracking</p>
         </div>
+
+        <div class="section-card" style="margin: 0; background: var(--card-bg); border: 1px solid var(--contract-border); border-radius: 15px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; padding-bottom:15px; border-bottom:1px solid var(--contract-border); flex-wrap:wrap;">
+                <div>
+                    <h3 style="margin:0; color: var(--text-main); font-size:1.05rem; letter-spacing:0.4px;">⚠ BPS Risk Monitor</h3>
+                    <p style="margin:6px 0 0 0; color: var(--text-main); opacity: 0.72; font-size:0.78rem; line-height:1.45; max-width: 300px;">Shows the current BPS balance, the amount at risk, and the next expiry window.</p>
+                </div>
+                <span id="user-bps-decay" style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:0.62rem; font-weight:900; letter-spacing:0.6px; text-transform:uppercase; background:rgba(241,196,15,0.10); color:#f1c40f; line-height:1.2; border: 1px solid rgba(241,196,15,0.18);">Inactive</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+                <div>
+                    <span class="stat-label" style="display:block; margin-bottom:4px; color:#9ea7b3;">Original Balance</span>
+                    <strong id="bps-risk-original" style="font-size:1.2rem; color:#fff;">0 BPS</strong>
+                </div>
+                <div>
+                    <span class="stat-label" style="display:block; margin-bottom:4px; color:#9ea7b3;">At Risk</span>
+                    <strong id="bps-risk-subtracted" style="font-size:1.2rem; color:#f1c40f;">0 BPS</strong>
+                </div>
+                <div>
+                    <span class="stat-label" style="display:block; margin-bottom:4px; color:#9ea7b3;">Projected Balance</span>
+                    <strong id="bps-risk-new" style="font-size:1.2rem; color:#2ecc71;">0 BPS</strong>
+                </div>
+                <div>
+                    <span class="stat-label" style="display:block; margin-bottom:4px; color:#9ea7b3;">Expires In</span>
+                    <strong id="bps-risk-expires" style="font-size:1.05rem; color:#f1c40f;">Inactive</strong>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="user-contract-section" class="section-card" style="margin-top: 20px; border-top: 4px solid #f1c40f;">

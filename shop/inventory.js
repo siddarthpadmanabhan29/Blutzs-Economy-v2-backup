@@ -9,6 +9,7 @@ import { updateBalanceDisplay } from "../main.js";
 import { logHistory } from "../historyManager.js";
 import { PLANS } from "../membership_plans.js";
 import { sendSlackMessage } from "../slackNotifier.js";
+import { getInventoryExpiryInfo } from "../expirationUtils.js";
 
 const inventoryContainer = document.getElementById("inventory-items");
 const inventoryValueEl = document.getElementById("inventory-value");
@@ -204,9 +205,10 @@ function loadInventory() {
    const userRef = doc(db, "users", user.uid);
    const invRef = collection(userRef, "inventory");
 
-   unsubscribeInventory = onSnapshot(invRef, (snapshot) => {
+   unsubscribeInventory = onSnapshot(invRef, async (snapshot) => {
      inventoryContainer.innerHTML = "";
      let totalValue = 0;
+     const expiredItemDeletes = [];
 
      if (snapshot.empty) {
        inventoryContainer.innerHTML = `
@@ -224,6 +226,13 @@ function loadInventory() {
 
      snapshot.forEach((itemDoc) => {
        const item = itemDoc.data();
+       const expiryInfo = getInventoryExpiryInfo(item);
+
+       if (expiryInfo.isExpired) {
+         expiredItemDeletes.push(deleteDoc(itemDoc.ref));
+         return;
+       }
+
        totalValue += item.value || 0;
 
        const isFreeItem = item.isFree === true;
@@ -300,6 +309,7 @@ function loadInventory() {
        itemCard.innerHTML = `
          <div style="margin-bottom: 12px; position: relative; z-index: 2;">
            <strong style="display: block; font-size: 0.85rem; color: #fff; margin-bottom: 4px; letter-spacing: 0.3px;">${item.name}</strong>
+           <div style="font-size: 0.68rem; color: ${expiryInfo.isExpired ? '#e74c3c' : '#f1c40f'}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; line-height: 1.4;">${expiryInfo.expiresLabel} · ${expiryInfo.expiresAtText}</div>
            ${isFreeItem ? 
                `<span style="color: #2ecc71; font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; background: rgba(46, 204, 113, 0.1); padding: 2px 6px; border-radius: 4px;">Membership Perk</span>` : 
                (isLotteryBypass ? 
@@ -324,6 +334,10 @@ function loadInventory() {
        `;
        inventoryContainer.appendChild(itemCard);
      });
+
+     if (expiredItemDeletes.length > 0) {
+       await Promise.allSettled(expiredItemDeletes);
+     }
 
      if (inventoryValueEl) {
          inventoryValueEl.innerHTML = `Total Value: <strong style="color: #2ecc71; margin-left: 5px; font-size: 1.1rem; text-shadow: 0 0 10px rgba(46, 204, 113, 0.2);">$${totalValue.toLocaleString()}</strong>`;

@@ -2,6 +2,7 @@ import { db, auth } from "./firebaseConfig.js";
 import { doc, getDoc, updateDoc, increment, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
 import { computeDailyLoginClaim, getDefaultGamesConfig, getPrizeForDay } from "./gamesLogic.js";
+import { buildBpsBalanceUpdate } from "./expirationUtils.js";
 
 let gamesConfig = getDefaultGamesConfig();
 let gamesListener = null;
@@ -369,7 +370,7 @@ export async function initGamesUI() {
       if (paymentMethod === "money") {
         await updateDoc(userRef, { balance: increment(-Number(recoveryCost.money || 0)), lastDailyLoginDate: getTodayKey(), dailyLoginDay: Number(userData.dailyLoginDay || 1) });
       } else {
-        await updateDoc(userRef, { bpsBalance: increment(-Number(recoveryCost.bps || 0)), lastDailyLoginDate: getTodayKey(), dailyLoginDay: Number(userData.dailyLoginDay || 1) });
+          await updateDoc(userRef, { ...buildBpsBalanceUpdate(userData, -Number(recoveryCost.bps || 0), new Date()), lastDailyLoginDate: getTodayKey(), dailyLoginDay: Number(userData.dailyLoginDay || 1) });
       }
 
       await logHistory(user.uid, "Recovered daily login streak", "usage");
@@ -451,7 +452,7 @@ export async function initGamesUI() {
       await logHistory(user.uid, `Purchased daily login recovery for $${Number(recoveryCost.money || 0).toLocaleString()}`, "usage");
     } else {
       await updateDoc(userRef, { 
-        bpsBalance: increment(-Number(recoveryCost.bps || 0)), 
+        ...buildBpsBalanceUpdate(userData, -Number(recoveryCost.bps || 0), new Date()), 
         lastDailyLoginDate: new Date().toISOString(), 
         dailyLoginDay: Number(userData.dailyLoginDay || 1) 
       });

@@ -77,6 +77,8 @@ export async function createOrUpdateUserDoc(uid, username, email) {
             email: email, 
             balance: 0,
             bpsBalance: 0,
+            bpsExpiryAt: null,
+            bpsDecayStartedAt: null,
             history: [],
             renewalDate: now.toISOString(),
             expirationDate: expiration.toISOString(),

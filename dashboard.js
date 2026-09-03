@@ -47,6 +47,7 @@ import { initInsurance, checkMondayAllowance } from "./finance/insurance.js";
 // --- NEW BPS SECURITY IMPORTS ---
 import { openPinModal } from "./securityModal.js";
 import { changeBpsPin, checkRewardsBilling } from "./bpsManager.js";
+import { getBpsDecayInfo } from "./expirationUtils.js";
 
 /* =========================================================
     QUOTA PROTECTION: LISTENER MANAGER
@@ -77,6 +78,11 @@ const dashboardContent = document.getElementById("dashboard-content");
 const adminPanel = document.getElementById("tab-admin"); 
 const userName = document.getElementById("user-name");
 const userBalance = document.getElementById("user-balance");
+const userBpsDecay = document.getElementById("user-bps-decay");
+const bpsRiskOriginalEl = document.getElementById("bps-risk-original");
+const bpsRiskSubtractedEl = document.getElementById("bps-risk-subtracted");
+const bpsRiskNewEl = document.getElementById("bps-risk-new");
+const bpsRiskExpiresEl = document.getElementById("bps-risk-expires");
 const logoutBtn = document.getElementById("logout-btn");
 const openAdminBtn = document.getElementById("open-admin");
 const themeToggleBtn = document.getElementById("theme-toggle-btn");
@@ -259,6 +265,56 @@ function formatCountdown(targetDate, now = new Date()) {
 
     const label = parts.join(" ") || "0m";
     return isOverdue ? `Overdue by ${label}` : `Due in ${label}`;
+}
+
+function maybeSyncBpsDecayState(userRef, data) {
+    const balance = Number(data?.bpsBalance || 0);
+    const now = new Date();
+    const expiryDate = data?.bpsExpiryAt ? new Date(data.bpsExpiryAt) : null;
+    const hasValidExpiry = expiryDate && !Number.isNaN(expiryDate.getTime());
+
+    if (balance <= 0) {
+        if (data?.bpsExpiryAt || data?.bpsDecayStartedAt) {
+            currentDashboardData = {
+                ...currentDashboardData,
+                bpsExpiryAt: null,
+                bpsDecayStartedAt: null
+            };
+            return updateDoc(userRef, { bpsExpiryAt: null, bpsDecayStartedAt: null });
+        }
+        return Promise.resolve();
+    }
+
+    if (!hasValidExpiry) {
+        const nextExpiry = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)).toISOString();
+        const startedAt = now.toISOString();
+        currentDashboardData = {
+            ...currentDashboardData,
+            bpsExpiryAt: nextExpiry,
+            bpsDecayStartedAt: startedAt
+        };
+        return updateDoc(userRef, { bpsExpiryAt: nextExpiry, bpsDecayStartedAt: startedAt });
+    }
+
+    if (expiryDate > now) return Promise.resolve();
+
+    const decayAmount = Math.min(10, balance);
+    const nextBalance = Math.max(0, balance - decayAmount);
+    const nextExpiry = nextBalance > 0 ? new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)).toISOString() : null;
+    const decayStartedAt = nextBalance > 0 ? now.toISOString() : null;
+
+    currentDashboardData = {
+        ...currentDashboardData,
+        bpsBalance: nextBalance,
+        bpsExpiryAt: nextExpiry,
+        bpsDecayStartedAt: decayStartedAt
+    };
+
+    return updateDoc(userRef, {
+        bpsBalance: increment(-decayAmount),
+        bpsExpiryAt: nextExpiry,
+        bpsDecayStartedAt: decayStartedAt
+    });
 }
 
 function buildDebtPaymentModalHtml(preview) {
@@ -485,6 +541,8 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!snap.exists()) return;
     currentDashboardData = snap.data();
+
+    await maybeSyncBpsDecayState(userRef, currentDashboardData);
 
     if (!billingCheckedOnce) {
         await checkMembershipBilling(user.uid, currentDashboardData);
@@ -931,6 +989,28 @@ function updateDashboardUI(user, dynamicRate) {
 
   if(document.getElementById("user-bps")) {
       document.getElementById("user-bps").textContent = bpsBalance.toLocaleString();
+  }
+
+    const bpsDecayInfo = getBpsDecayInfo(data);
+    const bpsOriginalBalance = Number(data.bpsBalance || 0);
+    const bpsAtRisk = bpsDecayInfo.isActive ? bpsDecayInfo.decayAmount : 0;
+    const bpsProjectedBalance = Math.max(0, bpsOriginalBalance - bpsAtRisk);
+
+  if (bpsRiskOriginalEl) bpsRiskOriginalEl.textContent = `${bpsOriginalBalance.toLocaleString()} BPS`;
+  if (bpsRiskSubtractedEl) bpsRiskSubtractedEl.textContent = `${bpsAtRisk.toLocaleString()} BPS`;
+  if (bpsRiskNewEl) bpsRiskNewEl.textContent = `${bpsProjectedBalance.toLocaleString()} BPS`;
+  if (bpsRiskExpiresEl) bpsRiskExpiresEl.textContent = bpsDecayInfo.isActive ? bpsDecayInfo.expiresLabel : "Inactive";
+
+  if (userBpsDecay) {
+      if (bpsDecayInfo.isActive) {
+          userBpsDecay.innerHTML = `⚠ ${bpsAtRisk} BPS at risk`;
+          userBpsDecay.style.background = bpsDecayInfo.isOverdue ? "rgba(231, 76, 60, 0.14)" : "rgba(241, 196, 15, 0.12)";
+          userBpsDecay.style.color = bpsDecayInfo.isOverdue ? "#ff9b9b" : "#f1c40f";
+      } else {
+          userBpsDecay.innerHTML = `<span style="color:#888;">Inactive</span>`;
+          userBpsDecay.style.background = "rgba(255,255,255,0.04)";
+          userBpsDecay.style.color = "#888";
+      }
   }
 
   const expirationDate = data.expirationDate ? new Date(data.expirationDate) : null;

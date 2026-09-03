@@ -8,6 +8,7 @@ import {
 import { updateBalanceDisplay } from "../main.js";
 import { logHistory } from "../historyManager.js";
 import { sendSlackMessage } from "../slackNotifier.js";
+import { buildBpsBalanceUpdate } from "../expirationUtils.js";
 
 // --- Import Hub Sub-Modules ---
 import { initRequests } from "../requests.js";
@@ -140,7 +141,7 @@ async function handleTransfer() {
 
         transaction.update(senderRef, {
           balance: increment(-amount),
-          bpsBalance: increment(-BPS_FEE)
+          ...buildBpsBalanceUpdate(freshSenderSnap.data(), -BPS_FEE, new Date())
         });
       } else {
         transaction.update(senderRef, { balance: increment(-amount) });
