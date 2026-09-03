@@ -8,9 +8,7 @@ import {
   getDoc,
   getDocs,
   increment,
-  limit,
   onSnapshot,
-  orderBy,
   query,
   runTransaction,
   updateDoc,
@@ -31,6 +29,10 @@ let choresUnsub = null;
 let usersUnsub = null;
 let choresCache = [];
 let usersCache = [];
+let choresLoaded = false;
+let choresLoadError = null;
+let choresCacheById = new Map();
+let choreRemovalTimers = new Map();
 
 function escapeHtml(value = "") {
   return String(value)
@@ -51,6 +53,18 @@ function formatDeadline(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "No deadline";
   return date.toLocaleString();
+}
+
+function getChoreSortTime(chore) {
+  const candidates = [chore.createdAt, chore.reviewedAt, chore.completedAt, chore.submittedAt, chore.acceptedAt, chore.pickedUpAt];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const date = new Date(candidate);
+    if (!Number.isNaN(date.getTime())) return date.getTime();
+  }
+
+  return 0;
 }
 
 function getChoreAssigneeName(chore) {
@@ -146,9 +160,19 @@ function renderChoreAdminManagement() {
     return;
   }
 
-  const manageableChores = [...choresCache].sort(
-    (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
-  );
+  if (!choresLoaded) {
+    manageEl.innerHTML = '<p style="color:#666; font-size:0.75rem; margin:0;">Loading chores...</p>';
+    return;
+  }
+
+  if (choresLoadError) {
+    manageEl.innerHTML = '<p style="color:#e74c3c; font-size:0.75rem; margin:0;">Unable to load chores right now.</p>';
+    return;
+  }
+
+  const manageableChores = [...choresCache]
+    .filter((chore) => !chore.dismissed)
+    .sort((a, b) => getChoreSortTime(b) - getChoreSortTime(a));
 
   manageEl.innerHTML = manageableChores.length
     ? manageableChores.map((chore) => {
@@ -164,15 +188,46 @@ function renderChoreAdminManagement() {
             <div style="font-size:0.75rem; color:#aaa;">Assigned to: ${chore.assignedTo ? escapeHtml(getUserNameByUid(chore.assignedTo)) : "Open for pickup"}</div>
             <div style="font-size:0.75rem; color:#aaa;">Reward: ${formatMoney(chore.reward)} • Deadline: ${formatDeadline(chore.deadline)}</div>
             <div class="chore-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
-              ${canReview ? `<button class="btn-primary" data-action="approve" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Approve</button>` : ""}
-              ${canReview ? `<button class="btn-danger" data-action="deny" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Deny</button>` : ""}
-              ${canDismiss ? `<button class="btn-secondary" data-action="dismiss" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Remove from Display</button>` : ""}
-              <button class="btn-danger" data-action="delete" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem; opacity:0.85;">🗑️ Delete</button>
+              ${canReview ? `<button type="button" class="btn-primary" data-action="approve" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Approve</button>` : ""}
+              ${canReview ? `<button type="button" class="btn-danger" data-action="deny" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Deny</button>` : ""}
+              ${canDismiss ? `<button type="button" class="btn-secondary" data-action="dismiss" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem;">Remove from Display</button>` : ""}
+              <button type="button" class="btn-danger" data-action="delete" data-id="${chore.id}" style="padding:6px 10px; font-size:0.7rem; opacity:0.85;">🗑️ Delete</button>
             </div>
           </div>
         `;
       }).join("")
     : '<p style="color:#666; font-size:0.75rem; margin:0;">No chores to manage.</p>';
+}
+
+function upsertChoreCache(choreData) {
+  if (!choreData?.id) return;
+
+  const existingTimer = choreRemovalTimers.get(choreData.id);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    choreRemovalTimers.delete(choreData.id);
+  }
+
+  choresCacheById.set(choreData.id, choreData);
+  choresCache = [...choresCacheById.values()];
+}
+
+function scheduleChoreRemoval(choreId) {
+  if (!choreId) return;
+
+  const existingTimer = choreRemovalTimers.get(choreId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  const timer = setTimeout(() => {
+    choresCacheById.delete(choreId);
+    choreRemovalTimers.delete(choreId);
+    choresCache = [...choresCacheById.values()];
+    renderChores();
+  }, 1500);
+
+  choreRemovalTimers.set(choreId, timer);
 }
 
 function renderChores() {
@@ -297,10 +352,10 @@ function renderChores() {
               <div>Assigned to: ${chore.assignedTo ? escapeHtml(getUserNameByUid(chore.assignedTo)) : "Open for pickup"}</div>
             </div>
             <div class="chore-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
-              ${canAccept ? `<button class="btn-primary" data-action="accept" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Accept</button>` : ""}
-              ${canDecline ? `<button class="btn-danger" data-action="decline" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Decline</button>` : ""}
-              ${canPickUp ? `<button class="btn-primary" data-action="pickup" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Pick Up</button>` : ""}
-              ${canDone ? `<button class="btn-primary" data-action="done" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Mark Done</button>` : ""}
+              ${canAccept ? `<button type="button" class="btn-primary" data-action="accept" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Accept</button>` : ""}
+              ${canDecline ? `<button type="button" class="btn-danger" data-action="decline" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Decline</button>` : ""}
+              ${canPickUp ? `<button type="button" class="btn-primary" data-action="pickup" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Pick Up</button>` : ""}
+              ${canDone ? `<button type="button" class="btn-primary" data-action="done" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Mark Done</button>` : ""}
               ${isMine && chore.status !== "completed" && chore.status !== "denied" ? `<span style="font-size:0.72rem; color:#888; align-self:center;">Created by you</span>` : ""}
             </div>
           </div>
@@ -365,6 +420,7 @@ async function createChore(event) {
 }
 
 async function handleChoreAction(event) {
+  event.preventDefault();
   const button = event.target.closest("button[data-action]");
   if (!button || !currentUser) return;
 
@@ -522,9 +578,29 @@ function initializeChoresUI() {
 
 function subscribeToChores() {
   if (choresUnsub) return;
-  const choresQuery = query(collection(db, "chores"), orderBy("createdAt", "desc"), limit(CHORES_QUERY_LIMIT));
+  const choresQuery = query(collection(db, "chores"));
   choresUnsub = onSnapshot(choresQuery, (snapshot) => {
-    choresCache = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    snapshot.docChanges().forEach((change) => {
+      const choreData = { id: change.doc.id, ...change.doc.data() };
+
+      if (change.type === "removed") {
+        scheduleChoreRemoval(change.doc.id);
+        return;
+      }
+
+      upsertChoreCache(choreData);
+    });
+
+    choresLoaded = true;
+    choresLoadError = null;
+    choresCache = [...choresCacheById.values()];
+    choresLoaded = true;
+    choresLoadError = null;
+    renderChores();
+  }, (error) => {
+    console.error("Failed to subscribe to chores:", error);
+    choresLoaded = true;
+    choresLoadError = error;
     renderChores();
   });
 }
@@ -544,6 +620,13 @@ onAuthStateChanged(auth, async (user) => {
     isAdmin = false;
     choresCache = [];
     usersCache = [];
+    choresLoaded = false;
+    choresLoadError = null;
+    choresCacheById.clear();
+    for (const timer of choreRemovalTimers.values()) {
+      clearTimeout(timer);
+    }
+    choreRemovalTimers.clear();
     renderChores();
     return;
   }
