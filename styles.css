@@ -789,6 +789,11 @@ body.dark-mode #login-screen input:focus {
     .history-type-pill { font-size: 0.55rem !important; padding: 2px 6px !important; }
     .history-tag-wrapper { align-self: flex-start; }
 
+    #tab-chores .chores-main-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+
     #history-date-filter, #history-end-date-filter {
         width: 100% !important;
         box-sizing: border-box !important;
