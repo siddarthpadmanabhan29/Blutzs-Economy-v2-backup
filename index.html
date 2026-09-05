@@ -196,19 +196,19 @@
 
             <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
                 <div>
-                    <span class="stat-label" style="display:block; margin-bottom:4px; color:#9ea7b3;">Original Balance</span>
-                    <strong id="bps-risk-original" style="font-size:1.2rem; color:#fff;">0 BPS</strong>
+                    <span class="stat-label" style="display:block; margin-bottom:4px; color:var(--text-muted);">Original Balance</span>
+                    <strong id="bps-risk-original" style="font-size:1.2rem; color:var(--text-main);">0 BPS</strong>
                 </div>
                 <div>
-                    <span class="stat-label" style="display:block; margin-bottom:4px; color:#9ea7b3;">At Risk</span>
+                    <span class="stat-label" style="display:block; margin-bottom:4px; color:var(--text-muted);">At Risk</span>
                     <strong id="bps-risk-subtracted" style="font-size:1.2rem; color:#f1c40f;">0 BPS</strong>
                 </div>
                 <div>
-                    <span class="stat-label" style="display:block; margin-bottom:4px; color:#9ea7b3;">Projected Balance</span>
+                    <span class="stat-label" style="display:block; margin-bottom:4px; color:var(--text-muted);">Projected Balance</span>
                     <strong id="bps-risk-new" style="font-size:1.2rem; color:#2ecc71;">0 BPS</strong>
                 </div>
                 <div>
-                    <span class="stat-label" style="display:block; margin-bottom:4px; color:#9ea7b3;">Expires In</span>
+                    <span class="stat-label" style="display:block; margin-bottom:4px; color:var(--text-muted);">Expires In</span>
                     <strong id="bps-risk-expires" style="font-size:1.05rem; color:#f1c40f;">Inactive</strong>
                 </div>
             </div>
@@ -253,21 +253,21 @@
         </div>
 
         <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.55fr); gap: 16px; align-items: start;">
-            <div style="background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px;">
+            <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
-                    <h4 style="margin: 0; color: #fff;">Open Debt Entries</h4>
-                    <span id="debt-loan-note" style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Loan balance counted in market debt</span>
+                    <h4 style="margin: 0; color: var(--text-main);">Open Debt Entries</h4>
+                    <span id="debt-loan-note" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Loan balance counted in market debt</span>
                 </div>
                 <div id="debt-list" style="display: grid; gap: 10px; max-height: 330px; overflow-y: auto; padding-right: 6px;">
-                    <p style="color: #666; font-style: italic; margin: 0;">No active debt entries.</p>
+                    <p style="color: var(--text-muted); font-style: italic; margin: 0;">No active debt entries.</p>
                 </div>
             </div>
 
-            <div style="background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px;">
+            <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px;">
                 <h4 style="margin: 0 0 10px 0; color: #f1c40f;">Pay Debt</h4>
-                <p style="margin: 0 0 12px 0; font-size: 0.78rem; color: #aaa; line-height: 1.5;">Judicial fines are paid first. Partial admin debt payments add a 5% fee, and overdue admin debt adds a 5% late fee. The amount you enter will be broken down before you confirm.</p>
-                <label style="display: block; font-size: 0.6rem; color: #888; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px;">Payment Amount</label>
-                <input id="debt-payment-amount" type="number" min="1" placeholder="Enter amount" style="width: 100%; height: 42px; background: #111; border: 1px solid #333; color: #fff; padding: 0 12px; border-radius: 8px; box-sizing: border-box; margin-bottom: 10px;">
+                <p style="margin: 0 0 12px 0; font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;">Judicial fines are paid first. Partial admin debt payments add a 5% fee, and overdue admin debt adds a 5% late fee. The amount you enter will be broken down before you confirm.</p>
+                <label style="display: block; font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px;">Payment Amount</label>
+                <input id="debt-payment-amount" type="number" min="1" placeholder="Enter amount" style="width: 100%; height: 42px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 0 12px; border-radius: 8px; box-sizing: border-box; margin-bottom: 10px;">
                 <div style="display: grid; gap: 8px;">
                     <button id="pay-debt-btn" class="btn-primary" style="width: 100%; height: 44px; background: #e67e22; color: #fff; border: none; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer;">Pay Entered Amount</button>
                     <button id="pay-full-debt-btn" class="btn-danger" style="width: 100%; height: 44px; background: #e74c3c; color: #fff; border: none; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer;">Pay Full Debt</button>
@@ -297,9 +297,9 @@
             </div>
 
             <div id="send-div" class="transfer-container">
-                <input id="transfer-to" placeholder="Target Username" autocomplete="off" style="width: 100%; max-width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: white;">
-                <input id="transfer-amount" type="number" placeholder="Amount" style="width: 100%; max-width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: white;">
-                <textarea id="transfer-memo" placeholder="Message (optional)" rows="3" style="width: 100%; max-width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: white; resize: vertical;"></textarea>
+                <input id="transfer-to" placeholder="Target Username" autocomplete="off" style="width: 100%; max-width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main);">
+                <input id="transfer-amount" type="number" placeholder="Amount" style="width: 100%; max-width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main);">
+                <textarea id="transfer-memo" placeholder="Message (optional)" rows="3" style="width: 100%; max-width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-main); resize: vertical;"></textarea>
                 
                 <div class="protection-toggle-container" style="margin: 15px 0; padding: 12px; background: rgba(0,0,0,0.03); border-radius: 10px; border: 1px solid rgba(0,0,0,0.05);">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -338,9 +338,9 @@
         </div>
 
         <div class="section-card" style="border-top: 4px solid #2ecc71; background: var(--card-bg); border-radius: 15px; padding: 20px;">
-    <h3 style="color: #fff; font-size: 1.25rem; margin-bottom: 20px; margin-top: 0;">Retirement Savings</h3>
+    <h3 style="color: var(--text-main); font-size: 1.25rem; margin-bottom: 20px; margin-top: 0;">Retirement Savings</h3>
 
-    <div style="background: rgba(255, 255, 255, 0.03); padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #f1c40f;">
+    <div style="background: var(--input-bg); padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #f1c40f;">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
             <span style="font-size: 0.9rem;">💰</span>
             <span style="font-size: 0.65rem; color: #888; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Lifetime Earnings</span>
@@ -349,41 +349,41 @@
     </div>
 
     <div style="margin-bottom: 20px; line-height: 1.6;">
-        <p style="margin: 0; color: #eee; font-size: 0.95rem;">Total Savings: <strong id="retirement-savings">$0</strong></p>
-        <p style="margin: 5px 0 0 0; color: #eee; font-size: 0.95rem;"> <strong id="retirement-interest" style="color: #3498db;">$0.00</strong></p>
-        <p style="margin: 5px 0 0 0; color: #aaa; font-size: 0.8rem;">Days until interest: <span id="retirement-days" style="color: #fff; font-weight: bold;">0</span></p>
+        <p style="margin: 0; color: var(--text-main); font-size: 0.95rem;">Total Savings: <strong id="retirement-savings">$0</strong></p>
+        <p style="margin: 5px 0 0 0; color: var(--text-main); font-size: 0.95rem;"> <strong id="retirement-interest" style="color: #3498db;">$0.00</strong></p>
+        <p style="margin: 5px 0 0 0; color: var(--text-muted); font-size: 0.8rem;">Days until interest: <span id="retirement-days" style="color: var(--text-main); font-weight: bold;">0</span></p>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 25px;">
         <div style="display: flex; flex-direction: column; gap: 5px;">
             <input type="number" id="retirement-deposit" placeholder="Deposit Amount" 
-                   style="width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid #444; color: white; padding: 10px; border-radius: 8px; outline: none;">
+                   style="width: 100%; box-sizing: border-box; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 8px; outline: none;">
             <button id="retirement-deposit-btn" class="btn-primary" style="width: 100%;">Deposit</button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 5px;">
             <input type="number" id="retirement-withdraw" placeholder="Withdraw Amount" 
-                   style="width: 100%; box-sizing: border-box; background: #ffffff; border: 1px solid #ddd; color: #333; padding: 10px; border-radius: 8px; outline: none;">
+                   style="width: 100%; box-sizing: border-box; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 8px; outline: none;">
             <button id="retirement-withdraw-btn" class="btn-secondary">Withdraw</button>
         </div>
     </div>
 
-    <div style="background: rgba(0, 0, 0, 0.25); border-radius: 12px; padding: 20px 10px 10px 10px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
+    <div style="background: var(--input-bg); border-radius: 12px; padding: 20px 10px 10px 10px; border: 1px solid var(--border-color); overflow: hidden;">
         <div class="retirement-chart-container" style="position: relative; width: 100%; height: 200px;">
             <canvas id="retirementChart"></canvas>
         </div>
     </div>
     
-    <p id="retirement-message" style="text-align: center; margin-top: 10px; font-size: 0.75rem; color: #888;"></p>
+    <p id="retirement-message" style="text-align: center; margin-top: 10px; font-size: 0.75rem; color: var(--text-muted);"></p>
 </div>
     </div>
 
     <section id="bps-converter-section" class="section-card hidden" style="border: 1px solid #d1bce3; background: var(--card-bg); border-radius: 15px; padding: 20px; margin-top: 20px;">
     
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid rgba(209, 188, 227, 0.1);">
-        <h3 style="color: #d1bce3; margin: 0; display: flex; align-items: center; gap: 10px;">
+        <h3 style="color: #8e44ad; margin: 0; display: flex; align-items: center; gap: 10px;">
             <span style="font-size: 1.2rem;">💱</span> BPS Exchange
         </h3>
-        <span style="font-size: 0.6rem; background: rgba(209, 188, 227, 0.1); color: #d1bce3; padding: 4px 10px; border-radius: 20px; font-weight: 800; text-transform: uppercase; border: 1px solid rgba(209, 188, 227, 0.2);">
+        <span style="font-size: 0.6rem; background: rgba(142, 68, 173, 0.08); color: #8e44ad; padding: 4px 10px; border-radius: 20px; font-weight: 800; text-transform: uppercase; border: 1px solid rgba(142, 68, 173, 0.2);">
             Member Exclusive
         </span>
     </div>
@@ -391,9 +391,9 @@
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; align-items: flex-end;">
         
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <div style="background: rgba(0, 0, 0, 0.2); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+            <div style="background: var(--input-bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color);">
                 <span class="stat-label" style="margin-bottom: 4px;">Exchange Rate</span>
-                <div style="font-size: 1.1rem; font-weight: 700; color: #eee;">
+                <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">
                     1 BPS = <span id="dynamic-bps-rate" style="color: #2ecc71;">$200</span>
                 </div>
             </div>
@@ -406,7 +406,7 @@
             <span class="stat-label" style="margin-bottom: 6px;">Amount to Convert</span>
             <div style="display: flex; gap: 8px;">
                 <input type="number" id="bps-convert-amount" placeholder="e.g. 10" 
-                       style="flex: 1; background: #111; border: 1px solid #333; color: #fff; padding: 12px; border-radius: 10px; outline: none; font-size: 0.9rem;">
+                       style="flex: 1; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 12px; border-radius: 10px; outline: none; font-size: 0.9rem;">
                 <button id="convert-bps-btn" class="btn-primary" 
                          style="background: #8e44ad; color: white; border: none; padding: 0 20px; border-radius: 10px; font-weight: 900; letter-spacing: 0.5px;">
                     CONVERT
@@ -415,8 +415,8 @@
         </div>
     </div>
 
-    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
-        <div style="font-size: 0.75rem; color: #888; font-weight: 600;">
+    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">
             Weekly Limit: <strong id="bps-weekly-remaining" style="color: #3498db;">--</strong> / <span style="color: #666;">-- BPS</span>
         </div>
         <p id="bps-converter-message" style="margin: 0; font-size: 0.8rem; font-weight: bold; min-height: 1.2em;"></p>
@@ -430,7 +430,7 @@
         </h3>
         <div style="background: rgba(230, 126, 34, 0.05); padding: 6px 14px; border-radius: 50px; border: 1px solid rgba(230, 126, 34, 0.2); box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
             <span style="font-size: 0.65rem; font-weight: 800; color: #888; text-transform: uppercase; letter-spacing: 1px;">Credit Score:</span>
-            <strong id="display-credit-score" style="color: #fff; margin-left: 5px; font-size: 0.9rem;">600</strong>
+            <strong id="display-credit-score" style="color: var(--text-main); margin-left: 5px; font-size: 0.9rem;">600</strong>
         </div>
     </div>
 
@@ -686,17 +686,17 @@
             </div>
         </div>
 
-        <div style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 12px; border: 1px solid #333;">
+        <div style="background: var(--input-bg); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h4 style="margin: 0; color: #f1c40f; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">Calculated Premium</h4>
-                    <p style="margin: 3px 0 0 0; font-size: 0.65rem; color: #888;">Total monthly payment due in <span style="color: #eee;">30 days</span>.</p>
+                    <p style="margin: 3px 0 0 0; font-size: 0.65rem; color: var(--text-muted);">Total monthly payment due in <span style="color: var(--text-main);">30 days</span>.</p>
                     <p style="font-size: 0.65rem; color: #f1c40f; font-weight: bold; margin-top: 8px; background: rgba(241, 196, 15, 0.1); padding: 4px 10px; border-radius: 4px; display: inline-block;">
                         MASTER DEAL: Select all 9 modules for a flat $290k rate!
                     </p>
                 </div>
                 <div style="text-align: right;">
-                    <h3 id="insurance-total-cost" style="margin: 0; font-size: 2rem; color: #fff; font-weight: 900;">$0</h3>
+                    <h3 id="insurance-total-cost" style="margin: 0; font-size: 2rem; color: var(--text-main); font-weight: 900;">$0</h3>
                 </div>
             </div>
             
@@ -719,10 +719,10 @@
                 </div>
                 <div class="section-card">
                     <h3 style="color: #2ecc71;">💚 Subscription Shop</h3>
-                    <p style="font-size: 0.85rem; color: #aaa; margin: 0 0 15px 0;">Subscribe to recurring services. You can cancel anytime!</p>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 15px 0;">Subscribe to recurring services. You can cancel anytime!</p>
                     <div id="subscription-shop-items" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;"></div>
                     
-                    <div style="background: rgba(46, 204, 113, 0.1); border: 1px solid #2ecc71; border-radius: 12px; padding: 15px; margin-top: 20px;">
+                    <div style="background: var(--input-bg); border: 1px solid #2ecc71; border-radius: 12px; padding: 15px; margin-top: 20px;">
                         <h4 style="color: #2ecc71; margin: 0 0 10px 0;">Your Active Subscriptions</h4>
                         <div id="user-subscriptions" style="display: grid; gap: 10px;"></div>
                     </div>
@@ -768,7 +768,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
                         <div>
                             <h3 style="color: #8e44ad; margin: 0;">🎮 Games</h3>
-                            <p style="font-size: 0.85rem; color: #aaa; margin: 6px 0 0 0;">Daily login streaks unlock rewards every day. Confirm once per day to keep the streak alive.</p>
+                            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 6px 0 0 0;">Daily login streaks unlock rewards every day. Confirm once per day to keep the streak alive.</p>
                         </div>
                         <span style="background: rgba(142, 68, 173, 0.08); color: #8e44ad; border: 1px solid rgba(142, 68, 173, 0.2); border-radius: 999px; padding: 6px 10px; font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Current Streak: <strong id="games-streak-display">Day 1</strong></span>
                     </div>
@@ -778,7 +778,7 @@
                                 <div style="display: flex; justify-content: space-between; gap: 20px; align-items: center;">
                                     <div>
                                         <div style="font-size: 0.65rem; color: #a29bfe; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Today</div>
-                                        <div id="games-day-card" style="font-size: 2rem; font-weight: 800; color: #fff; margin-top: 8px;">Day 1</div>
+                                        <div id="games-day-card" style="font-size: 2rem; font-weight: 800; color: var(--text-main); margin-top: 8px;">Day 1</div>
                                     </div>
                                     <div style="text-align: right;">
                                         <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800;">Prize</div>
@@ -787,35 +787,35 @@
                                 </div>
                             </div>
 
-                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px; margin-bottom: 16px;">
+                            <div style="background: var(--input-bg); border: 1px solid var(--border-color); padding: 16px; border-radius: 10px; margin-bottom: 16px;">
                                 <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 12px;">📅 Days Completed</div>
                                 <div id="games-day-tracker" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;">
-                                    <div class="games-day-item" data-day="1" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 1</div>
-                                    <div class="games-day-item" data-day="2" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 2</div>
-                                    <div class="games-day-item" data-day="3" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 3</div>
-                                    <div class="games-day-item" data-day="4" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 4</div>
-                                    <div class="games-day-item" data-day="5" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 5</div>
-                                    <div class="games-day-item" data-day="6" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 6</div>
-                                    <div class="games-day-item" data-day="7" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 7</div>
+                                    <div class="games-day-item" data-day="1" style="background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 1</div>
+                                    <div class="games-day-item" data-day="2" style="background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 2</div>
+                                    <div class="games-day-item" data-day="3" style="background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 3</div>
+                                    <div class="games-day-item" data-day="4" style="background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 4</div>
+                                    <div class="games-day-item" data-day="5" style="background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 5</div>
+                                    <div class="games-day-item" data-day="6" style="background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 6</div>
+                                    <div class="games-day-item" data-day="7" style="background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px; border-radius: 6px; text-align: center; font-size: 0.8rem; font-weight: 700; cursor: default; transition: all 0.2s;">Day 7</div>
                                 </div>
                             </div>
 
                             <div style="display: grid; gap: 12px; margin-bottom: 18px;">
-                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px;">
+                                <div style="background: var(--input-bg); border: 1px solid var(--border-color); padding: 16px; border-radius: 10px;">
                                     <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">Status</div>
                                     <div id="games-status-msg" style="font-size: 0.95rem; color: #f1c40f; font-weight: 700; min-height: 1.2em;">Loading your daily login streak...</div>
                                 </div>
-                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px;">
+                                <div style="background: var(--input-bg); border: 1px solid var(--border-color); padding: 16px; border-radius: 10px;">
                                     <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">⏱️ Next Claim Available</div>
                                     <div id="games-timer" style="font-size: 0.9rem; color: #3498db; font-weight: 700; min-height: 1.2em;">Calculating...</div>
                                 </div>
-                                <div id="games-recovery-section" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px; display: block;">
+                                <div id="games-recovery-section" style="background: var(--input-bg); border: 1px solid var(--border-color); padding: 16px; border-radius: 10px; display: block;">
                                     <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">🔓 Purchase Recovery</div>
                                     <div id="games-recovery-cost" style="font-size: 0.9rem; color: #2ecc71; font-weight: 700;">Recovery available for $5,000 or 2 BPS.</div>
                                 </div>
-                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 10px;">
+                                <div style="background: var(--input-bg); border: 1px solid var(--border-color); padding: 16px; border-radius: 10px;">
                                     <div style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; margin-bottom: 8px;">Last Confirmed</div>
-                                    <div id="games-last-claim" style="font-size: 0.9rem; color: #aaa;">No confirmation yet.</div>
+                                    <div id="games-last-claim" style="font-size: 0.9rem; color: var(--text-muted);">No confirmation yet.</div>
                                 </div>
                             </div>
 
@@ -829,12 +829,12 @@
                             </div>
                         </div>
 
-                        <div class="section-card" style="margin: 0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                        <div class="section-card" style="margin: 0; background: var(--input-bg); border: 1px solid var(--border-color);">
                             <h4 style="margin: 0 0 12px 0; color: #8e44ad;">🎯 Reward Schedule</h4>
                             <div style="display: grid; gap: 8px; font-size: 0.9rem;">
                                 <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
                                     <span style="font-weight: 600;">Day 1</span>
-                                    <span style="color: #aaa; font-size: 0.85rem;">No prize</span>
+                                    <span style="color: var(--text-muted); font-size: 0.85rem;">No prize</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
                                     <span style="font-weight: 600;">Day 2</span>
@@ -842,7 +842,7 @@
                                 </div>
                                 <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
                                     <span style="font-weight: 600;">Day 3</span>
-                                    <span style="color: #aaa; font-size: 0.85rem;">No prize</span>
+                                    <span style="color: var(--text-muted); font-size: 0.85rem;">No prize</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
                                     <span style="font-weight: 600;">Day 4</span>
@@ -850,7 +850,7 @@
                                 </div>
                                 <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
                                     <span style="font-weight: 600;">Day 5</span>
-                                    <span style="color: #aaa; font-size: 0.85rem;">No prize</span>
+                                    <span style="color: var(--text-muted); font-size: 0.85rem;">No prize</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; padding: 10px; background: rgba(142, 68, 173, 0.08); border-radius: 6px;">
                                     <span style="font-weight: 600;">Day 6</span>
@@ -871,7 +871,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
             <div>
                 <h3 style="margin:0; color:#2ecc71;">🧹 Community Chores</h3>
-                <p style="margin: 6px 0 0 0; font-size:0.8rem; color:#aaa;">Admins create chores, users can pick them up or accept assigned work, and completed chores are reviewed before payment is released.</p>
+                <p style="margin: 6px 0 0 0; font-size:0.8rem; color:var(--text-muted);">Admins create chores, users can pick them up or accept assigned work, and completed chores are reviewed before payment is released.</p>
             </div>
             <span id="chores-status-badge" style="background: rgba(46,204,113,0.12); color:#2ecc71; border:1px solid rgba(46,204,113,0.2); padding:6px 12px; border-radius:999px; font-size:0.7rem; font-weight:800; text-transform:uppercase;">Loading</span>
         </div>
@@ -880,12 +880,12 @@
 
         <div class="chores-main-grid" style="display:grid; grid-template-columns: 1.4fr 0.8fr; gap:20px; align-items:start;">
             <div class="chores-panel">
-                <h4 style="margin:0 0 10px 0; color:#fff;">📋 Available Chores</h4>
+                <h4 style="margin:0 0 10px 0; color:var(--text-main);">📋 Available Chores</h4>
                 <div id="chores-list" style="display:flex; flex-direction:column; gap:8px;"></div>
             </div>
             <div class="chores-panel">
                 <h4 style="margin:0 0 10px 0; color:#f1c40f;">🏆 Chore Leaderboard</h4>
-                <div id="chores-leaderboard" style="background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px;"></div>
+                <div id="chores-leaderboard" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:12px; padding:12px;"></div>
                 <h4 style="margin:16px 0 10px 0; color:#3498db;">📝 Pending Review</h4>
                 <div id="chores-admin-review-list" style="display:flex; flex-direction:column; gap:8px;"></div>
             </div>
@@ -904,24 +904,24 @@
             <button id="clear-history-filters" class="btn-primary" style="height: 34px; padding: 0 15px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; border-radius: 8px;">Reset Filters</button>
         </div>
 
-        <div class="history-controls" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; background: rgba(0, 0, 0, 0.15); padding: 15px; border-radius: 12px; border: 1px solid var(--contract-border); margin-bottom: 20px;">
+        <div class="history-controls" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; background: var(--input-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--contract-border); margin-bottom: 20px;">
             
             <div style="display: flex; gap: 10px;">
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
-                    <label style="font-size: 0.6rem; font-weight: 900; color: #666; text-transform: uppercase; letter-spacing: 1px;">From</label>
-                    <input type="date" id="history-date-filter" style="background: #111; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 8px; font-size: 0.85rem; height: 40px; outline: none;">
+                    <label style="font-size: 0.6rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">From</label>
+                    <input type="date" id="history-date-filter" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 8px; border-radius: 8px; font-size: 0.85rem; height: 40px; outline: none;">
                 </div>
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
-                    <label style="font-size: 0.6rem; font-weight: 900; color: #666; text-transform: uppercase; letter-spacing: 1px;">To</label>
-                    <input type="date" id="history-end-date-filter" style="background: #111; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 8px; font-size: 0.85rem; height: 40px; outline: none;">
+                    <label style="font-size: 0.6rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">To</label>
+                    <input type="date" id="history-end-date-filter" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 8px; border-radius: 8px; font-size: 0.85rem; height: 40px; outline: none;">
                 </div>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 5px;">
-                <label style="font-size: 0.6rem; font-weight: 900; color: #666; text-transform: uppercase; letter-spacing: 1px;">Search Activity</label>
+                <label style="font-size: 0.6rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">Search Activity</label>
                 <div style="position: relative;">
                     <input type="text" id="history-search-filter" placeholder="e.g. 'Shop', 'Salary', 'Lottery'..." 
-                           style="background: #111; border: 1px solid #333; color: #fff; padding: 0 15px; border-radius: 8px; font-size: 0.85rem; height: 40px; width: 100%; box-sizing: border-box; outline: none;">
+                           style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 0 15px; border-radius: 8px; font-size: 0.85rem; height: 40px; width: 100%; box-sizing: border-box; outline: none;">
                 </div>
             </div>
         </div>
@@ -1667,11 +1667,11 @@
     </div>
 
     <div id="bps-pin-modal" class="hidden" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center;">
-        <div style="background:#1a1a1a; padding:30px; border-radius:24px; border:2px solid #9b59b6; width:280px; text-align:center; box-shadow:0 0 30px rgba(155,89,182,0.3);">
+        <div style="background:var(--card-bg); padding:30px; border-radius:24px; border:2px solid #9b59b6; width:280px; text-align:center; box-shadow:0 0 30px rgba(155,89,182,0.3);">
             <h4 id="pin-modal-title" style="color:#9b59b6; margin: 0 0 5px 0; font-weight:800; text-transform:uppercase;">Security PIN</h4>
-            <p id="pin-modal-desc" style="color:gray; font-size:0.7rem; margin-bottom:20px; font-weight: 600;">Authorize Transaction</p>
+            <p id="pin-modal-desc" style="color:var(--text-muted); font-size:0.7rem; margin-bottom:20px; font-weight: 600;">Authorize Transaction</p>
             
-            <div id="pin-display" style="font-size:2.2rem; letter-spacing:10px; color:white; margin-bottom:30px; height:40px; font-family: monospace;">_ _ _ _</div>
+            <div id="pin-display" style="font-size:2.2rem; letter-spacing:10px; color:var(--text-main); margin-bottom:30px; height:40px; font-family: monospace;">_ _ _ _</div>
             
             <div class="keypad-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
                 <button class="key-btn" data-val="1">1</button>
@@ -1683,9 +1683,9 @@
                 <button class="key-btn" data-val="7">7</button>
                 <button class="key-btn" data-val="8">8</button>
                 <button class="key-btn" data-val="9">9</button>
-                <button class="key-btn" style="background:#e74c3c; font-size:0.7rem;" data-val="clear">CLR</button>
+                <button class="key-btn" style="background:#e74c3c; color:#fff; font-size:0.7rem;" data-val="clear">CLR</button>
                 <button class="key-btn" data-val="0">0</button>
-                <button id="close-pin-btn" class="key-btn" style="background:#444; font-size:0.7rem;">ESC</button>
+                <button id="close-pin-btn" class="key-btn" style="background:#444; color:#fff; font-size:0.7rem;">ESC</button>
             </div>
         </div>
     </div>
@@ -1712,9 +1712,9 @@
     </div>
     <style>
         .key-btn {
-            background: #2c2c2c;
-            border: none;
-            color: white;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
             padding: 18px 0;
             border-radius: 12px;
             font-size: 1.3rem;
@@ -1722,7 +1722,7 @@
             cursor: pointer;
             transition: 0.15s;
         }
-        .key-btn:active { transform: scale(0.9); background: #3d3d3d; }
+        .key-btn:active { transform: scale(0.9); background: var(--border-color); }
 
         /* ---------- Games / Daily Login: mobile responsiveness ---------- */
         @media (max-width: 900px) {

@@ -6,17 +6,21 @@
     --bg-light: #f3f7fa;
     --card-bg: #ffffff;
     --text-main: #2c3e50;
-    --sidebar-bg: #2c3e50;
-    --sidebar-text: #ffffff;
-    --sidebar-border: rgba(255, 255, 255, 0.1);
-    --sidebar-hover-bg: rgba(255, 255, 255, 0.1);
-    --nav-item-color: #bdc3c7;
-    --nav-hover-bg: rgba(255, 255, 255, 0.1);
+    --sidebar-bg: #ffffff;
+    --sidebar-text: #2c3e50;
+    --sidebar-border: rgba(44, 62, 80, 0.12);
+    --sidebar-hover-bg: rgba(52, 152, 219, 0.08);
+    --nav-item-color: #5f6f7f;
+    --nav-hover-bg: rgba(52, 152, 219, 0.08);
     --overlay-bg: rgba(0, 0, 0, 0.5);
     
     --contract-bg: #ffffff;
     --contract-text: #2c3e50;
     --contract-border: #dcdde1;
+    --text-color: var(--text-main);
+    --text-muted: #6c757d;
+    --input-bg: #f5f7fa;
+    --border-color: var(--contract-border);
     
     --hist-border: #ecf0f1;
     --hist-icon-bg: #f8f9fa;
@@ -38,6 +42,10 @@ body.dark-mode {
     --contract-bg: #121212; 
     --contract-text: #f5f6fa;
     --contract-border: #333;
+    --text-color: var(--text-main);
+    --text-muted: #aeb6bf;
+    --input-bg: #222;
+    --border-color: var(--contract-border);
     
     --hist-border: #222;
     --hist-icon-bg: #1a1a1a;
@@ -94,7 +102,7 @@ body.dark-mode {
     gap: 12px;
     transition: 0.2s;
     font-weight: 500;
-    color: #bdc3c7;
+    color: var(--nav-item-color);
 }
 
 .nav-item:hover {
@@ -111,6 +119,16 @@ body.dark-mode {
 .sidebar-footer {
     padding: 20px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body:not(.dark-mode) .sidebar-footer {
+    border-top-color: var(--sidebar-border);
+}
+
+body:not(.dark-mode) #wallet-security-status {
+    background: rgba(52, 152, 219, 0.08) !important;
+    border-color: rgba(52, 152, 219, 0.2) !important;
+    color: var(--text-main);
 }
 
 /* Main Content Area */
@@ -213,6 +231,16 @@ button {
 button:hover { background: #2980b9; }
 .btn-secondary { background: #6c757d; }
 .btn-danger { background: #dc3545; }
+
+.key-btn {
+    background: var(--input-bg);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    font-size: 1.2rem;
+    font-weight: 900;
+}
+
+.key-btn:hover { background: var(--border-color); }
 
 /* ---------- BALANCE FLASHES ---------- */
 @keyframes flash-gain { 0% { background: #2ecc71; color: #fff; } 100% { background: transparent; } }
@@ -376,6 +404,19 @@ body.dark-mode .package-option {
 
 .package-option.pending-add { border: 2px dashed #3498db !important; }
 .package-option.pending-remove { opacity: 0.5; filter: grayscale(1); border: 2px solid #e74c3c !important; }
+.package-option:not(.active-policy):not(.pending-add):not(.pending-remove),
+.package-option:not(.active-policy):not(.pending-add):not(.pending-remove):hover {
+    background: var(--input-bg) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-main) !important;
+}
+.package-option.active-policy,
+.package-option.pending-add,
+.package-option.pending-remove {
+    background: var(--input-bg) !important;
+}
+.package-option h5 { color: var(--text-main) !important; }
+.package-option p { color: var(--text-muted) !important; }
 
 .main-content {
     padding-left: calc(env(safe-area-inset-left) + 20px);
@@ -1054,8 +1095,8 @@ body.dark-mode .result-ball {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: rgba(255, 255, 255, 0.02);
-    color: #fff;
+    background: var(--input-bg);
+    color: var(--text-main);
     border: 2px solid #e67e22;
     border-radius: 10px;
     padding: 0 18px;
@@ -1066,14 +1107,14 @@ body.dark-mode .result-ball {
     transition: border-color 0.25s ease, box-shadow 0.25s ease;
     outline: none;
     -webkit-tap-highlight-color: transparent;
-    box-shadow: inset 0 0 15px rgba(0,0,0,0.3);
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.08);
 }
 
 .loan-select-trigger:focus,
 .loan-select-trigger:focus-visible,
 .loan-select-trigger:active {
     outline: none;
-    box-shadow: inset 0 0 15px rgba(0,0,0,0.3);
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.08);
 }
 
 .loan-select-trigger em {
@@ -1086,9 +1127,9 @@ body.dark-mode .result-ball {
 
 .loan-select-trigger:hover,
 .loan-select-trigger[aria-expanded="true"] {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--input-bg);
     border-color: #f1c40f;
-    box-shadow: inset 0 0 15px rgba(0,0,0,0.3), 0 0 15px rgba(241, 196, 15, 0.25);
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.08), 0 0 15px rgba(241, 196, 15, 0.25);
 }
 
 .loan-select-arrow {
@@ -1110,18 +1151,18 @@ body.dark-mode .result-ball {
     left: 0;
     right: 0;
     z-index: 30;
-    background: #161616;
+    background: var(--card-bg);
     border: 1px solid rgba(230, 126, 34, 0.35);
     border-radius: 12px;
     padding: 8px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.18), 0 0 0 1px var(--border-color);
     display: none;
     flex-direction: column;
     gap: 4px;
     max-height: 280px;
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: #e67e22 rgba(255,255,255,0.05);
+    scrollbar-color: #e67e22 var(--input-bg);
 }
 
 .loan-select-panel::-webkit-scrollbar {
@@ -1129,7 +1170,7 @@ body.dark-mode .result-ball {
 }
 
 .loan-select-panel::-webkit-scrollbar-track {
-    background: rgba(255,255,255,0.05);
+    background: var(--input-bg);
     border-radius: 8px;
     margin: 4px 0;
 }
@@ -1137,7 +1178,7 @@ body.dark-mode .result-ball {
 .loan-select-panel::-webkit-scrollbar-thumb {
     background: linear-gradient(180deg, #e67e22, #f1c40f);
     border-radius: 8px;
-    border: 2px solid #161616;
+    border: 2px solid var(--card-bg);
 }
 
 .loan-select-panel::-webkit-scrollbar-thumb:hover {
@@ -1161,7 +1202,7 @@ body.dark-mode .result-ball {
     padding: 12px 14px;
     border-radius: 8px;
     cursor: pointer;
-    color: #ddd;
+    color: var(--text-main);
     font-weight: 600;
     background: transparent;
     border: 1px solid transparent;
@@ -1177,7 +1218,7 @@ body.dark-mode .result-ball {
 .loan-select-option.selected {
     background: rgba(230, 126, 34, 0.18);
     border-color: #e67e22;
-    color: #fff;
+    color: var(--text-main);
 }
 
 .loan-select-option.selected .loan-opt-amount::before {
@@ -1261,7 +1302,7 @@ html {
 }
 
 .package-option:hover {
-    background: rgba(255, 255, 255, 0.05) !important;
+    background: var(--input-bg) !important;
     transform: translateY(-2px);
 }
 

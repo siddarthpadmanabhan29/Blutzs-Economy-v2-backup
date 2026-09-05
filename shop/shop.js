@@ -104,8 +104,8 @@ function renderShop(externalUserData = null) {
     
     // FIXED: Added missing colons (:) and semicolons (;) for position and overflow
     itemCard.style.cssText = `
-        background: #1a1a1a;
-        border: 1px solid #333;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
         border-radius: 16px;
         padding: 20px;
         display: flex;
@@ -113,7 +113,7 @@ function renderShop(externalUserData = null) {
         gap: 15px;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
         text-align: center;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.12);
         position: relative;
         overflow: hidden;
         ${outOfStock ? 'opacity: 0.6;' : ''}
@@ -187,7 +187,7 @@ function renderShop(externalUserData = null) {
     itemCard.innerHTML = `
         ${discountBadgeHTML}
         ${outOfStockBadgeHTML}
-        <div class="shop-item-image" style="width:100%; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.1);">
+        <div class="shop-item-image" style="width:100%; height:120px; border-radius:8px; overflow:hidden; background:var(--input-bg);">
           <img src="${item.image || 'https://via.placeholder.com/150?text=Item'}" alt="${item.name}" style="width:100%; height:100%; object-fit:cover;">
         </div>
         <div class="shop-item-info">

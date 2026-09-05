@@ -260,7 +260,7 @@ function renderSubscriptionShop() {
     const itemCard = document.createElement("div");
     itemCard.classList.add("subscription-item");
     itemCard.style.cssText = `
-      background: #1a1a1a;
+      background: var(--card-bg);
       border: 1px solid #2ecc71;
       border-radius: 16px;
       padding: 20px;
@@ -269,7 +269,7 @@ function renderSubscriptionShop() {
       gap: 15px;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
       text-align: center;
-      box-shadow: 0 4px 10px rgba(46, 204, 113, 0.1);
+      box-shadow: 0 4px 10px rgba(46, 204, 113, 0.12);
       position: relative;
       overflow: hidden;
     `;
@@ -278,13 +278,13 @@ function renderSubscriptionShop() {
     itemCard.onmouseleave = () => { itemCard.style.transform = "translateY(0)"; };
 
     itemCard.innerHTML = `
-      <div class="subscription-item-image" style="width:100%; height:120px; border-radius:8px; overflow:hidden; background:rgba(46, 204, 113, 0.1);">
+      <div class="subscription-item-image" style="width:100%; height:120px; border-radius:8px; overflow:hidden; background:var(--input-bg);">
         <img src="${item.image || 'https://via.placeholder.com/150?text=Sub'}" alt="${item.name}" style="width:100%; height:100%; object-fit:cover;">
       </div>
       <div class="subscription-item-info">
         <h4 style="margin:0; font-size: 0.95rem; color: #2ecc71;">${item.name}</h4>
-        <p style="margin: 5px 0; font-size: 0.8rem; color: #aaa;">${item.description || "Subscription service"}</p>
-        <div style="margin: 8px 0; font-size: 0.75rem; color: #888;">
+        <p style="margin: 5px 0; font-size: 0.8rem; color: var(--text-muted);">${item.description || "Subscription service"}</p>
+        <div style="margin: 8px 0; font-size: 0.75rem; color: var(--text-muted);">
           <div style="margin: 4px 0;">💚 ${renewalText}</div>
           <div style="margin: 4px 0; color: #f1c40f;">
             ${activeDiscount > 0 ? `<span style="text-decoration: line-through; opacity: 0.6;">$${originalCost.toLocaleString()}</span> ` : ''}
@@ -358,7 +358,7 @@ function renderUserSubscriptions() {
 
     const subscriptionCard = document.createElement("div");
     subscriptionCard.style.cssText = `
-      background: rgba(46, 204, 113, 0.1);
+      background: var(--input-bg);
       border: 1px solid #2ecc71;
       border-radius: 12px;
       padding: 15px;
@@ -371,10 +371,10 @@ function renderUserSubscriptions() {
     subscriptionCard.innerHTML = `
       <div style="flex: 1;">
         <h4 style="margin: 0 0 5px 0; color: #2ecc71;">${item.name}</h4>
-        <p style="margin: 0; font-size: 0.8rem; color: #aaa;">
+        <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">
           Cost: <span style="color: #f1c40f;">$${Number(item.cost).toLocaleString()}</span> every ${subscription.renewalInterval} ${subscription.renewalType}
         </p>
-        <p style="margin: 5px 0 0 0; font-size: 0.75rem; color: #888;">
+        <p style="margin: 5px 0 0 0; font-size: 0.75rem; color: var(--text-muted);">
             Next charge: ${nextBillingDate.toLocaleDateString()}${subscription.upcomingFree ? ' <span style="color: #f1c40f; font-weight:800;">(FREE)</span>' : ` (in ${daysUntilRenewal} days)`}
         </p>
         ${couponSectionHTML}
@@ -463,21 +463,21 @@ async function openCouponClipModal(subscriptionId) {
     `;
 
     modal.innerHTML = `
-      <div style="background: #1a1a1a; border: 2px solid #8e44ad; border-radius: 16px; padding: 25px; width: 90%; max-width: 420px;">
+      <div style="background: var(--card-bg); border: 2px solid #8e44ad; border-radius: 16px; padding: 25px; width: 90%; max-width: 420px;">
         <h3 style="color: #8e44ad; margin: 0 0 5px 0;">🎟️ Clip a Coupon</h3>
-        <p style="color: #888; font-size: 0.8rem; margin: 0 0 20px 0;">
+        <p style="color: var(--text-muted); font-size: 0.8rem; margin: 0 0 20px 0;">
           Select a coupon to lock to this subscription. Once clipped it cannot be undone or used elsewhere.
         </p>
         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
           ${coupons.map(c => `
             <button class="select-coupon-btn" data-inventory-id="${c.id}" data-discount="${c.discountValue}"
               style="background: rgba(142,68,173,0.1); border: 1px solid #8e44ad; border-radius: 8px;
-              padding: 12px 15px; color: #fff; cursor: pointer; text-align: left; font-size: 0.85rem; font-weight: bold;">
+              padding: 12px 15px; color: var(--text-main); cursor: pointer; text-align: left; font-size: 0.85rem; font-weight: bold;">
               🎟️ ${c.discountValue}% Off Coupon
             </button>
           `).join('')}
         </div>
-        <button id="close-clip-modal" style="width: 100%; background: #333; color: #fff; border: none;
+        <button id="close-clip-modal" style="width: 100%; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color);
           padding: 10px; border-radius: 8px; cursor: pointer; font-weight: bold;">
           Cancel
         </button>

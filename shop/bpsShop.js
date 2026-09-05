@@ -187,7 +187,7 @@ function renderBpsShop(externalUserData = null) {
 
         div.style.cssText = `
             background: ${cardBg};
-            border: 1px solid ${isGiftCard ? '#f1c40f' : (isLoanDiscount ? '#3a3a3a' : 'var(--contract-border)')};
+            border: 1px solid ${isGiftCard ? '#f1c40f' : 'var(--contract-border)'};
             border-radius: 14px;
             padding: 18px;
             display: flex;
@@ -212,12 +212,12 @@ function renderBpsShop(externalUserData = null) {
             div.onmouseleave = () => {
                 div.style.transform = "translateY(0)";
                 div.style.borderStyle = "solid";
-                div.style.borderColor = isGiftCard ? "#f1c40f" : (isLoanDiscount ? '#3a3a3a' : "var(--contract-border)");
+                div.style.borderColor = isGiftCard ? "#f1c40f" : "var(--contract-border)";
                 div.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
             };
         }
 
-        const priceColor = isGiftCard ? "#fff" : "#a29bfe";
+        const priceColor = isGiftCard ? "#fff" : "#6c5ce7";
         const itemBadge = isLoanDiscount
             ? `<span style="display: inline-block; font-size: 0.6rem; color: #8e44ad; font-weight: 900; text-transform: uppercase; margin-top: 4px; background: rgba(142, 68, 173, 0.12); padding: 2px 6px; border-radius: 4px;">Applies to one active loan</span>`
             : "";
@@ -225,7 +225,7 @@ function renderBpsShop(externalUserData = null) {
         const priceHTML = hasInsuranceDiscount 
             ? `
             <div style="margin: 10px 0;">
-                <span style="text-decoration: line-through; color: ${isGiftCard ? '#eee' : '#7f8c8d'}; font-size: 0.8rem; opacity: 0.8;">${item.cost} BPS</span>
+                <span style="text-decoration: line-through; color: ${isGiftCard ? '#eee' : 'var(--text-muted)'}; font-size: 0.8rem; opacity: 0.8;">${item.cost} BPS</span>
                 <div style="color: ${priceColor}; font-weight: 900; font-size: 1.3rem; letter-spacing: -0.5px;">${finalCost} <span style="font-size: 0.7rem; opacity: 0.8;">BPS</span></div>
                 <div style="display: inline-block; font-size: 0.6rem; color: #2ecc71; font-weight: 800; text-transform: uppercase; margin-top: 4px; background: rgba(255, 255, 255, 0.15); padding: 2px 6px; border-radius: 4px;">🛡️ Insurance -10%</div>
                 ${itemBadge}
@@ -238,7 +238,7 @@ function renderBpsShop(externalUserData = null) {
 
         div.innerHTML = `
             <div style="position: relative; z-index: 2;">
-            <h4 style="margin:0; font-size: 1rem; font-weight: 700; color: #fff; line-height: 1.2;">${isGiftCard ? '🎁 ' : ''}${item.name}</h4>
+            <h4 style="margin:0; font-size: 1rem; font-weight: 700; color: ${isGiftCard ? '#fff' : 'var(--text-main)'}; line-height: 1.2;">${isGiftCard ? '🎁 ' : ''}${item.name}</h4>
             ${priceHTML}
             </div>
             <button class="buy-bps-btn" data-id="${item.id}" data-cost="${finalCost}" ${isDisabled ? "disabled" : ""}

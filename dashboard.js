@@ -455,6 +455,7 @@ function applyTheme(theme) {
     if (themeToggleBtn) themeToggleBtn.textContent = "☀️";
   }
   localStorage.setItem("theme", theme);
+    if (currentDashboardData) renderSavings(currentDashboardData);
 }
 
 /* =========================================================
@@ -1130,14 +1131,14 @@ function renderDebtPanel(data, forceRefresh = false) {
 
     if (debtListEl) {
         if (entries.length === 0) {
-            debtListEl.innerHTML = `<p style="color: #666; font-style: italic; margin: 0;">No active debt entries.</p>`;
+            debtListEl.innerHTML = `<p style="color: var(--text-muted); font-style: italic; margin: 0;">No active debt entries.</p>`;
         } else {
             debtListEl.innerHTML = entries.map((entry) => `
-                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 14px; border-radius: 12px; display: grid; gap: 8px;">
+                <div style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 14px; border-radius: 12px; display: grid; gap: 8px;">
                     <div style="display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <div>
-                            <div style="font-size: 0.85rem; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: 0.6px;">${entry.title}</div>
-                            <div style="font-size: 0.72rem; color: #aaa; margin-top: 2px; line-height: 1.35;">
+                            <div style="font-size: 0.85rem; font-weight: 900; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.6px;">${entry.title}</div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; line-height: 1.35;">
                                 <span>${entry.reason || entry.meta}</span>
                                 ${entry.insuranceText ? `<span style="color:#d4af37; font-weight:900; text-transform:uppercase; letter-spacing:0.5px;"> · ${entry.insuranceText}</span>` : ``}
                             </div>
@@ -1161,11 +1162,11 @@ function renderDebtPanel(data, forceRefresh = false) {
                                         ? `<span style="background: rgba(231,76,60,0.12); color:#e74c3c; border:1px solid rgba(231,76,60,0.25); padding:4px 8px; border-radius:999px; font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.8px;">Appeal Denied</span>`
                                         : `<button type="button" onclick="window.requestFineAppeal()" style="background: rgba(241,196,15,0.15); color:#f1c40f; border:1px solid rgba(241,196,15,0.35); padding:6px 10px; border-radius:8px; font-size:0.65rem; font-weight:900; text-transform:uppercase; letter-spacing:1px; cursor:pointer;">Appeal Fine</button>`
                                 }
-                                ${entry.appealReason ? `<span style="font-size:0.65rem; color:#888;">Reason: ${escapeHtml(entry.appealReason)}</span>` : ``}
+                                ${entry.appealReason ? `<span style="font-size:0.65rem; color:var(--text-muted);">Reason: ${escapeHtml(entry.appealReason)}</span>` : ``}
                             </div>
                         `
                         : ``}
-                    <div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; color: #888;">
+                    <div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; color: var(--text-muted);">
                         <span>Status: ${entry.status}</span>
                                 <span>Due: ${entry.dueLabel}</span>
                     </div>

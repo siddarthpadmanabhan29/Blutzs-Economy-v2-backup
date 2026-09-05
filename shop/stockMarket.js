@@ -330,6 +330,10 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
     container.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
+    const styles = getComputedStyle(document.body);
+    const textMuted = styles.getPropertyValue('--text-muted').trim() || '#6c757d';
+    const isDarkMode = document.body.classList.contains('dark-mode');
+    const gridColor = isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(44,62,80,0.12)';
     const chartInstance = new Chart(ctx, {
       type: 'line',
       data: {
@@ -372,12 +376,12 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
         scales: {
           y: {
             beginAtZero: false,
-            grid: { color: 'rgba(255,255,255,0.05)' },
-            ticks: { color: '#aaa', callback: (val) => `$${val.toFixed(2)}` }
+            grid: { color: gridColor },
+            ticks: { color: textMuted, callback: (val) => `$${val.toFixed(2)}` }
           },
           x: {
             grid: { display: false },
-            ticks: { color: '#aaa', maxTicksLimit: 10 }
+            ticks: { color: textMuted, maxTicksLimit: 10 }
           }
         }
       }
@@ -406,44 +410,44 @@ function renderStockMarket() {
     const estimatedSellTax = livePrice * SELL_TAX_RATE;
 
     return `
-      <article class="stock-card" style="background: rgba(0,0,0,0.25); border: 1px solid ${delta >= 0 ? '#2ecc71' : '#e74c3c'}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+      <article class="stock-card" style="background: var(--card-bg); border: 1px solid ${delta >= 0 ? '#2ecc71' : '#e74c3c'}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
         <div style="display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap;">
           <div style="flex: 1; min-width: 200px;">
-            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1rem; word-break: break-word;">${company.name}</h4>
-            <p style="margin: 0; color: #aaa; font-size: 0.75rem; word-break: break-word;">${company.description || "Public company listed for investor trading."}</p>
+            <h4 style="margin: 0 0 4px 0; color: var(--text-main); font-size: 1rem; word-break: break-word;">${company.name}</h4>
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.75rem; word-break: break-word;">${company.description || "Public company listed for investor trading."}</p>
           </div>
           <span style="background: rgba(52,152,219,0.12); color: #3498db; border: 1px solid rgba(52,152,219,0.2); border-radius: 999px; padding: 4px 8px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; white-space: nowrap; flex-shrink: 0;">${ownerLabel}</span>
         </div>
 
-        <div class="stock-info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem; color: #ddd;">
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+        <div class="stock-info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem; color: var(--text-main);">
+          <div style="background: var(--input-bg); border-radius: 10px; padding: 10px; min-width: 0;">
             ${company.isBankrupt ? `Status<br><strong style="color: #e74c3c; font-size: 1rem;">Bankrupt</strong>` : `Live Price<br><strong style="color: #f1c40f; font-size: 1rem;">$${livePrice.toLocaleString()}</strong>`}
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div style="background: var(--input-bg); border-radius: 10px; padding: 10px; min-width: 0;">
             Market Change<br><strong style="color: ${changeClass}; font-size: 1rem;">${delta >= 0 ? '+' : ''}$${delta.toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</strong>
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div style="background: var(--input-bg); border-radius: 10px; padding: 10px; min-width: 0;">
             Shares Available<br><strong style="color: #2ecc71; font-size: 1rem;">${availableShares}</strong>
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div style="background: var(--input-bg); border-radius: 10px; padding: 10px; min-width: 0;">
             Dividend Yield<br><strong style="color: #8e44ad; font-size: 1rem;">${Number(company.dividendRate || 0)}%</strong>
-            <span style="display: block; font-size: 0.6rem; color: #888;">Paid weekly · 15% tax</span>
+            <span style="display: block; font-size: 0.6rem; color: var(--text-muted);">Paid weekly · 15% tax</span>
           </div>
         </div>
 
         <!-- CHART SECTION -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.05);">
+        <div style="background: var(--input-bg); border-radius: 10px; padding: 12px; border: 1px solid var(--border-color);">
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
-            <span style="color: #aaa; font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Performance</span>
+            <span style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Performance</span>
             <div class="chart-timeframe-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;">
               <button class="chart-btn chart-btn-daily" data-company-id="${company.id}" data-timeframe="daily" style="background: rgba(46,204,113,0.2); color: #2ecc71; border: 1px solid rgba(46,204,113,0.3); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">D</button>
-              <button class="chart-btn chart-btn-weekly" data-company-id="${company.id}" data-timeframe="weekly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">W</button>
-              <button class="chart-btn chart-btn-monthly" data-company-id="${company.id}" data-timeframe="monthly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">M</button>
-              <button class="chart-btn chart-btn-yearly" data-company-id="${company.id}" data-timeframe="yearly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">Y</button>
+              <button class="chart-btn chart-btn-weekly" data-company-id="${company.id}" data-timeframe="weekly" style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">W</button>
+              <button class="chart-btn chart-btn-monthly" data-company-id="${company.id}" data-timeframe="monthly" style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">M</button>
+              <button class="chart-btn chart-btn-yearly" data-company-id="${company.id}" data-timeframe="yearly" style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">Y</button>
             </div>
           </div>
           <div id="chart-container-${company.id}" style="position: relative; height: 200px; width: 100%;"></div>
-          <div id="chart-stats-${company.id}" class="chart-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; font-size: 0.7rem; color: #aaa;"></div>
+          <div id="chart-stats-${company.id}" class="chart-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; font-size: 0.7rem; color: var(--text-muted);"></div>
         </div>
 
         <div style="background: rgba(231,76,60,0.06); border: 1px solid rgba(231,76,60,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.7rem; color: #e74c3c; word-break: break-word;">
@@ -452,7 +456,7 @@ function renderStockMarket() {
 
         <div class="stock-action-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <input id="stock-qty-${company.id}" type="number" min="1" max="${availableShares}" value="1"
-            style="flex: 1; min-width: 70px; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; box-sizing: border-box;" />
+            style="flex: 1; min-width: 70px; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; box-sizing: border-box;" />
           <button class="stock-buy-btn" data-company-id="${company.id}" data-price="${livePrice}"
             ${company.isBankrupt ? 'data-blocked-reason="bankrupt"' : (livePrice < MIN_BUY_PRICE ? 'data-blocked-reason="price"' : '')}
             ${company.isBankrupt ? 'disabled' : ''}
@@ -505,27 +509,27 @@ function renderPortfolio() {
     const gainLoss = currentValue - totalInvested;
 
     return `
-      <article class="portfolio-card" style="background: rgba(46,204,113,0.08); border: 1px solid ${positive ? '#2ecc71' : '#e74c3c'}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+      <article class="portfolio-card" style="background: var(--input-bg); border: 1px solid ${positive ? '#2ecc71' : '#e74c3c'}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
           <div style="flex: 1; min-width: 150px;">
-            <h4 style="margin: 0; color: #fff; font-size: 0.95rem; word-break: break-word;">${company.name || item.companyId} ${company.isBankrupt ? '<span style="color:#e74c3c; font-weight:800; font-size:0.8rem; margin-left:8px;">(Bankrupt)</span>' : ''}</h4>
-            <p style="margin: 2px 0 0 0; color: #aaa; font-size: 0.72rem; word-break: break-word;">${sharesOwned} share(s) @ avg $${avgCost.toLocaleString()} each</p>
+            <h4 style="margin: 0; color: var(--text-main); font-size: 0.95rem; word-break: break-word;">${company.name || item.companyId} ${company.isBankrupt ? '<span style="color:#e74c3c; font-weight:800; font-size:0.8rem; margin-left:8px;">(Bankrupt)</span>' : ''}</h4>
+            <p style="margin: 2px 0 0 0; color: var(--text-muted); font-size: 0.72rem; word-break: break-word;">${sharesOwned} share(s) @ avg $${avgCost.toLocaleString()} each</p>
           </div>
           <span style="color: ${positive ? '#2ecc71' : '#e74c3c'}; font-size: 0.75rem; font-weight: 800; white-space: nowrap; flex-shrink: 0;">
             ${positive ? '+' : ''}$${profit.toLocaleString()} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)
           </span>
         </div>
 
-        <div style="font-size: 0.75rem; color: #ddd; display: grid; gap: 6px; word-break: break-word;">
+        <div style="font-size: 0.75rem; color: var(--text-main); display: grid; gap: 6px; word-break: break-word;">
           <div>Initial investment: <strong style="color: #f1c40f;">$${totalInvested.toLocaleString()}</strong></div>
           <div>Current value: <strong style="color: #f1c40f;">$${currentValue.toLocaleString()}</strong></div>
           <div>Gain/Loss: <strong style="color: ${positive ? '#2ecc71' : '#e74c3c'};">${gainLoss >= 0 ? '+' : ''}$${gainLoss.toLocaleString()}</strong></div>
         </div>
 
         ${dividendRate > 0 ? `
-          <div style="background: rgba(142,68,173,0.08); border: 1px solid rgba(142,68,173,0.2); border-radius: 8px; padding: 8px 10px; font-size: 0.7rem; color: #ccc; word-break: break-word;">
+          <div style="background: var(--card-bg); border: 1px solid rgba(142,68,173,0.2); border-radius: 8px; padding: 8px 10px; font-size: 0.7rem; color: var(--text-muted); word-break: break-word;">
             💰 Next dividend: <strong style="color: #8e44ad;">$${estimatedDividendAfterTax.toFixed(2)}</strong> after 15% tax
-            <span style="color: #888; display: block; margin-top: 3px;">(in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'})</span>
+            <span style="color: var(--text-muted); display: block; margin-top: 3px;">(in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'})</span>
           </div>
         ` : ''}
       </article>
@@ -545,16 +549,16 @@ function updateChartStats(company, timeframe) {
     const stats = calculateChartStats(data);
     
     statsContainer.innerHTML = `
-      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-        Min: <strong style="color: #aaa;">$${stats.min}</strong>
+      <div style="padding: 8px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+        Min: <strong style="color: var(--text-muted);">$${stats.min}</strong>
       </div>
-      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-        Max: <strong style="color: #aaa;">$${stats.max}</strong>
+      <div style="padding: 8px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+        Max: <strong style="color: var(--text-muted);">$${stats.max}</strong>
       </div>
-      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-        Avg: <strong style="color: #aaa;">$${stats.avg}</strong>
+      <div style="padding: 8px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+        Avg: <strong style="color: var(--text-muted);">$${stats.avg}</strong>
       </div>
-      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      <div style="padding: 8px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
         Change: <strong style="color: ${stats.change >= 0 ? '#2ecc71' : '#e74c3c'};">${stats.change >= 0 ? '+' : ''}$${stats.change} (${stats.changePercent >= 0 ? '+' : ''}${stats.changePercent}%)</strong>
       </div>
     `;
@@ -579,9 +583,9 @@ function attachTradeButtons() {
         // Update active button styling
         const buttonGroup = btn.parentElement;
         buttonGroup.querySelectorAll(".chart-btn").forEach(b => {
-          b.style.background = "rgba(255,255,255,0.05)";
-          b.style.color = "#aaa";
-          b.style.borderColor = "rgba(255,255,255,0.1)";
+          b.style.background = "var(--input-bg)";
+          b.style.color = "var(--text-muted)";
+          b.style.borderColor = "var(--border-color)";
         });
         btn.style.background = "rgba(46,204,113,0.2)";
         btn.style.color = "#2ecc71";

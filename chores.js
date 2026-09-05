@@ -269,19 +269,19 @@ function renderChores() {
 
   statsEl.innerHTML = `
     <div style="display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
-      <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
+      <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
         <div style="font-size:0.65rem; color:#888; text-transform:uppercase; font-weight:800; letter-spacing:1px;">Completed</div>
         <div style="font-size:1.25rem; font-weight:800; color:#2ecc71; margin-top:4px;">${stats.completed}</div>
       </div>
-      <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
+      <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
         <div style="font-size:0.65rem; color:#888; text-transform:uppercase; font-weight:800; letter-spacing:1px;">Chore Points</div>
         <div style="font-size:1.25rem; font-weight:800; color:#f1c40f; margin-top:4px;">${stats.points}</div>
       </div>
-      <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
+      <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
         <div style="font-size:0.65rem; color:#888; text-transform:uppercase; font-weight:800; letter-spacing:1px;">Declines</div>
         <div style="font-size:1.25rem; font-weight:800; color:#e74c3c; margin-top:4px;">${stats.declines}</div>
       </div>
-      <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
+      <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
         <div style="font-size:0.65rem; color:#888; text-transform:uppercase; font-weight:800; letter-spacing:1px;">Pending Review</div>
         <div style="font-size:1.25rem; font-weight:800; color:#3498db; margin-top:4px;">${stats.pending}</div>
       </div>
@@ -296,8 +296,8 @@ function renderChores() {
     ? leaderboardRows.map((user, index) => `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
           <div>
-            <div style="font-weight:800; color:#fff;">#${index + 1} ${escapeHtml(user.username || "Unknown")}</div>
-            <div style="font-size:0.75rem; color:#888;">${Number(user.choresCompleted || 0)} chores • ${Number(user.chorePoints || 0)} points</div>
+            <div style="font-weight:800; color:var(--text-main);">#${index + 1} ${escapeHtml(user.username || "Unknown")}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">${Number(user.choresCompleted || 0)} chores • ${Number(user.chorePoints || 0)} points</div>
           </div>
           <div style="font-weight:800; color:#f1c40f;">${Number(user.chorePoints || 0)} pts</div>
         </div>
@@ -307,14 +307,14 @@ function renderChores() {
   if (adminReviewEl) {
     adminReviewEl.innerHTML = pendingReview.length
       ? pendingReview.map((chore) => `
-          <div class="chore-card chore-card--compact" style="background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+          <div class="chore-card chore-card--compact" style="background: var(--input-bg); border:1px solid var(--border-color); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px;">
             <div class="chore-title-row" style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
-              <strong style="color:#fff;">${escapeHtml(chore.title)}</strong>
+              <strong style="color:var(--text-main);">${escapeHtml(chore.title)}</strong>
               <span style="font-size:0.7rem; text-transform:uppercase; color:#f1c40f; font-weight:800;">${getStatusLabel(chore.status)}</span>
             </div>
-            <div style="font-size:0.8rem; color:#aaa;">Assigned to: ${escapeHtml(getUserNameByUid(chore.assignedTo))}</div>
-            <div style="font-size:0.8rem; color:#aaa;">Reward: ${formatMoney(chore.reward)} • Deadline: ${formatDeadline(chore.deadline)}</div>
-            <span style="font-size:0.72rem; color:#888;">Awaiting admin review</span>
+            <div style="font-size:0.8rem; color:var(--text-muted);">Assigned to: ${escapeHtml(getUserNameByUid(chore.assignedTo))}</div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">Reward: ${formatMoney(chore.reward)} • Deadline: ${formatDeadline(chore.deadline)}</div>
+            <span style="font-size:0.72rem; color:var(--text-muted);">Awaiting admin review</span>
           </div>
         `).join("")
       : '<p style="color:#666; font-size:0.8rem; margin:0;">No chores awaiting review.</p>';
@@ -337,15 +337,15 @@ function renderChores() {
         const canDone = isAssignedToMe && chore.status === "in_progress";
 
         return `
-          <div class="chore-card" style="background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+          <div class="chore-card" style="background: var(--input-bg); border:1px solid var(--border-color); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
             <div class="chore-title-row" style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:center;">
               <div>
-                <div style="font-weight:800; color:#fff;">${escapeHtml(chore.title)}</div>
-                <div class="chore-subtitle" style="font-size:0.75rem; color:#888; margin-top:2px;">${escapeHtml(chore.assignmentMode === "free" ? "Free pick up" : "Assigned chore")}</div>
+                <div style="font-weight:800; color:var(--text-main);">${escapeHtml(chore.title)}</div>
+                <div class="chore-subtitle" style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${escapeHtml(chore.assignmentMode === "free" ? "Free pick up" : "Assigned chore")}</div>
               </div>
               <span style="font-size:0.7rem; text-transform:uppercase; color:#f1c40f; font-weight:800;">${getStatusLabel(chore.status)}</span>
             </div>
-            <div class="chore-meta-grid" style="display:grid; gap:6px; font-size:0.82rem; color:#aaa;">
+            <div class="chore-meta-grid" style="display:grid; gap:6px; font-size:0.82rem; color:var(--text-muted);">
               <div>Reward: ${formatMoney(chore.reward)}</div>
               <div>Deadline: ${formatDeadline(chore.deadline)}</div>
               <div>Owner: ${escapeHtml(getUserNameByUid(chore.createdBy) || "Admin")}</div>
@@ -356,7 +356,7 @@ function renderChores() {
               ${canDecline ? `<button type="button" class="btn-danger" data-action="decline" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Decline</button>` : ""}
               ${canPickUp ? `<button type="button" class="btn-primary" data-action="pickup" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Pick Up</button>` : ""}
               ${canDone ? `<button type="button" class="btn-primary" data-action="done" data-id="${chore.id}" style="padding:8px 12px; font-size:0.75rem;">Mark Done</button>` : ""}
-              ${isMine && chore.status !== "completed" && chore.status !== "denied" ? `<span style="font-size:0.72rem; color:#888; align-self:center;">Created by you</span>` : ""}
+              ${isMine && chore.status !== "completed" && chore.status !== "denied" ? `<span style="font-size:0.72rem; color:var(--text-muted); align-self:center;">Created by you</span>` : ""}
             </div>
           </div>
         `;

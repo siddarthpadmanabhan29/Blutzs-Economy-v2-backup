@@ -85,7 +85,7 @@ export function initInsurance(userData) {
                 activeCount++;
                 btn.style.cssText = `
                     border: 2px solid #3498db;
-                    background: rgba(52, 152, 219, 0.12);
+                    background: var(--input-bg);
                     box-shadow: 0 0 12px rgba(52, 152, 219, 0.2);
                     opacity: 1; filter: none; text-decoration: none;
                 `;
@@ -95,7 +95,7 @@ export function initInsurance(userData) {
                 pendingRemoveCount++;
                 btn.style.cssText = `
                     border: 2px dashed #e74c3c;
-                    background: rgba(231, 76, 60, 0.05);
+                    background: var(--input-bg);
                     opacity: 0.5; filter: grayscale(1);
                     text-decoration: line-through; color: #e74c3c;
                 `;
@@ -105,7 +105,7 @@ export function initInsurance(userData) {
                 pendingAddCount++;
                 btn.style.cssText = `
                     border: 2px solid #2ecc71;
-                    background: rgba(46, 204, 113, 0.12);
+                    background: var(--input-bg);
                     box-shadow: 0 0 15px rgba(46, 204, 113, 0.25);
                     opacity: 1; filter: none; text-decoration: none;
                 `;
@@ -113,8 +113,8 @@ export function initInsurance(userData) {
 
             } else {
                 btn.style.cssText = `
-                    border: 1px solid rgba(255,255,255,0.05);
-                    background: rgba(255,255,255,0.02);
+                    border: 1px solid var(--border-color);
+                    background: var(--input-bg);
                     opacity: 0.7; filter: none; text-decoration: none; color: inherit;
                 `;
             }
@@ -123,7 +123,7 @@ export function initInsurance(userData) {
         const total = calculateTotal(stagingPackages.size);
         if (totalDisplay) {
             totalDisplay.textContent = `$${total.toLocaleString()}`;
-            totalDisplay.style.color = stagingPackages.size > 0 ? "#fff" : "#444";
+            totalDisplay.style.color = stagingPackages.size > 0 ? "var(--text-main)" : "var(--text-muted)";
         }
 
         const badgesHTML = `

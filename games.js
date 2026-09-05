@@ -149,9 +149,9 @@ function updateDayTracker(currentDay, lastClaimDate) {
   const dayItems = tracker.querySelectorAll(".games-day-item");
   dayItems.forEach((item) => {
     const day = Number(item.dataset.day);
-    item.style.background = day < currentDay ? "rgba(212, 175, 55, 0.3)" : "rgba(255,255,255,0.05)";
-    item.style.border = day < currentDay ? "2px solid #d4af37" : "1px solid rgba(255,255,255,0.1)";
-    item.style.color = day < currentDay ? "#d4af37" : "#fff";
+    item.style.background = day < currentDay ? "rgba(212, 175, 55, 0.3)" : "var(--input-bg)";
+    item.style.border = day < currentDay ? "2px solid #d4af37" : "1px solid var(--border-color)";
+    item.style.color = day < currentDay ? "#d4af37" : "var(--text-main)";
     item.style.textShadow = day < currentDay ? "0 0 8px rgba(212, 175, 55, 0.5)" : "none";
   });
 }

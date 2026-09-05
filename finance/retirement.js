@@ -151,6 +151,9 @@ function renderGrowthChart(currentSavings, interestRate) {
     const canvas = document.getElementById('retirementChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const styles = getComputedStyle(document.body);
+    const textMuted = styles.getPropertyValue('--text-muted').trim() || '#6c757d';
+    const borderColor = styles.getPropertyValue('--contract-border').trim() || '#dcdde1';
     
     const months = ["Now", "Mo 1", "Mo 2", "Mo 3", "Mo 4", "Mo 5", "Mo 6"];
     const dataPoints = [currentSavings];
@@ -179,7 +182,8 @@ function renderGrowthChart(currentSavings, interestRate) {
             responsive: true,
             plugins: { legend: { display: false } },
             scales: {
-                y: { ticks: { callback: (val) => '$' + Number(val).toLocaleString() } }
+                x: { ticks: { color: textMuted }, grid: { color: borderColor } },
+                y: { ticks: { color: textMuted, callback: (val) => '$' + Number(val).toLocaleString() }, grid: { color: borderColor } }
             }
         }
     });

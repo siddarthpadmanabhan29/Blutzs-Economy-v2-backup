@@ -2,6 +2,7 @@
 console.log("cosmetics.js loaded");
 
 import { db, auth } from "../firebaseConfig.js";
+import { renderSavings } from "../finance/retirement.js";
 import {
   doc, getDoc, updateDoc,
   collection, getDocs, addDoc
@@ -198,7 +199,7 @@ async function loadCosmetics(userData = null) {
         ${item.img ? `<img src="${item.img}" alt="${item.name}" style="width:100%; height:100%; border-radius:50%; object-fit: cover;">` : ""}
       </div>
       <div class="shop-item-info">
-        <h4 style="margin:0; font-size: 0.95rem; font-weight:700; color:#fff;">${item.name}</h4>
+        <h4 style="margin:0; font-size: 0.95rem; font-weight:700; color:var(--text-main);">${item.name}</h4>
         <div class="cosmetic-price" style="font-weight: 800; font-size: 0.85rem; margin: 8px 0; color: ${owned ? '#95a5a6' : '#2ecc71'};">
             ${owned ? 'OWNED' : `$${Number(item.price).toLocaleString()}`}
         </div>
@@ -267,6 +268,7 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
       document.body.classList.toggle("dark-mode", !isDark);
       document.body.classList.toggle("light-mode", isDark);
       localStorage.setItem("theme", newMode);
+      if (localUserData) renderSavings(localUserData);
       await updateDoc(userRef, { theme: newMode });
     }
 

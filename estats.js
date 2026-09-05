@@ -9,7 +9,7 @@ export async function renderStatsTeaser(userData) {
     // Market Insights is free for all users; no membership gate.
 
     // 2. LOADING STATE
-    statsTeaserUI.innerHTML = `<p style="font-size: 0.85rem; color: #555;">Syncing Intelligence...</p>`;
+    statsTeaserUI.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted);">Syncing Intelligence...</p>`;
 
     try {
         // 3. UNLOCKED STATE (Premium Intelligence)
@@ -31,8 +31,8 @@ export async function renderStatsTeaser(userData) {
         const supplyFormatted = (globalSupply / 1000000).toFixed(1);
 
         statsTeaserUI.innerHTML = `
-            <div style="margin-bottom: 15px; padding: 12px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
-                <span style="font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Resistance Pressure</span>
+            <div style="margin-bottom: 15px; padding: 12px; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--contract-border);">
+                <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Resistance Pressure</span>
                 <div style="font-size: 1.2rem; font-weight: 900; color: ${healthColor}; text-shadow: 0 0 10px ${healthColor}33;">
                     ${healthText}
                 </div>
