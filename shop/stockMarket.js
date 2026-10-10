@@ -8,8 +8,6 @@ import {
   getDoc,
   getDocs,
   query,
-  orderBy,
-  limit,
   where,
   runTransaction,
   increment,
@@ -20,7 +18,7 @@ import {
   addDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "../historyManager.js";
-import { logAdminAction } from "../admin/adminUtils.js";
+import { sendSlackMessage } from "../slackNotifier.js";
 
 const stockMarketList = document.getElementById("stock-market-list");
 const stockPortfolioList = document.getElementById("stock-portfolio-list");
@@ -31,135 +29,29 @@ let companyUnsubscribe = null;
 let portfolioUnsubscribe = null;
 let authUnsubscribe = null; // added
 
+export function getPortfolioSnapshot() {
+  return holdings.map((holding) => {
+    const company = companies.find((entry) => entry.id === holding.companyId);
+    const shares = Number(holding.shares || 0);
+    const averageCost = Number(holding.avgCost || 0);
+    const currentPrice = company ? getLivePrice(company) : null;
+    const costBasis = Number((shares * averageCost).toFixed(2));
+    const marketValue = currentPrice === null ? null : Number((shares * currentPrice).toFixed(2));
+
+    return {
+      ...holding,
+      companyName: company?.name || holding.companyName || holding.companyId,
+      currentPrice,
+      costBasis,
+      marketValue,
+      unrealizedGainLoss: marketValue === null ? null : Number((marketValue - costBasis).toFixed(2))
+    };
+  });
+}
+
 const SELL_TAX_RATE = 0.10;       // 10% tax on sell proceeds
 const DIVIDEND_TAX_RATE = 0.15;   // 15% tax on dividend payouts
 const DIVIDEND_INTERVAL_DAYS = 30; // Pay dividends every 30 days
-const MIN_STOCK_PRICE = 0; // allow exact zero so losses can reach -100%
-const MIN_BUY_PRICE = 100; // live price must be at least this much to allow buying
-const DAY_MS = 24 * 60 * 60 * 1000;
-const HOUR_MS = 60 * 60 * 1000;
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function getEstDate(value = new Date()) {
-  const now = new Date(value);
-  const estOffset = now.getTime() + (now.getTimezoneOffset() * 60000) - (5 * 3600000);
-  return new Date(estOffset);
-}
-
-function startOfEstDay(value = new Date()) {
-  const estDate = getEstDate(value);
-  estDate.setHours(0, 0, 0, 0);
-  return estDate;
-}
-
-function formatChartDate(value, includeTime = false) {
-  const date = getEstDate(value);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  if (!includeTime) {
-    return `${month}/${day}`;
-  }
-
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const suffix = hours >= 12 ? 'PM' : 'AM';
-  const displayHour = hours % 12 || 12;
-  return `${month}/${day} ${displayHour}:${minutes} ${suffix}`;
-}
-
-function formatMidnightDate(value) {
-  const date = getEstDate(value);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${month}/${day} 12:00 AM`;
-}
-
-function formatDateTimeLabel(value) {
-  const date = getEstDate(value);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const suffix = hours >= 12 ? 'PM' : 'AM';
-  const displayHour = hours % 12 || 12;
-  return `${month}/${day} ${displayHour}:${minutes} ${suffix}`;
-}
-
-function getSnapshotRangeForTimeframe(timeframe) {
-  const now = new Date();
-  const startToday = startOfEstDay(now);
-
-  switch (timeframe) {
-    case 'daily':
-      return { start: startToday, end: new Date(now) };
-    case 'weekly':
-      return { start: new Date(startToday.getTime() - (6 * DAY_MS)), end: new Date(now) };
-    case 'monthly':
-      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date(now) };
-    case 'yearly':
-      return { start: new Date(now.getFullYear() - 1, now.getMonth(), 1), end: new Date(now) };
-    default:
-      return { start: startToday, end: new Date(now) };
-  }
-}
-
-function isSameEstDay(left, right) {
-  return getEstDate(left).toDateString() === getEstDate(right).toDateString();
-}
-
-function isSameEstMonth(left, right) {
-  const leftDate = getEstDate(left);
-  const rightDate = getEstDate(right);
-  return leftDate.getFullYear() === rightDate.getFullYear() && leftDate.getMonth() === rightDate.getMonth();
-}
-
-function groupHistoryByDay(history) {
-  const grouped = new Map();
-
-  history.forEach((entry) => {
-    const entryDate = getEstDate(entry.timestamp);
-    const key = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key).push(entry);
-  });
-
-  return Array.from(grouped.values()).map((entries) => {
-    const sorted = [...entries].sort((left, right) => left.timestamp - right.timestamp);
-    const first = sorted[0];
-    const closing = sorted[sorted.length - 1]; // last snapshot of the day = closing price
-    return {
-      date: formatMidnightDate(first.timestamp),
-      price: Number(closing.price || 0),
-      timestamp: first.timestamp,
-      tooltipLabel: formatMidnightDate(first.timestamp),
-    };
-  }).sort((left, right) => left.timestamp - right.timestamp);
-}
-
-function groupHistoryByMonth(history) {
-  const grouped = new Map();
-
-  history.forEach((entry) => {
-    const entryDate = getEstDate(entry.timestamp);
-    const key = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key).push(entry);
-  });
-
-  return Array.from(grouped.entries()).map(([key, entries]) => {
-    const [year, month] = key.split('-').map(Number);
-    const sorted = [...entries].sort((left, right) => left.timestamp - right.timestamp);
-    const closing = sorted[sorted.length - 1]; // last snapshot of the month = closing price
-    const monthDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
-
-    return {
-      date: `${MONTH_NAMES[month - 1]} 12:00 AM`,
-      price: Number(closing.price || 0),
-      timestamp: monthDate.getTime(),
-      tooltipLabel: `${MONTH_NAMES[month - 1]} ${year} 12:00 AM`,
-    };
-  }).sort((left, right) => left.timestamp - right.timestamp);
-}
 
 // ==================== PRICE LOGIC ====================
 
@@ -167,7 +59,7 @@ function getLivePrice(company) {
   const base = Number(company.basePrice || 0);
   const trend = Number(company.marketTrend || 0) / 100;
   const live = base * (1 + trend);
-  return Math.max(MIN_STOCK_PRICE, Number(live.toFixed(2)));
+  return Math.max(1, Number(live.toFixed(2)));
 }
 
 function calculatePriceImpact(company, quantity, action) {
@@ -178,30 +70,13 @@ function calculatePriceImpact(company, quantity, action) {
   const impactPct = Math.min(tradeFraction, maxImpact);
   const direction = action === "buy" ? 1 : -1;
   const newBase = currentBase * (1 + direction * impactPct);
-  return Math.max(MIN_STOCK_PRICE, Number(newBase.toFixed(2)));
+  return Math.max(1, Number(newBase.toFixed(2)));
 }
 
 function formatDelta(price, base) {
   const delta = price - base;
   const pct = base > 0 ? (delta / base) * 100 : 0;
   return { delta, pct };
-}
-
-function syncCompanyState(companyId, updater) {
-  companies = companies.map((company) => {
-    if (company.id !== companyId) return company;
-    return updater(company);
-  });
-}
-
-function syncHoldingState(companyId, updater) {
-  holdings = holdings
-    .map((holding) => {
-      if (holding.companyId !== companyId) return holding;
-      const nextHolding = updater(holding);
-      return nextHolding;
-    })
-    .filter(Boolean);
 }
 
 // ==================== CHART & HISTORY ====================
@@ -220,17 +95,20 @@ export async function recordPriceSnapshot(companyId, price) {
   }
 }
 
+// Get all price history from Firestore for a company
 async function getPriceHistoryFromFirestore(companyId) {
   try {
     const historyRef = collection(db, "stockCompanies", companyId, "priceHistory");
-    const q = query(historyRef, orderBy("timestamp", "asc"), limit(500));
+    const q = query(historyRef);
     const snapshot = await getDocs(q);
 
     const history = [];
-    snapshot.forEach((docSnap) => {
-      history.push(docSnap.data());
+    snapshot.forEach((doc) => {
+      history.push(doc.data());
     });
 
+    // Sort by timestamp ascending
+    history.sort((a, b) => a.timestamp - b.timestamp);
     return history;
   } catch (err) {
     console.error("Failed to fetch price history:", err);
@@ -238,44 +116,58 @@ async function getPriceHistoryFromFirestore(companyId) {
   }
 }
 
+// Build a rolling period series; the final point always reflects the current live price.
 async function getHistoryByTimeframe(company, timeframe = 'daily') {
+  const now = Date.now();
+  const periodConfig = {
+    daily: { duration: 24 * 60 * 60 * 1000, bucket: 60 * 60 * 1000 },
+    weekly: { duration: 7 * 24 * 60 * 60 * 1000, bucket: 24 * 60 * 60 * 1000 },
+    monthly: { duration: 30 * 24 * 60 * 60 * 1000, bucket: 24 * 60 * 60 * 1000 },
+    yearly: { duration: null, bucket: null }
+  }[timeframe] || { duration: 24 * 60 * 60 * 1000, bucket: 60 * 60 * 1000 };
+  let start = now - periodConfig.duration;
+  if (timeframe === 'yearly') {
+    const firstMonth = new Date();
+    firstMonth.setDate(1);
+    firstMonth.setHours(0, 0, 0, 0);
+    firstMonth.setMonth(firstMonth.getMonth() - 11);
+    start = firstMonth.getTime();
+  }
   const history = await getPriceHistoryFromFirestore(company.id);
-  const now = new Date();
-  const range = getSnapshotRangeForTimeframe(timeframe);
+  const buckets = new Map();
 
-  const filtered = history.filter((entry) => {
-    const timestamp = new Date(entry.timestamp);
-    return timestamp >= range.start && timestamp <= range.end;
+  history.forEach((entry) => {
+    const timestamp = Number(entry.timestamp) || new Date(`${entry.date}T00:00:00`).getTime();
+    const price = Number(entry.price);
+    if (!Number.isFinite(timestamp) || timestamp < start || timestamp > now || !Number.isFinite(price)) return;
+
+    const bucketTimestamp = timeframe === 'yearly'
+      ? new Date(new Date(timestamp).getFullYear(), new Date(timestamp).getMonth(), 1).getTime()
+      : Math.floor(timestamp / periodConfig.bucket) * periodConfig.bucket;
+    const bucket = buckets.get(bucketTimestamp) || { sum: 0, count: 0 };
+    bucket.sum += price;
+    bucket.count += 1;
+    buckets.set(bucketTimestamp, bucket);
   });
 
-  switch (timeframe) {
-    case 'daily':
-      return filtered
-        .filter((entry) => isSameEstDay(entry.timestamp, now))
-        .map((entry) => ({
-          date: formatDateTimeLabel(entry.timestamp),
-          price: Number(entry.price || 0),
-          timestamp: entry.timestamp,
-          tooltipLabel: formatDateTimeLabel(entry.timestamp),
-        }));
+  const data = Array.from(buckets, ([timestamp, bucket]) => ({
+    timestamp,
+    price: Number((bucket.sum / bucket.count).toFixed(2))
+  })).sort((a, b) => a.timestamp - b.timestamp);
 
-    case 'weekly':
-      return filtered.map((entry) => ({
-        date: formatDateTimeLabel(entry.timestamp),
-        price: Number(entry.price || 0),
-        timestamp: entry.timestamp,
-        tooltipLabel: formatDateTimeLabel(entry.timestamp),
-      }));
+  data.push({ timestamp: now, price: getLivePrice(company), live: true });
+  return data;
+}
 
-    case 'monthly':
-      return groupHistoryByDay(filtered.filter((entry) => isSameEstMonth(entry.timestamp, now)));
-
-    case 'yearly':
-      return groupHistoryByMonth(filtered);
-
-    default:
-      return [];
+function formatChartTime(timestamp, timeframe) {
+  const date = new Date(timestamp);
+  if (timeframe === 'daily') {
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
+  if (timeframe === 'yearly') {
+    return date.toLocaleDateString([], { month: 'short', year: '2-digit' });
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function calculateChartStats(data) {
@@ -297,8 +189,6 @@ function calculateChartStats(data) {
   };
 }
 
-const chartInstancesByContainer = new Map();
-
 function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -307,87 +197,156 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
   (async () => {
     const data = await getHistoryByTimeframe(company, initialTimeframe);
     const stats = calculateChartStats(data);
-    const isPositive = stats.change >= 0;
-
-    const labels = data.map(d => d.date);
+    const labels = data.map(d => formatChartTime(d.timestamp, initialTimeframe));
     const prices = data.map(d => d.price);
-    const tooltipLabels = data.map(d => d.tooltipLabel || d.date);
+    const averagePrices = data.map(() => stats.avg);
 
     if (labels.length === 0) {
       container.innerHTML = '<p style="color: #888; text-align: center; padding: 20px; font-size: 0.75rem;">No price data yet. Check back after trading begins.</p>';
       return;
     }
 
-    // Destroy the chart instance previously attached to this container, if any
-    const existingChart = chartInstancesByContainer.get(containerId);
-    if (existingChart) {
-      existingChart.destroy();
-      chartInstancesByContainer.delete(containerId);
-    }
+    // Destroy the previous chart instance before replacing its canvas.
+    const existingCanvas = container.querySelector('canvas');
+    if (existingCanvas && Chart.getChart(existingCanvas)) Chart.getChart(existingCanvas).destroy();
 
     const canvas = document.createElement('canvas');
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.display = 'block';
     container.innerHTML = '';
     container.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
-    const styles = getComputedStyle(document.body);
-    const textMuted = styles.getPropertyValue('--text-muted').trim() || '#6c757d';
-    const isDarkMode = document.body.classList.contains('dark-mode');
-    const gridColor = isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(44,62,80,0.12)';
-    const chartInstance = new Chart(ctx, {
+    const slider = document.getElementById(`chart-slider-${company.id}`);
+    const selection = document.getElementById(`chart-selection-${company.id}`);
+    let selectedIndex = -1;
+    const chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: labels,
-        datasets: [{
-          label: `${company.name} Price`,
-          data: prices,
-          borderColor: isPositive ? '#2ecc71' : '#e74c3c',
-          backgroundColor: isPositive ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
-          borderWidth: 2,
-          fill: true,
-          tension: 0.4,
-          pointRadius: 3,
-          pointBackgroundColor: isPositive ? '#2ecc71' : '#e74c3c',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 1,
-          pointHoverRadius: 5,
-        }]
+        datasets: [
+          {
+            label: `${company.name} Price`,
+            data: prices,
+            borderColor: '#2ecc71',
+            segment: {
+              borderColor: (context) => context.p0.parsed.y >= stats.avg && context.p1.parsed.y >= stats.avg
+                ? '#2ecc71'
+                : '#e74c3c'
+            },
+            borderWidth: 2,
+            fill: false,
+            tension: 0.25,
+            pointRadius: data.map((point) => point.live ? 4 : 2),
+            pointBackgroundColor: data.map((point) => point.price >= stats.avg ? '#2ecc71' : '#e74c3c'),
+            pointBorderColor: '#fff',
+            pointBorderWidth: 1,
+            pointHoverRadius: 5,
+          },
+          {
+            label: `Period average ($${stats.avg.toFixed(2)})`,
+            data: averagePrices,
+            borderColor: '#f1c40f',
+            borderWidth: 1.5,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            fill: false,
+            tension: 0
+          }
+        ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            align: 'start',
+            labels: { color: '#aaa', usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 14 }
+          },
           tooltip: {
             backgroundColor: 'rgba(0,0,0,0.8)',
             titleColor: '#fff',
             bodyColor: '#ddd',
-            borderColor: isPositive ? '#2ecc71' : '#e74c3c',
+            borderColor: '#555',
             borderWidth: 1,
             padding: 8,
             displayColors: false,
             callbacks: {
-              title: (context) => tooltipLabels[context[0].dataIndex] || context[0].label,
-              label: (context) => `$${Number(context.parsed.y).toFixed(2)}`
+              label: (context) => `${context.datasetIndex === 1 ? 'Period average' : 'Price'}: $${Number(context.parsed.y).toFixed(2)}`
             }
           }
         },
         scales: {
           y: {
             beginAtZero: false,
-            grid: { color: gridColor },
-            ticks: { color: textMuted, callback: (val) => `$${val.toFixed(2)}` }
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: '#aaa', callback: (val) => `$${val.toFixed(2)}` }
           },
           x: {
             grid: { display: false },
-            ticks: { color: textMuted, maxTicksLimit: 10 }
+            ticks: { color: '#aaa', maxTicksLimit: 10, autoSkip: true }
           }
         }
-      }
+      },
+      plugins: [{
+        id: 'stockChartSelectionMarker',
+        afterDraw: (activeChart) => {
+          if (selectedIndex < 0) return;
+          const x = activeChart.scales.x.getPixelForValue(labels[selectedIndex], selectedIndex);
+          const { top, bottom } = activeChart.chartArea;
+          const markerContext = activeChart.ctx;
+          markerContext.save();
+          markerContext.beginPath();
+          markerContext.setLineDash([3, 4]);
+          markerContext.strokeStyle = 'rgba(255,255,255,0.65)';
+          markerContext.moveTo(x, top);
+          markerContext.lineTo(x, bottom);
+          markerContext.stroke();
+          markerContext.restore();
+        }
+      }]
     });
 
-    chartInstancesByContainer.set(containerId, chartInstance);
+    const selectPoint = (index) => {
+      selectedIndex = Math.max(0, Math.min(data.length - 1, index));
+      if (slider) slider.value = String(selectedIndex);
+
+      const point = data[selectedIndex];
+      const change = point.price - prices[0];
+      const changePercent = prices[0] ? (change / prices[0]) * 100 : 0;
+      const changeLabel = change >= 0 ? `+$${change.toFixed(2)}` : `-$${Math.abs(change).toFixed(2)}`;
+      const percentLabel = changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`;
+      if (selection) {
+        selection.textContent = `${new Date(point.timestamp).toLocaleString()}  ·  $${point.price.toFixed(2)}  ·  ${changeLabel} (${percentLabel}) vs period start`;
+        selection.style.color = change >= 0 ? '#2ecc71' : '#e74c3c';
+      }
+
+      const activeElement = { datasetIndex: 0, index: selectedIndex };
+      const tooltipPosition = {
+        x: chart.scales.x.getPixelForValue(labels[selectedIndex], selectedIndex),
+        y: chart.scales.y.getPixelForValue(point.price)
+      };
+      chart.setActiveElements([activeElement]);
+      chart.tooltip.setActiveElements([activeElement], tooltipPosition);
+      chart.update('none');
+    };
+
+    if (slider) {
+      slider.min = '0';
+      slider.max = String(data.length - 1);
+      slider.step = '1';
+      slider.disabled = data.length < 2;
+      slider.oninput = () => selectPoint(Number(slider.value));
+    }
+
+    chart.canvas.onclick = (event) => {
+      const points = chart.getElementsAtEventForMode(event, 'nearest', { intersect: false }, true);
+      if (points.length) selectPoint(points[0].index);
+    };
+    selectPoint(data.length - 1);
   })();
 }
 
@@ -402,7 +361,7 @@ function renderStockMarket() {
   }
 
   stockMarketList.innerHTML = companies.map((company) => {
-    const livePrice = (company.isBankrupt || Number(company.basePrice || 0) <= MIN_STOCK_PRICE) ? 0 : getLivePrice(company);
+    const livePrice = getLivePrice(company);
     const { delta, pct } = formatDelta(livePrice, Number(company.basePrice || 0));
     const changeClass = delta >= 0 ? "#2ecc71" : "#e74c3c";
     const availableShares = Number(company.availableShares || 0);
@@ -410,44 +369,48 @@ function renderStockMarket() {
     const estimatedSellTax = livePrice * SELL_TAX_RATE;
 
     return `
-      <article class="stock-card" style="background: var(--card-bg); border: 1px solid ${delta >= 0 ? '#2ecc71' : '#e74c3c'}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+      <article class="stock-card" style="background: rgba(0,0,0,0.25); border: 1px solid ${delta >= 0 ? '#2ecc71' : '#e74c3c'}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
         <div style="display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap;">
           <div style="flex: 1; min-width: 200px;">
-            <h4 style="margin: 0 0 4px 0; color: var(--text-main); font-size: 1rem; word-break: break-word;">${company.name}</h4>
-            <p style="margin: 0; color: var(--text-muted); font-size: 0.75rem; word-break: break-word;">${company.description || "Public company listed for investor trading."}</p>
+            <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 1rem; word-break: break-word;">${company.name}</h4>
+            <p style="margin: 0; color: #aaa; font-size: 0.75rem; word-break: break-word;">${company.description || "Public company listed for investor trading."}</p>
           </div>
           <span style="background: rgba(52,152,219,0.12); color: #3498db; border: 1px solid rgba(52,152,219,0.2); border-radius: 999px; padding: 4px 8px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; white-space: nowrap; flex-shrink: 0;">${ownerLabel}</span>
         </div>
 
-        <div class="stock-info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem; color: var(--text-main);">
-          <div style="background: var(--input-bg); border-radius: 10px; padding: 10px; min-width: 0;">
-            ${company.isBankrupt ? `Status<br><strong style="color: #e74c3c; font-size: 1rem;">Bankrupt</strong>` : `Live Price<br><strong style="color: #f1c40f; font-size: 1rem;">$${livePrice.toLocaleString()}</strong>`}
+        <div class="stock-info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem; color: #ddd;">
+          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+            Live Price<br><strong style="color: #f1c40f; font-size: 1rem;">$${livePrice.toLocaleString()}</strong>
           </div>
-          <div style="background: var(--input-bg); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Market Change<br><strong style="color: ${changeClass}; font-size: 1rem;">${delta >= 0 ? '+' : ''}$${delta.toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</strong>
           </div>
-          <div style="background: var(--input-bg); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Shares Available<br><strong style="color: #2ecc71; font-size: 1rem;">${availableShares}</strong>
           </div>
-          <div style="background: var(--input-bg); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Dividend Yield<br><strong style="color: #8e44ad; font-size: 1rem;">${Number(company.dividendRate || 0)}%</strong>
-            <span style="display: block; font-size: 0.6rem; color: var(--text-muted);">Paid weekly · 15% tax</span>
+            <span style="display: block; font-size: 0.6rem; color: #888;">Paid weekly · 15% tax</span>
           </div>
         </div>
 
         <!-- CHART SECTION -->
-        <div style="background: var(--input-bg); border-radius: 10px; padding: 12px; border: 1px solid var(--border-color);">
+        <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.05);">
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
-            <span style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Performance</span>
+            <span style="color: #aaa; font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Performance</span>
             <div class="chart-timeframe-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;">
               <button class="chart-btn chart-btn-daily" data-company-id="${company.id}" data-timeframe="daily" style="background: rgba(46,204,113,0.2); color: #2ecc71; border: 1px solid rgba(46,204,113,0.3); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">D</button>
-              <button class="chart-btn chart-btn-weekly" data-company-id="${company.id}" data-timeframe="weekly" style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">W</button>
-              <button class="chart-btn chart-btn-monthly" data-company-id="${company.id}" data-timeframe="monthly" style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">M</button>
-              <button class="chart-btn chart-btn-yearly" data-company-id="${company.id}" data-timeframe="yearly" style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">Y</button>
+              <button class="chart-btn chart-btn-weekly" data-company-id="${company.id}" data-timeframe="weekly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">W</button>
+              <button class="chart-btn chart-btn-monthly" data-company-id="${company.id}" data-timeframe="monthly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">M</button>
+              <button class="chart-btn chart-btn-yearly" data-company-id="${company.id}" data-timeframe="yearly" style="background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 10px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">Y</button>
             </div>
           </div>
-          <div id="chart-container-${company.id}" style="position: relative; height: 200px; width: 100%;"></div>
-          <div id="chart-stats-${company.id}" class="chart-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; font-size: 0.7rem; color: var(--text-muted);"></div>
+          <div id="chart-container-${company.id}" style="position: relative; height: 240px; width: 100%; min-width: 0;"></div>
+          <div style="display: grid; grid-template-columns: 1fr; gap: 5px; margin-top: 8px;">
+            <input id="chart-slider-${company.id}" type="range" min="0" max="0" value="0" disabled aria-label="Explore ${company.name} price history" style="width: 100%; accent-color: #3498db; cursor: pointer;">
+            <div id="chart-selection-${company.id}" role="status" aria-live="polite" style="min-height: 1.2em; color: #aaa; font-size: 0.7rem; font-variant-numeric: tabular-nums;"></div>
+          </div>
+          <div id="chart-stats-${company.id}" class="chart-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; font-size: 0.7rem; color: #aaa;"></div>
         </div>
 
         <div style="background: rgba(231,76,60,0.06); border: 1px solid rgba(231,76,60,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.7rem; color: #e74c3c; word-break: break-word;">
@@ -456,15 +419,12 @@ function renderStockMarket() {
 
         <div class="stock-action-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <input id="stock-qty-${company.id}" type="number" min="1" max="${availableShares}" value="1"
-            style="flex: 1; min-width: 70px; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; box-sizing: border-box;" />
+            style="flex: 1; min-width: 70px; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; box-sizing: border-box;" />
           <button class="stock-buy-btn" data-company-id="${company.id}" data-price="${livePrice}"
-            ${company.isBankrupt ? 'data-blocked-reason="bankrupt"' : (livePrice < MIN_BUY_PRICE ? 'data-blocked-reason="price"' : '')}
-            ${company.isBankrupt ? 'disabled' : ''}
-            style="background: #2ecc71; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;${(company.isBankrupt || livePrice < MIN_BUY_PRICE) ? ' opacity:0.5; cursor:not-allowed;' : ''}">Buy</button>
+            style="background: #2ecc71; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;">Buy</button>
           <button class="stock-sell-btn" data-company-id="${company.id}" data-price="${livePrice}"
             style="background: #e74c3c; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; white-space: nowrap;">Sell</button>
         </div>
-
       </article>
     `;
   }).join("");
@@ -482,7 +442,7 @@ function renderPortfolio() {
 
   stockPortfolioList.innerHTML = holdings.map((item) => {
     const company = companies.find((c) => c.id === item.companyId) || {};
-    const livePrice = (company.isBankrupt || Number(company.basePrice || 0) <= MIN_STOCK_PRICE) ? 0 : getLivePrice(company);
+    const livePrice = getLivePrice(company);
     const avgCost = Number(item.avgCost || 0);
     const sharesOwned = Number(item.shares || 0);
     const profit = (livePrice - avgCost) * sharesOwned;
@@ -505,31 +465,31 @@ function renderPortfolio() {
     const daysUntilNext = Math.max(0, DIVIDEND_INTERVAL_DAYS - daysSinceLastPaid);
 
     const totalInvested = avgCost * sharesOwned;
-    const currentValue = company.isBankrupt ? 0 : livePrice * sharesOwned;
+    const currentValue = livePrice * sharesOwned;
     const gainLoss = currentValue - totalInvested;
 
     return `
-      <article class="portfolio-card" style="background: var(--input-bg); border: 1px solid ${positive ? '#2ecc71' : '#e74c3c'}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+      <article class="portfolio-card" style="background: rgba(46,204,113,0.08); border: 1px solid ${positive ? '#2ecc71' : '#e74c3c'}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
           <div style="flex: 1; min-width: 150px;">
-            <h4 style="margin: 0; color: var(--text-main); font-size: 0.95rem; word-break: break-word;">${company.name || item.companyId} ${company.isBankrupt ? '<span style="color:#e74c3c; font-weight:800; font-size:0.8rem; margin-left:8px;">(Bankrupt)</span>' : ''}</h4>
-            <p style="margin: 2px 0 0 0; color: var(--text-muted); font-size: 0.72rem; word-break: break-word;">${sharesOwned} share(s) @ avg $${avgCost.toLocaleString()} each</p>
+            <h4 style="margin: 0; color: #fff; font-size: 0.95rem; word-break: break-word;">${company.name || item.companyId}</h4>
+            <p style="margin: 2px 0 0 0; color: #aaa; font-size: 0.72rem; word-break: break-word;">${sharesOwned} share(s) @ avg $${avgCost.toLocaleString()} each</p>
           </div>
           <span style="color: ${positive ? '#2ecc71' : '#e74c3c'}; font-size: 0.75rem; font-weight: 800; white-space: nowrap; flex-shrink: 0;">
             ${positive ? '+' : ''}$${profit.toLocaleString()} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)
           </span>
         </div>
 
-        <div style="font-size: 0.75rem; color: var(--text-main); display: grid; gap: 6px; word-break: break-word;">
+        <div style="font-size: 0.75rem; color: #ddd; display: grid; gap: 6px; word-break: break-word;">
           <div>Initial investment: <strong style="color: #f1c40f;">$${totalInvested.toLocaleString()}</strong></div>
           <div>Current value: <strong style="color: #f1c40f;">$${currentValue.toLocaleString()}</strong></div>
           <div>Gain/Loss: <strong style="color: ${positive ? '#2ecc71' : '#e74c3c'};">${gainLoss >= 0 ? '+' : ''}$${gainLoss.toLocaleString()}</strong></div>
         </div>
 
         ${dividendRate > 0 ? `
-          <div style="background: var(--card-bg); border: 1px solid rgba(142,68,173,0.2); border-radius: 8px; padding: 8px 10px; font-size: 0.7rem; color: var(--text-muted); word-break: break-word;">
+          <div style="background: rgba(142,68,173,0.08); border: 1px solid rgba(142,68,173,0.2); border-radius: 8px; padding: 8px 10px; font-size: 0.7rem; color: #ccc; word-break: break-word;">
             💰 Next dividend: <strong style="color: #8e44ad;">$${estimatedDividendAfterTax.toFixed(2)}</strong> after 15% tax
-            <span style="color: var(--text-muted); display: block; margin-top: 3px;">(in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'})</span>
+            <span style="color: #888; display: block; margin-top: 3px;">(in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'})</span>
           </div>
         ` : ''}
       </article>
@@ -549,16 +509,16 @@ function updateChartStats(company, timeframe) {
     const stats = calculateChartStats(data);
     
     statsContainer.innerHTML = `
-      <div style="padding: 8px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
-        Min: <strong style="color: var(--text-muted);">$${stats.min}</strong>
+      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+        Min: <strong style="color: #aaa;">$${stats.min}</strong>
       </div>
-      <div style="padding: 8px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
-        Max: <strong style="color: var(--text-muted);">$${stats.max}</strong>
+      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+        Max: <strong style="color: #aaa;">$${stats.max}</strong>
       </div>
-      <div style="padding: 8px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
-        Avg: <strong style="color: var(--text-muted);">$${stats.avg}</strong>
+      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+        Avg: <strong style="color: #aaa;">$${stats.avg}</strong>
       </div>
-      <div style="padding: 8px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
         Change: <strong style="color: ${stats.change >= 0 ? '#2ecc71' : '#e74c3c'};">${stats.change >= 0 ? '+' : ''}$${stats.change} (${stats.changePercent >= 0 ? '+' : ''}${stats.changePercent}%)</strong>
       </div>
     `;
@@ -583,9 +543,9 @@ function attachTradeButtons() {
         // Update active button styling
         const buttonGroup = btn.parentElement;
         buttonGroup.querySelectorAll(".chart-btn").forEach(b => {
-          b.style.background = "var(--input-bg)";
-          b.style.color = "var(--text-muted)";
-          b.style.borderColor = "var(--border-color)";
+          b.style.background = "rgba(255,255,255,0.05)";
+          b.style.color = "#aaa";
+          b.style.borderColor = "rgba(255,255,255,0.1)";
         });
         btn.style.background = "rgba(46,204,113,0.2)";
         btn.style.color = "#2ecc71";
@@ -603,11 +563,6 @@ function attachTradeButtons() {
     btn.addEventListener("click", async () => {
       const companyId = btn.dataset.companyId;
       const price = Number(btn.dataset.price || 0);
-
-      if (btn.dataset.blockedReason === "price") {
-        return alert(`🚫 This stock can't be bought right now.\n\nThe live price ($${price.toLocaleString()}) is below the $${MIN_BUY_PRICE.toLocaleString()} minimum required to buy — this usually happens when the market has crashed hard. Wait for the price to recover to at least $${MIN_BUY_PRICE.toLocaleString()} before purchasing.`);
-      }
-
       const qtyInput = document.getElementById(`stock-qty-${companyId}`);
       const qty = Math.max(1, parseInt(qtyInput?.value || "1", 10) || 1);
       await tradeShares(companyId, qty, price, "buy");
@@ -645,27 +600,22 @@ async function tradeShares(companyId, quantity, price, action) {
 
     const companyData = companySnap.data();
     const userData = userSnap.data();
-      const livePrice = (companyData.isBankrupt || Number(companyData.basePrice || 0) <= MIN_STOCK_PRICE) ? 0 : getLivePrice(companyData);
+    const livePrice = getLivePrice(companyData);
     const totalCost = livePrice * quantity;
     const newBasePrice = calculatePriceImpact(companyData, quantity, action);
-      const willBankrupt = newBasePrice <= MIN_STOCK_PRICE;
 
     // ── BUY ──
     if (action === "buy") {
-      if (companyData.isBankrupt) return alert("Cannot buy shares: company is bankrupt/delisted.");
-      if (livePrice < MIN_BUY_PRICE) return alert(`Cannot buy shares: live price must be at least $${MIN_BUY_PRICE.toLocaleString()} (currently $${livePrice.toLocaleString()}).`);
       if (Number(companyData.availableShares || 0) < quantity) return alert("Not enough shares available.");
       if (Number(userData.balance || 0) < totalCost) return alert("Insufficient funds for this trade.");
 
-      await runTransaction(db, async (transaction) => {
+      const purchaseSummary = await runTransaction(db, async (transaction) => {
         const freshUser = await transaction.get(userRef);
         const freshCompany = await transaction.get(companyRef);
         const freshHolding = await transaction.get(holdingRef);
 
         if (!freshCompany.exists()) throw new Error("Company not found.");
         if (!freshUser.exists()) throw new Error("User not found.");
-        if (freshCompany.data().isBankrupt) throw new Error("Company is bankrupt/delisted.");
-        if (livePrice < MIN_BUY_PRICE) throw new Error(`Live price must be at least $${MIN_BUY_PRICE.toLocaleString()} to buy.`);
         if (Number(freshUser.data().balance || 0) < livePrice * quantity) throw new Error("Insufficient funds.");
         if (Number(freshCompany.data().availableShares || 0) < quantity) throw new Error("Not enough shares available.");
 
@@ -677,9 +627,8 @@ async function tradeShares(companyId, quantity, price, action) {
 
         transaction.update(userRef, { balance: increment(-totalCost) });
         transaction.update(companyRef, {
-          availableShares: willBankrupt ? 0 : increment(-quantity),
-          basePrice: willBankrupt ? MIN_STOCK_PRICE : newBasePrice,
-          isBankrupt: willBankrupt
+          availableShares: increment(-quantity),
+          basePrice: newBasePrice
         });
         transaction.set(holdingRef, {
           companyId,
@@ -688,49 +637,24 @@ async function tradeShares(companyId, quantity, price, action) {
           avgCost: Number(freshNextAvg.toFixed(2)),
           lastUpdatedAt: new Date().toISOString()
         }, { merge: true });
+        return {
+          totalShares: freshCurrentShares + quantity,
+          averageCost: Number(freshNextAvg.toFixed(2))
+        };
       });
 
-      syncCompanyState(companyId, (company) => ({
-        ...company,
-        availableShares: willBankrupt ? 0 : Math.max(0, Number(company.availableShares || 0) - quantity),
-        basePrice: willBankrupt ? MIN_STOCK_PRICE : newBasePrice,
-        isBankrupt: willBankrupt,
-      }));
-
-      const existingHolding = holdings.find((holding) => holding.companyId === companyId);
-      if (existingHolding) {
-        syncHoldingState(companyId, (holding) => ({
-          ...holding,
-          shares: Number(holding.shares || 0) + quantity,
-          avgCost: Number(((Number(holding.avgCost || 0) * Number(holding.shares || 0)) + totalCost) / (Number(holding.shares || 0) + quantity)).toFixed(2),
-          lastUpdatedAt: new Date().toISOString(),
-        }));
-      } else {
-        holdings = [
-          ...holdings,
-          {
-            id: companyId,
-            companyId,
-            companyName: companyData.name,
-            shares: quantity,
-            avgCost: Number(livePrice.toFixed(2)),
-            lastUpdatedAt: new Date().toISOString(),
-          },
-        ];
-      }
-
-      renderStockMarket();
-      renderPortfolio();
-
-      await recordPriceSnapshot(companyId, newBasePrice);
+      await recordPriceSnapshot(companyId, getLivePrice({ ...companyData, basePrice: newBasePrice }));
       await logHistory(user.uid, `Bought ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each`, "stock");
-      if (willBankrupt) {
-        try {
-          await logAdminAction(user.uid, `Company ${companyData.name} declared BANKRUPT after trade by ${user.uid}`);
-        } catch (err) {
-          console.error("Failed to log bankruptcy action:", err);
-        }
-      }
+      await sendSlackMessage(
+        `📈 *Stock Purchase*\n` +
+        `*Buyer:* ${userData.username || user.email || user.uid}\n` +
+        `*Company:* ${companyData.name}\n` +
+        `*Shares bought:* ${quantity.toLocaleString()}\n` +
+        `*Price per share:* $${livePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+        `*Trade value:* $${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+        `*New holding:* ${purchaseSummary.totalShares.toLocaleString()} shares\n` +
+        `*Average cost:* $${purchaseSummary.averageCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per share`
+      );
       alert(`✅ Bought ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each.\nTotal paid: $${totalCost.toLocaleString()}`);
       return;
     }
@@ -756,7 +680,7 @@ async function tradeShares(companyId, quantity, price, action) {
       );
       if (!confirmed) return;
 
-      await runTransaction(db, async (transaction) => {
+      const saleSummary = await runTransaction(db, async (transaction) => {
         const freshUser = await transaction.get(userRef);
         const freshCompany = await transaction.get(companyRef);
         const freshHolding = await transaction.get(holdingRef);
@@ -765,14 +689,14 @@ async function tradeShares(companyId, quantity, price, action) {
         if (!freshHolding.exists()) throw new Error("Holding not found.");
 
         const currentShares = Number(freshHolding.data().shares || 0);
+        const averageCost = Number(freshHolding.data().avgCost || 0);
         const nextShares = currentShares - quantity;
 
         // Credit net proceeds (after tax) to user
         transaction.update(userRef, { balance: increment(netProceeds) });
         transaction.update(companyRef, {
-          availableShares: willBankrupt ? 0 : increment(quantity),
-          basePrice: willBankrupt ? MIN_STOCK_PRICE : newBasePrice,
-          isBankrupt: willBankrupt
+          availableShares: increment(quantity),
+          basePrice: newBasePrice
         });
 
         if (nextShares <= 0) {
@@ -783,41 +707,33 @@ async function tradeShares(companyId, quantity, price, action) {
             lastUpdatedAt: new Date().toISOString()
           });
         }
+        return { averageCost, remainingShares: Math.max(0, nextShares) };
       });
 
-      syncCompanyState(companyId, (company) => ({
-        ...company,
-        availableShares: willBankrupt ? 0 : Number(company.availableShares || 0) + quantity,
-        basePrice: willBankrupt ? MIN_STOCK_PRICE : newBasePrice,
-        isBankrupt: willBankrupt,
-      }));
-
-      syncHoldingState(companyId, (holding) => {
-        const nextShares = Number(holding.shares || 0) - quantity;
-        if (nextShares <= 0) return null;
-        return {
-          ...holding,
-          shares: nextShares,
-          lastUpdatedAt: new Date().toISOString(),
-        };
-      });
-
-      renderStockMarket();
-      renderPortfolio();
-
-      await recordPriceSnapshot(companyId, newBasePrice);
+      await recordPriceSnapshot(companyId, getLivePrice({ ...companyData, basePrice: newBasePrice }));
+      const costBasis = Number((saleSummary.averageCost * quantity).toFixed(2));
+      const realizedGainLoss = Number((netProceeds - costBasis).toFixed(2));
+      const gainLossLabel = realizedGainLoss >= 0
+        ? `+$${realizedGainLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : `-$${Math.abs(realizedGainLoss).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       await logHistory(
         user.uid,
         `Sold ${quantity} share(s) of ${companyData.name} at $${livePrice.toLocaleString()} each — received $${netProceeds.toLocaleString()} after 10% tax ($${taxAmount.toLocaleString()} deducted)`,
         "stock"
       );
-      if (willBankrupt) {
-        try {
-          await logAdminAction(user.uid, `Company ${companyData.name} declared BANKRUPT after trade by ${user.uid}`);
-        } catch (err) {
-          console.error("Failed to log bankruptcy action:", err);
-        }
-      }
+      await sendSlackMessage(
+        `📉 *Stock Sale*\n` +
+        `*Seller:* ${userData.username || user.email || user.uid}\n` +
+        `*Company:* ${companyData.name}\n` +
+        `*Shares sold:* ${quantity.toLocaleString()}\n` +
+        `*Price per share:* $${livePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+        `*Gross proceeds:* $${grossProceeds.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+        `*Sell tax (${(SELL_TAX_RATE * 100).toFixed(0)}%):* $${taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+        `*Net proceeds:* $${netProceeds.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+        `*Cost basis:* $${costBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${saleSummary.averageCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} average/share)\n` +
+        `*Realized gain/loss after tax:* ${gainLossLabel}\n` +
+        `*Remaining shares:* ${saleSummary.remainingShares.toLocaleString()}`
+      );
       alert(
         `✅ Sold ${quantity} share(s) of ${companyData.name}\n\n` +
         `Gross: $${grossProceeds.toLocaleString()}\n` +
@@ -911,56 +827,40 @@ async function processDividends(userId) {
 
 // ==================== INIT ====================
 
-// Read-only accessor so other modules (e.g. aiChat.js) can reuse the already-live
-// holdings/companies data instead of issuing their own extra Firestore reads.
-export function getPortfolioSnapshot() {
-  return holdings.map((item) => {
-    const company = companies.find((c) => c.id === item.companyId) || {};
-    const livePrice = (company.isBankrupt || Number(company.basePrice || 0) <= MIN_STOCK_PRICE) ? 0 : getLivePrice(company);
-    const avgCost = Number(item.avgCost || 0);
-    const sharesOwned = Number(item.shares || 0);
-    return {
-      companyId: item.companyId,
-      name: company.name || item.companyId,
-      shares: sharesOwned,
-      avgCost,
-      livePrice,
-      marketValue: Number((livePrice * sharesOwned).toFixed(2)),
-      profit: Number(((livePrice - avgCost) * sharesOwned).toFixed(2)),
-      isBankrupt: !!company.isBankrupt,
-    };
-  });
-}
-
 export function initStockMarketUI() {
   if (!stockMarketList || !stockPortfolioList) return;
 
+  if (companyUnsubscribe) companyUnsubscribe();
+  if (portfolioUnsubscribe) portfolioUnsubscribe();
   if (authUnsubscribe) authUnsubscribe(); // added — cleans up previous auth listener
 
-  authUnsubscribe = auth.onAuthStateChanged(async (user) => { // stored at module level now
+  companyUnsubscribe = onSnapshot(collection(db, "stockCompanies"), (snapshot) => {
+    companies = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    renderStockMarket();
+    renderPortfolio();
+  }, (err) => console.error("Failed to load stock companies:", err));
+
+  authUnsubscribe = auth.onAuthStateChanged((user) => { // stored at module level now
+    if (portfolioUnsubscribe) portfolioUnsubscribe();
     if (!user) {
-      companies = [];
       holdings = [];
-      renderStockMarket();
       renderPortfolio();
       return;
     }
 
-    const [companySnapshot, holdingSnapshot] = await Promise.all([
-      getDocs(collection(db, "stockCompanies")),
-      getDocs(query(collection(db, "users", user.uid, "shares"))),
-    ]);
-
-    companies = companySnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-    holdings = holdingSnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-    renderStockMarket();
-    renderPortfolio();
-
     processDividends(user.uid);
+
+    const q = query(collection(db, "users", user.uid, "shares"));
+    portfolioUnsubscribe = onSnapshot(q, (snapshot) => {
+      holdings = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      renderPortfolio();
+    }, (err) => console.error("Failed to load stock portfolio:", err));
   });
 
   return () => {
     if (authUnsubscribe) authUnsubscribe(); // updated to use module-level var
+    if (companyUnsubscribe) companyUnsubscribe();
+    if (portfolioUnsubscribe) portfolioUnsubscribe();
   };
 }
 

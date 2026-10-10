@@ -536,9 +536,9 @@
 
         <div class="plans-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
             
-            <div class="plan-card" style="border: 1px solid #444; padding: 20px; border-radius: 12px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column;">
+            <div class="plan-card" data-membership-plan="basic" style="border: 1px solid #444; padding: 20px; border-radius: 12px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column;">
                 <h4 style="margin-top: 0;">🟢 Basic</h4>
-                <div class="plan-price" style="font-size: 1.5rem; font-weight: 800; color: #2ecc71; margin: 10px 0;">$100,000<span style="font-size: 0.8rem; color: #888;"> /mo</span></div>
+                <div class="plan-price" style="font-size: 1.5rem; font-weight: 800; color: #2ecc71; margin: 10px 0;"><span data-membership-price="basic">$100,000</span><span style="font-size: 0.8rem; color: #888;"> /mo</span><div data-membership-sale="basic" style="font-size: 0.65rem; line-height: 1.4; color: #f1c40f; font-weight: 800;"></div></div>
                 <ul class="plan-perks" style="list-style: none; padding: 0; font-size: 0.85rem; line-height: 1.8; flex-grow: 1;">
                     <li>✅ 8% Shop Tax</li>
                     <li>✅ 4% Retirement Interest</li>
@@ -550,9 +550,9 @@
                 <button class="btn-primary join-plan-btn" data-plan="basic" style="width: 100%; margin-top: 15px;">Join Basic</button>
             </div>
 
-            <div class="plan-card" style="border: 1px solid #9b59b6; padding: 20px; border-radius: 12px; background: rgba(155, 89, 182, 0.05); display: flex; flex-direction: column;">
+            <div class="plan-card" data-membership-plan="premium" style="border: 1px solid #9b59b6; padding: 20px; border-radius: 12px; background: rgba(155, 89, 182, 0.05); display: flex; flex-direction: column;">
                 <h4 style="margin-top: 0; color: #9b59b6;">💎 Premium</h4>
-                <div class="plan-price" style="font-size: 1.5rem; font-weight: 800; color: #9b59b6; margin: 10px 0;">$300,000<span style="font-size: 0.8rem; color: #888;"> /mo</span></div>
+                <div class="plan-price" style="font-size: 1.5rem; font-weight: 800; color: #9b59b6; margin: 10px 0;"><span data-membership-price="premium">$300,000</span><span style="font-size: 0.8rem; color: #888;"> /mo</span><div data-membership-sale="premium" style="font-size: 0.65rem; line-height: 1.4; color: #f1c40f; font-weight: 800;"></div></div>
                 <ul class="plan-perks" style="list-style: none; padding: 0; font-size: 0.85rem; line-height: 1.8; flex-grow: 1;">
                     <li>✅ 4% Shop Tax</li>
                     <li>✅ 5% Retirement Interest</li>
@@ -565,10 +565,10 @@
                 <button class="btn-primary join-plan-btn" data-plan="premium" style="width: 100%; margin-top: 15px; background-color: #9b59b6;">Join Premium</button>
             </div>
 
-            <div class="plan-card" style="border: 2px solid #f1c40f; padding: 20px; border-radius: 12px; background: rgba(241, 196, 15, 0.05); display: flex; flex-direction: column; position: relative;">
+            <div class="plan-card" data-membership-plan="platinum" style="border: 2px solid #f1c40f; padding: 20px; border-radius: 12px; background: rgba(241, 196, 15, 0.05); display: flex; flex-direction: column; position: relative;">
                 <div style="position: absolute; top: -12px; right: 10px; background: #f1c40f; color: black; font-size: 0.6rem; font-weight: 900; padding: 2px 8px; border-radius: 4px;">BEST VALUE</div>
                 <h4 style="margin-top: 0; color: #f1c40f;">👑 Platinum</h4>
-                <div class="plan-price" style="font-size: 1.5rem; font-weight: 800; color: #f1c40f; margin: 10px 0;">$500,000<span style="font-size: 0.8rem; color: #888;"> /mo</span></div>
+                <div class="plan-price" style="font-size: 1.5rem; font-weight: 800; color: #f1c40f; margin: 10px 0;"><span data-membership-price="platinum">$500,000</span><span style="font-size: 0.8rem; color: #888;"> /mo</span><div data-membership-sale="platinum" style="font-size: 0.65rem; line-height: 1.4; color: #f1c40f; font-weight: 800;"></div></div>
                 <ul class="plan-perks" style="list-style: none; padding: 0; font-size: 0.85rem; line-height: 1.8; flex-grow: 1;">
                     <li>✅ 0% Shop Tax (Exempt)</li>
                     <li>✅ 5% Retirement Interest</li>
@@ -1069,6 +1069,43 @@
         Save Games Settings
     </button>
 </div>
+
+        <div class="admin-section" style="border: 1px solid #f1c40f; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #f1c40f; margin: 0 0 6px; font-size: 1rem; text-transform: uppercase;">Membership Pricing & Flash Sales</h3>
+            <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px;">Price edits take effect at signup or the member's next renewal. Sales apply only when a signup or renewal is charged before the sale ends.</p>
+            <div id="admin-membership-pricing-status" role="status" style="padding: 10px; margin-bottom: 14px; background: rgba(0,0,0,0.2); border-left: 3px solid #f1c40f; color: #ddd; font-size: 0.8rem;">No active membership sale.</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end; margin-bottom: 18px;">
+                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">PLAN PRICE
+                    <select id="admin-membership-price-plan" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                        <option value="basic">Basic</option><option value="premium">Premium</option><option value="platinum">Platinum</option>
+                    </select>
+                </label>
+                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">NEW MONTHLY PRICE
+                    <input id="admin-membership-price" type="number" min="0" step="1" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                </label>
+                <button id="admin-save-membership-price" type="button" class="btn-primary" style="height: 40px;">Save Price</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end;">
+                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">SALE PLANS
+                    <select id="admin-membership-sale-plan" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                        <option value="all">All paid plans</option><option value="basic">Basic</option><option value="premium">Premium</option><option value="platinum">Platinum</option>
+                    </select>
+                </label>
+                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">PERCENT OFF
+                    <input id="admin-membership-sale-percent" type="number" min="1" max="100" step="1" placeholder="20" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                </label>
+                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">DURATION
+                    <input id="admin-membership-sale-duration" type="number" min="1" step="1" placeholder="3" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                </label>
+                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">DURATION UNIT
+                    <select id="admin-membership-sale-unit" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                        <option value="days">Days</option><option value="months">Months</option>
+                    </select>
+                </label>
+                <button id="admin-save-membership-sale" type="button" class="btn-primary" style="height: 40px; background: #f1c40f; color: #111;">Start Flash Sale</button>
+                <button id="admin-clear-membership-sale" type="button" class="btn-danger" style="height: 40px;" disabled>End Sale</button>
+            </div>
+        </div>
 
         <div class="admin-section" style="border: 1px solid #e74c3c; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">

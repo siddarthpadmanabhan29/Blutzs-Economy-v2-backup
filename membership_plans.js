@@ -64,6 +64,45 @@ export const PLANS = {
     }
 };
 
+const MEMBERSHIP_PRICING_REF = doc(db, "settings", "membershipPricing");
+
+export async function getMembershipPricing() {
+    const result = await getMembershipPricingWithStatus();
+    return result.pricing;
+}
+
+export async function getMembershipPricingWithStatus() {
+    try {
+        const snap = await getDoc(MEMBERSHIP_PRICING_REF);
+        return { pricing: snap.exists() ? snap.data() : {}, available: true };
+    } catch (error) {
+        console.warn("Unable to read membership pricing settings; using default plan prices.", error);
+        return { pricing: {}, available: false };
+    }
+}
+
+export function getMembershipPrice(tier, pricing = {}, now = new Date()) {
+    const plan = PLANS[tier] || PLANS.standard;
+    const basePrice = Number(pricing.prices?.[tier] ?? plan.price);
+    const sale = pricing.sale;
+    const startsAt = sale?.startsAt ? new Date(sale.startsAt) : null;
+    const endsAt = sale?.endsAt ? new Date(sale.endsAt) : null;
+    const saleIsActive = !!sale
+        && Array.isArray(sale.planKeys)
+        && sale.planKeys.includes(tier)
+        && Number.isFinite(Number(sale.percentOff))
+        && Number(sale.percentOff) > 0
+        && Number(sale.percentOff) <= 100
+        && startsAt && endsAt
+        && now >= startsAt && now < endsAt;
+
+    return {
+        basePrice,
+        price: saleIsActive ? Math.round(basePrice * (1 - Number(sale.percentOff) / 100)) : basePrice,
+        sale: saleIsActive ? sale : null
+    };
+}
+
 /**
  * UI HELPER: Calculates the next billing date.
  */
@@ -118,14 +157,17 @@ export async function checkMembershipBilling(userId, userData) {
 
     if (tier === 'standard') return;
 
+    const pricing = await getMembershipPricing();
+    const currentPricing = getMembershipPrice(tier, pricing, now);
+
     const lastPaidStr = userData.membershipLastPaid;
-    const isFirstSubscription = !lastPaidStr && PLANS[tier].price > 0;
+    const isFirstSubscription = !lastPaidStr && currentPricing.price > 0;
     const lastPaid = lastPaidStr ? new Date(lastPaidStr) : now;
     const nextDueDate = lastPaidStr ? new Date(lastPaid) : now;
     if (lastPaidStr) nextDueDate.setMonth(nextDueDate.getMonth() + 1);
 
     if (now >= nextDueDate) {
-        let cost = PLANS[tier].price;
+        let cost = currentPricing.basePrice;
         const hasPriceLock = userData.insurance?.activePackages?.includes("darkblue_a");
         let usedPriceLock = false;
         const timestamp = now.toLocaleString();
@@ -135,6 +177,9 @@ export async function checkMembershipBilling(userId, userData) {
                 cost = userData.membershipLockedPrice;
                 usedPriceLock = true;
             }
+        }
+        if (currentPricing.sale) {
+            cost = Math.round(cost * (1 - Number(currentPricing.sale.percentOff) / 100));
         }
 
         const username = userData.username || 'Unknown user';
@@ -151,7 +196,7 @@ export async function checkMembershipBilling(userId, userData) {
             };
 
             if (hasPriceLock && !userData.membershipLockedPrice) {
-                updatePayload.membershipLockedPrice = PLANS[tier].price;
+                updatePayload.membershipLockedPrice = currentPricing.basePrice;
             }
 
             if (usedPriceLock) {
@@ -188,13 +233,15 @@ export function getTierBadge(tier) {
 /**
  * SLACK HELPERS: Manual purchase actions
  */
-export async function purchaseMembership(userId, newTier, userData, oldTier = null) {
+export async function purchaseMembership(userId, newTier, userData, oldTier = null, paidCost = null, pricingSnapshot = null) {
     const currentTier = oldTier || userData.membershipLevel || 'standard';
     const plan = PLANS[newTier];
     const oldPlan = PLANS[currentTier];
     const username = userData.username || 'Unknown user';
     const timestamp = new Date().toLocaleString();
-    const cost = plan.price;
+    const pricing = pricingSnapshot || await getMembershipPricing();
+    const currentPricing = getMembershipPrice(newTier, pricing);
+    const cost = paidCost ?? currentPricing.price;
 
    if (currentTier === 'standard') {
         sendSlackMessage(`💥 *New Subscriber:* ${username} subscribed to ${newTier.toUpperCase()} membership for $${cost.toLocaleString()}.\n*Time:* ${timestamp}`);
@@ -213,7 +260,7 @@ export async function purchaseMembership(userId, newTier, userData, oldTier = nu
     };
 
     if (userData.insurance?.activePackages?.includes("darkblue_a")) {
-        updatePayload.membershipLockedPrice = plan.price;
+        updatePayload.membershipLockedPrice = currentPricing.basePrice;
     }
 
     await updateDoc(doc(db, "users", userId), updatePayload);

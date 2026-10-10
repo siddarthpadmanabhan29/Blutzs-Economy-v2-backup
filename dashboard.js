@@ -21,7 +21,7 @@ import { loadCosmetics } from "./shop/cosmetics.js";
 import { loadSubscriptionShop } from "./shop/subscriptionShop.js";
 
 // --- MEMBERSHIP IMPORTS ---
-import { PLANS, checkMembershipBilling, getTierBadge, getNextBillingDate, purchaseMembership, cancelMembership } from "./membership_plans.js";
+import { PLANS, checkMembershipBilling, getTierBadge, getNextBillingDate, getMembershipPricing, getMembershipPrice, purchaseMembership, cancelMembership } from "./membership_plans.js";
 
 // --- BPS CONVERTER IMPORT ---
 import { renderBpsConverter } from "./bpsConverter.js";
@@ -43,6 +43,40 @@ import { initFineSystem } from "./fines.js";
 
 // --- INSURANCE SYSTEM IMPORT ---
 import { initInsurance, checkMondayAllowance } from "./finance/insurance.js";
+
+let currentMembershipPricing = {};
+
+function renderMembershipPricing(pricing = currentMembershipPricing) {
+    for (const tier of ["basic", "premium", "platinum"]) {
+        const priceElement = document.querySelector(`[data-membership-price="${tier}"]`);
+        const saleElement = document.querySelector(`[data-membership-sale="${tier}"]`);
+        if (!priceElement) continue;
+
+        const effective = getMembershipPrice(tier, pricing);
+        const formatPrice = (amount) => `$${Math.round(amount).toLocaleString()}`;
+        if (effective.sale) {
+            priceElement.innerHTML = `<span style="font-size: 0.85em; color: #888; text-decoration: line-through; font-weight: 600;">${formatPrice(effective.basePrice)}</span> <strong>${formatPrice(effective.price)}</strong>`;
+            if (saleElement) {
+                const startsAt = new Date(effective.sale.startsAt).toLocaleDateString();
+                const endsAt = new Date(effective.sale.endsAt).toLocaleDateString();
+                saleElement.textContent = `FLASH SALE ${effective.sale.percentOff}% OFF · ${startsAt} – ${endsAt}`;
+            }
+        } else {
+            priceElement.textContent = formatPrice(effective.basePrice);
+            if (saleElement) saleElement.textContent = "";
+        }
+    }
+}
+
+onSnapshot(doc(db, "settings", "membershipPricing"), (snap) => {
+    currentMembershipPricing = snap.exists() ? snap.data() : {};
+    renderMembershipPricing();
+}, (error) => console.warn("Membership pricing listener error:", error));
+window.addEventListener("membership-pricing-updated", (event) => {
+    currentMembershipPricing = event.detail || {};
+    renderMembershipPricing();
+});
+setInterval(() => renderMembershipPricing(), 30000);
 
 // --- NEW BPS SECURITY IMPORTS ---
 import { openPinModal } from "./securityModal.js";
@@ -1033,7 +1067,7 @@ function updateDashboardUI(user, dynamicRate) {
 
   const employmentStatus = data.employmentStatus || "Unemployed";
   if (employmentStatusEl) {
-    employmentStatusEl.textContent = employmentStatus;
+        employmentStatusEl.textContent = employmentStatus;
     employmentStatusEl.style.color = employmentStatus === "Employed"
       ? "green"
       : employmentStatus === "Retired"
@@ -1184,20 +1218,25 @@ window.joinPlan = async (planKey) => {
     const plan = PLANS[planKey];
     const userRef = doc(db, "users", auth.currentUser.uid);
     const oldTier = currentDashboardData.membershipLevel || 'standard';
+    const pricing = await getMembershipPricing();
+    const currentPrice = getMembershipPrice(planKey, pricing);
 
     if (currentDashboardData.trialExpiration) return alert("End trial first.");
-    if (!confirm(`Join ${plan.label}?`)) return;
-    if (currentDashboardData.balance < plan.price) return alert("Insufficient funds!");
+    const pricePrompt = currentPrice.sale
+        ? `Join ${plan.label} for $${currentPrice.price.toLocaleString()} per month (${currentPrice.sale.percentOff}% off until ${new Date(currentPrice.sale.endsAt).toLocaleDateString()})?`
+        : `Join ${plan.label} for $${currentPrice.price.toLocaleString()} per month?`;
+    if (!confirm(pricePrompt)) return;
+    if (currentDashboardData.balance < currentPrice.price) return alert("Insufficient funds!");
 
     try {
         await updateDoc(userRef, {
             membershipLevel: planKey,
-            balance: increment(-plan.price),
+            balance: increment(-currentPrice.price),
             membershipLastPaid: new Date().toISOString(),
             shopOrderCount: 0
         });
         await logHistory(auth.currentUser.uid, `Subscribed to ${plan.label}`, "membership");
-        if (typeof purchaseMembership === "function") await purchaseMembership(auth.currentUser.uid, planKey, currentDashboardData, oldTier);
+        if (typeof purchaseMembership === "function") await purchaseMembership(auth.currentUser.uid, planKey, currentDashboardData, oldTier, currentPrice.price, pricing);
         alert(`Plan active!`);
     } catch (err) { alert("Error joining plan."); }
 };

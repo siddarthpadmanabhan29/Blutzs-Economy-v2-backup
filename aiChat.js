@@ -14,6 +14,7 @@ import { auth, db } from "./firebaseConfig.js";
 import { collection, doc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getCurrentDashboardData, getCachedHistory } from "./dashboard.js";
 import { getPortfolioSnapshot } from "./shop/stockMarket.js";
+import { PLANS, getMembershipPricingWithStatus, getMembershipPrice } from "./membership_plans.js";
 import { getCachedContracts } from "./contracts.js";
 import { getCreditStatus } from "./finance/loan.js";
 import { getDebtLedger } from "./debtManager.js";
@@ -278,6 +279,34 @@ async function buildUserContext() {
   }
 
   const stockPortfolio = getPortfolioSnapshot().filter((p) => p.shares > 0);
+  const membershipPricingResult = await getMembershipPricingWithStatus();
+  const membershipPricingConfig = membershipPricingResult.pricing;
+  const pricingCheckedAt = new Date();
+  const configuredSale = membershipPricingConfig.sale;
+  const saleStatus = !configuredSale
+    ? null
+    : new Date(configuredSale.endsAt) <= pricingCheckedAt
+      ? "expired"
+      : new Date(configuredSale.startsAt) > pricingCheckedAt
+        ? "scheduled"
+        : "active";
+  const membershipPlans = Object.fromEntries(
+    ["basic", "premium", "platinum"].map((tier) => {
+      const effectivePrice = getMembershipPrice(tier, membershipPricingConfig, pricingCheckedAt);
+      return [tier, {
+        label: PLANS[tier].label,
+        regularMonthlyPrice: effectivePrice.basePrice,
+        currentMonthlyPrice: effectivePrice.price,
+        salePercentOff: effectivePrice.sale ? Number(effectivePrice.sale.percentOff) : null,
+        saleEndsAt: effectivePrice.sale?.endsAt || null
+      }];
+    })
+  );
+  const lastMembershipPayment = data.membershipLastPaid ? new Date(data.membershipLastPaid) : null;
+  const nextMembershipRenewal = lastMembershipPayment && !Number.isNaN(lastMembershipPayment.getTime())
+    ? new Date(lastMembershipPayment)
+    : null;
+  if (nextMembershipRenewal) nextMembershipRenewal.setMonth(nextMembershipRenewal.getMonth() + 1);
   const contracts = getCachedContracts().map((c) => ({
     status: c.status,
     terms: c.terms || null,
@@ -385,6 +414,22 @@ async function buildUserContext() {
       atRiskAmount: Math.min(10, Number(data.bpsBalance || 0)),
     },
     membershipLevel: data.membershipLevel || "standard",
+    membership: {
+      level: data.membershipLevel || "standard",
+      pricingSource: membershipPricingResult.available ? "firestore-readable" : "defaults-fallback-settings-unavailable",
+      lastPaidAt: data.membershipLastPaid || null,
+      nextRenewalAt: nextMembershipRenewal?.toISOString() || null,
+      trialExpiration: data.trialExpiration || null,
+      lockedMonthlyPrice: data.membershipLockedPrice ?? null,
+      plans: membershipPlans,
+      configuredSale: configuredSale ? {
+        percentOff: Number(configuredSale.percentOff),
+        planKeys: configuredSale.planKeys || [],
+        startsAt: configuredSale.startsAt || null,
+        endsAt: configuredSale.endsAt || null,
+        status: saleStatus
+      } : null
+    },
     employmentStatus: data.employmentStatus || null,
     creditScore,
     creditTier: getCreditStatus(creditScore)?.label || null,
@@ -407,6 +452,12 @@ async function buildUserContext() {
     },
     chores: {
       summary: choreSummary,
+      userProgress: {
+        completed: Number(data.choresCompleted || 0),
+        points: Number(data.chorePoints || 0),
+        declines: Number(data.choreDeclines || 0),
+        pointsUntilNextBonus: 10 - (Number(data.chorePoints || 0) % 10)
+      },
       active: activeChores,
       guidance: {
         canAnswerGeneralQuestions: true,

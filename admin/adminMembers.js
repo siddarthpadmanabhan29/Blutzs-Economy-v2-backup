@@ -1,13 +1,154 @@
 import { db } from "../firebaseConfig.js";
-import { collection, doc, getDoc, getDocs, updateDoc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, updateDoc, setDoc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "../historyManager.js";
 import { sendSlackMessage } from "../slackNotifier.js";
+import { PLANS } from "../membership_plans.js";
 import { getDOMElements, handleUserLookup } from "./adminUtils.js";
 
 let renewalRequestsListener = null;
+let membershipPricingConfig = {};
+const membershipPricingRef = doc(db, "settings", "membershipPricing");
+
+function publishMembershipPricing(config) {
+  window.dispatchEvent(new CustomEvent("membership-pricing-updated", { detail: config }));
+}
 
 export function initMembershipsUI() {
   const el = getDOMElements();
+
+  const planSelect = document.getElementById("admin-membership-price-plan");
+  const priceInput = document.getElementById("admin-membership-price");
+  const savePriceBtn = document.getElementById("admin-save-membership-price");
+  const salePlanSelect = document.getElementById("admin-membership-sale-plan");
+  const salePercentInput = document.getElementById("admin-membership-sale-percent");
+  const saleDurationInput = document.getElementById("admin-membership-sale-duration");
+  const saleUnitSelect = document.getElementById("admin-membership-sale-unit");
+  const saveSaleBtn = document.getElementById("admin-save-membership-sale");
+  const clearSaleBtn = document.getElementById("admin-clear-membership-sale");
+  const pricingStatus = document.getElementById("admin-membership-pricing-status");
+
+  const refreshPriceInput = () => {
+    if (planSelect && priceInput) {
+      const plan = PLANS[planSelect.value];
+      priceInput.value = membershipPricingConfig.prices?.[planSelect.value] ?? plan?.price ?? "";
+    }
+  };
+
+  onSnapshot(membershipPricingRef, (snap) => {
+    membershipPricingConfig = snap.exists() ? snap.data() : {};
+    refreshPriceInput();
+    if (pricingStatus) {
+      const sale = membershipPricingConfig.sale;
+      const endsAt = sale?.endsAt ? new Date(sale.endsAt) : null;
+      const active = endsAt && new Date() < endsAt && sale.startsAt && new Date() >= new Date(sale.startsAt);
+      if (active) {
+        const labels = sale.planKeys.map((key) => PLANS[key]?.label || key).join(", ");
+        pricingStatus.textContent = `${sale.percentOff}% off ${labels} through ${endsAt.toLocaleString()}`;
+        if (clearSaleBtn) clearSaleBtn.disabled = false;
+      } else if (endsAt && new Date() < endsAt) {
+        pricingStatus.textContent = `Sale scheduled through ${endsAt.toLocaleString()}`;
+        if (clearSaleBtn) clearSaleBtn.disabled = false;
+      } else {
+        pricingStatus.textContent = "No active membership sale.";
+        if (clearSaleBtn) clearSaleBtn.disabled = true;
+      }
+    }
+  }, (error) => {
+    console.error("Membership pricing listener error:", error);
+    if (pricingStatus) pricingStatus.textContent = "Unable to load membership pricing settings.";
+  });
+
+  planSelect?.addEventListener("change", refreshPriceInput);
+  savePriceBtn?.addEventListener("click", async () => {
+    const planKey = planSelect?.value;
+    const price = Number(priceInput?.value);
+    if (!PLANS[planKey] || planKey === "standard" || !Number.isFinite(price) || price < 0) {
+      return alert("Choose a paid plan and enter a valid price of 0 or more.");
+    }
+    try {
+      const snap = await getDoc(membershipPricingRef);
+      const latest = snap.exists() ? snap.data() : {};
+      const updated = {
+        ...latest,
+        prices: { ...(latest.prices || {}), [planKey]: Math.round(price) },
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(membershipPricingRef, updated);
+      publishMembershipPricing(updated);
+      alert(`${PLANS[planKey].label} price updated. It applies on new signups and the next renewal.`);
+    } catch (error) {
+      console.error("Membership price update error:", error);
+      alert("Unable to update membership price.");
+    }
+  });
+
+  saveSaleBtn?.addEventListener("click", async () => {
+    const percentOff = Number(salePercentInput?.value);
+    const duration = Number(saleDurationInput?.value);
+    const unit = saleUnitSelect?.value;
+    const planKeys = salePlanSelect?.value === "all"
+      ? ["basic", "premium", "platinum"]
+      : [salePlanSelect?.value];
+    if (!Number.isFinite(percentOff) || percentOff <= 0 || percentOff > 100
+      || !Number.isInteger(duration) || duration < 1
+      || !["days", "months"].includes(unit)) {
+      return alert("Enter a discount from 1-100% and a duration of at least one day or month.");
+    }
+    const startsAt = new Date();
+    const endsAt = new Date(startsAt);
+    if (unit === "days") endsAt.setDate(endsAt.getDate() + duration);
+    else {
+      const dayOfMonth = endsAt.getDate();
+      endsAt.setDate(1);
+      endsAt.setMonth(endsAt.getMonth() + duration);
+      const finalDayOfMonth = new Date(endsAt.getFullYear(), endsAt.getMonth() + 1, 0).getDate();
+      endsAt.setDate(Math.min(dayOfMonth, finalDayOfMonth));
+    }
+    try {
+      const snap = await getDoc(membershipPricingRef);
+      const latest = snap.exists() ? snap.data() : {};
+      const updated = {
+        ...latest,
+        sale: { percentOff, planKeys, duration, durationUnit: unit, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() },
+        updatedAt: startsAt.toISOString()
+      };
+      await setDoc(membershipPricingRef, updated);
+      publishMembershipPricing(updated);
+      const priceLines = planKeys.map((key) => {
+        const originalPrice = Number(latest.prices?.[key] ?? PLANS[key].price);
+        const salePrice = Math.round(originalPrice * (1 - percentOff / 100));
+        return `• ${PLANS[key].label}: $${originalPrice.toLocaleString()} → $${salePrice.toLocaleString()} / month`;
+      }).join("\n");
+      await sendSlackMessage(
+        `🏷️ *Membership Flash Sale Started*\n` +
+        `*Plans:* ${planKeys.map((key) => PLANS[key].label).join(", ")}\n` +
+        `*Discount:* ${percentOff}% off for ${duration} ${unit}\n` +
+        `*Active until:* ${endsAt.toLocaleString()}\n` +
+        `*Prices:*\n${priceLines}\n` +
+        `*Time:* ${startsAt.toLocaleString()}`
+      );
+      alert(`Membership sale is active through ${endsAt.toLocaleString()}.`);
+    } catch (error) {
+      console.error("Membership sale update error:", error);
+      alert("Unable to start membership sale.");
+    }
+  });
+
+  clearSaleBtn?.addEventListener("click", async () => {
+    if (!confirm("End the current membership sale now?")) return;
+    try {
+      const snap = await getDoc(membershipPricingRef);
+      const latest = snap.exists() ? snap.data() : {};
+      const updated = { ...latest, sale: null, updatedAt: new Date().toISOString() };
+      await setDoc(membershipPricingRef, updated);
+      publishMembershipPricing(updated);
+    } catch (error) {
+      console.error("Membership sale removal error:", error);
+      alert("Unable to end membership sale.");
+    }
+  });
+
+  refreshPriceInput();
   
   if (el.adminGrantTrialBtn) {
     el.adminGrantTrialBtn.addEventListener("click", grantTrialMembership);
