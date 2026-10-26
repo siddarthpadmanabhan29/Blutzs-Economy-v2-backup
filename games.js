@@ -1,7 +1,7 @@
 import { db, auth } from "./firebaseConfig.js";
 import { doc, getDoc, updateDoc, increment, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "./historyManager.js";
-import { computeDailyLoginClaim, getDefaultGamesConfig, getPrizeForDay } from "./gamesLogic.js";
+import { computeDailyLoginClaim, getCompletedDailyLoginScheduleDay, getDefaultGamesConfig, getLocalDateKey, getPrizeForDay } from "./gamesLogic.js";
 import { buildBpsBalanceUpdate } from "./expirationUtils.js";
 
 let gamesConfig = getDefaultGamesConfig();
@@ -18,13 +18,6 @@ function formatPrize(prize) {
   if (money) parts.push(`$${money.toLocaleString()}`);
   if (bps) parts.push(`${bps} BPS`);
   return parts.join(" + ");
-}
-
-// Returns true if two Date objects fall on the same LOCAL calendar day.
-function isSameLocalDay(dateA, dateB) {
-  return dateA.getFullYear() === dateB.getFullYear() &&
-         dateA.getMonth() === dateB.getMonth() &&
-         dateA.getDate() === dateB.getDate();
 }
 
 // Milliseconds remaining until the next local midnight (device/computer time).
@@ -101,8 +94,8 @@ function startTimer(lastClaimDate) {
       return;
     }
 
-    const parsedDate = new Date(lastClaimDate);
-    if (isNaN(parsedDate.getTime())) {
+    const lastClaimDay = getLocalDateKey(lastClaimDate);
+    if (!lastClaimDay) {
       timerEl.textContent = "Ready to claim now!";
       timerEl.style.color = "#2ecc71";
       if (timerInterval) clearInterval(timerInterval);
@@ -113,7 +106,7 @@ function startTimer(lastClaimDate) {
 
     // If the last claim wasn't today (local time), a new day has already
     // started, so the user is free to claim/recover right now.
-    if (!isSameLocalDay(parsedDate, now)) {
+    if (lastClaimDay !== getLocalDateKey(now)) {
       timerEl.textContent = "Ready to claim now!";
       timerEl.style.color = "#2ecc71";
       if (timerInterval) clearInterval(timerInterval);
@@ -142,17 +135,20 @@ function startTimer(lastClaimDate) {
   timerInterval = setInterval(updateTimer, 1000);
 }
 
-function updateDayTracker(currentDay, lastClaimDate) {
+function updateDayTracker(claimState) {
   const tracker = document.getElementById("games-day-tracker");
   if (!tracker) return;
+
+  const completedThroughDay = getCompletedDailyLoginScheduleDay(claimState);
 
   const dayItems = tracker.querySelectorAll(".games-day-item");
   dayItems.forEach((item) => {
     const day = Number(item.dataset.day);
-    item.style.background = day < currentDay ? "rgba(212, 175, 55, 0.3)" : "var(--input-bg)";
-    item.style.border = day < currentDay ? "2px solid #d4af37" : "1px solid var(--border-color)";
-    item.style.color = day < currentDay ? "#d4af37" : "var(--text-main)";
-    item.style.textShadow = day < currentDay ? "0 0 8px rgba(212, 175, 55, 0.5)" : "none";
+    const isCompleted = day <= completedThroughDay;
+    item.style.background = isCompleted ? "rgba(212, 175, 55, 0.3)" : "var(--input-bg)";
+    item.style.border = isCompleted ? "2px solid #d4af37" : "1px solid var(--border-color)";
+    item.style.color = isCompleted ? "#d4af37" : "var(--text-main)";
+    item.style.textShadow = isCompleted ? "0 0 8px rgba(212, 175, 55, 0.5)" : "none";
   });
 }
 
@@ -208,21 +204,25 @@ function renderGamesUI(userData, claimState) {
   const lastClaimEl = document.getElementById("games-last-claim");
   const confirmBtn = document.getElementById("games-confirm-btn");
 
-  const currentDay = Number(userData?.dailyLoginDay || 1);
-  const prize = getPrizeForDay(gamesConfig, currentDay);
+  const streakDay = claimState.streakDayToClaim;
+  const scheduleDay = claimState.dayToClaim;
+  const prize = getPrizeForDay(gamesConfig, scheduleDay);
   const recoveryCost = gamesConfig.recoveryCost || { money: 5000, bps: 2 };
   const lastClaimDate = userData?.lastDailyLoginDate;
 
-  if (streakEl) streakEl.textContent = `Day ${currentDay}`;
-  if (dayCardEl) dayCardEl.textContent = `Day ${currentDay}`;
+  if (streakEl) streakEl.textContent = `Day ${streakDay}`;
+  if (dayCardEl) dayCardEl.textContent = `Day ${streakDay}`;
   if (prizeEl) prizeEl.textContent = formatPrize(prize);
   if (recoveryEl) recoveryEl.textContent = `Recovery available for $${Number(recoveryCost.money || 0).toLocaleString()} or ${Number(recoveryCost.bps || 0)} BPS.`;
 
   if (lastClaimEl) {
-    lastClaimEl.textContent = lastClaimDate ? new Date(lastClaimDate).toLocaleDateString() : "No confirmation yet.";
+    const lastClaimDay = lastClaimDate ? getLocalDateKey(lastClaimDate) : null;
+    lastClaimEl.textContent = lastClaimDay
+      ? new Date(`${lastClaimDay}T00:00:00`).toLocaleDateString()
+      : "No confirmation yet.";
   }
 
-  updateDayTracker(currentDay, lastClaimDate);
+  updateDayTracker(claimState);
   startTimer(lastClaimDate);
 
   // Recovery section/button is always shown; lock state depends on claimState.
@@ -245,7 +245,7 @@ function renderGamesUI(userData, claimState) {
   }
 
   if (claimState.status === "claim") {
-    setStatus(`Ready to confirm Day ${currentDay}.`, "#2ecc71");
+    setStatus(`Ready to confirm streak Day ${streakDay} (reward schedule Day ${scheduleDay}).`, "#2ecc71");
     confirmBtn.disabled = false;
     confirmBtn.textContent = "Confirm Daily Login";
     confirmBtn.style.background = "linear-gradient(135deg, #8e44ad, #6c5ce7)";
@@ -336,6 +336,7 @@ export async function initGamesUI() {
 
     const recoveryCost = gamesConfig.recoveryCost || { money: 5000, bps: 2 };
     const claimDay = Number(claimState.dayToClaim || 1);
+    const streakDay = Number(claimState.streakDayToClaim || 1);
     const prize = getPrizeForDay(gamesConfig, claimDay);
 
     if (claimState.status === "recoverable-miss") {
@@ -382,15 +383,15 @@ export async function initGamesUI() {
 
     const updates = {
       lastDailyLoginDate: new Date().toISOString(),
-      dailyLoginDay: Number(claimState.nextDay || (claimDay + 1 > 7 ? 1 : claimDay + 1))
+      dailyLoginDay: claimState.nextDay
     };
 
     if (payout.money) updates.balance = increment(payout.money);
     if (payout.bps) updates.bpsBalance = increment(payout.bps);
 
     await updateDoc(userRef, updates);
-    await logHistory(user.uid, `Confirmed daily login Day ${claimDay}${payout.money || payout.bps ? ` and received ${formatPrize(payout)}` : ""}`, "transfer-in");
-    setStatus(`Confirmed Day ${claimDay}. ${payout.money || payout.bps ? `You received ${formatPrize(payout)}.` : "No prize this time."}`, "#2ecc71");
+    await logHistory(user.uid, `Confirmed daily login streak Day ${streakDay} (reward Day ${claimDay})${payout.money || payout.bps ? ` and received ${formatPrize(payout)}` : ""}`, "transfer-in");
+    setStatus(`Confirmed streak Day ${streakDay} (reward schedule Day ${claimDay}). ${payout.money || payout.bps ? `You received ${formatPrize(payout)}.` : "No prize this time."}`, "#2ecc71");
   };
 
   recoveryBtn.onclick = async () => {
@@ -447,14 +448,14 @@ export async function initGamesUI() {
       await updateDoc(userRef, { 
         balance: increment(-Number(recoveryCost.money || 0)), 
         lastDailyLoginDate: new Date().toISOString(), 
-        dailyLoginDay: Number(userData.dailyLoginDay || 1) 
+        dailyLoginDay: Number(userData.dailyLoginDay || 1)
       });
       await logHistory(user.uid, `Purchased daily login recovery for $${Number(recoveryCost.money || 0).toLocaleString()}`, "usage");
     } else {
       await updateDoc(userRef, { 
         ...buildBpsBalanceUpdate(userData, -Number(recoveryCost.bps || 0), new Date()), 
         lastDailyLoginDate: new Date().toISOString(), 
-        dailyLoginDay: Number(userData.dailyLoginDay || 1) 
+        dailyLoginDay: Number(userData.dailyLoginDay || 1)
       });
       await logHistory(user.uid, `Purchased daily login recovery for ${Number(recoveryCost.bps || 0)} BPS`, "usage");
     }
