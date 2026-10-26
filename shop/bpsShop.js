@@ -2,7 +2,7 @@
 console.log("bpsShop.js loaded");
 import { db, auth } from "../firebaseConfig.js";
 import { 
- doc, getDoc, updateDoc, collection, getDocs, arrayUnion, addDoc, query, where, increment 
+ doc, getDoc, updateDoc, collection, getDocs, arrayUnion, addDoc, query, where, increment, onSnapshot
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // --- NEW BPS SECURITY IMPORTS ---
@@ -17,38 +17,49 @@ const bpsContainer = document.getElementById("bps-shop-items");
 // We store data locally to avoid constant database pings
 let currentUserData = null;
 let currentBpsItems = [];
+let bpsShopUnsubscribe = null;
+let saleExpiryTimer = null;
 
 /**
  * HELPER: Calculates the effective cost based on Insurance Package C (Cross Go)
  */
-function getEffectiveCost(baseCost) {
- const hasInsuranceDiscount = currentUserData?.insurance?.activePackages?.includes("crossgo_c");
+function getEffectiveCost(baseCost, userData = currentUserData) {
+ const hasInsuranceDiscount = userData?.insurance?.activePackages?.includes("crossgo_c");
  if (hasInsuranceDiscount) {
    return Math.floor(baseCost * 0.9); // 10% Discount
  }
  return baseCost;
 }
 
+function getActiveSalePrice(item, now = new Date()) {
+ const saleEndsAt = item.saleEndsAt ? new Date(item.saleEndsAt) : null;
+ const salePrice = Number(item.salePrice);
+ if (!saleEndsAt || !Number.isFinite(saleEndsAt.getTime()) || saleEndsAt <= now ||
+     !Number.isSafeInteger(salePrice) || salePrice < 1 || salePrice >= Number(item.cost)) {
+   return null;
+ }
+ return salePrice;
+}
+
 async function loadBpsShop() {
  const user = auth.currentUser;
  if (!user) return;
 
- const shopRef = collection(db, "bpsShop");
  const userRef = doc(db, "users", user.uid);
 
  try {
-   // ONE-TIME FETCH: Read the catalog once to save reads
-   const querySnap = await getDocs(shopRef);
-   currentBpsItems = [];
-   querySnap.forEach(doc => currentBpsItems.push({ id: doc.id, ...doc.data() }));
-
-   // Fetch user data once for the initial render
    const userSnap = await getDoc(userRef);
    if (userSnap.exists()) {
      currentUserData = userSnap.data();
    }
 
-   renderBpsShop();
+   if (bpsShopUnsubscribe) bpsShopUnsubscribe();
+   bpsShopUnsubscribe = onSnapshot(collection(db, "bpsShop"), (snapshot) => {
+     currentBpsItems = snapshot.docs.map(itemDoc => ({ id: itemDoc.id, ...itemDoc.data() }));
+     renderBpsShop();
+   }, (err) => {
+     console.error("Failed to listen to BPS shop updates:", err);
+   });
  } catch (err) {
    console.error("Failed to load BPS shop:", err);
  }
@@ -160,7 +171,10 @@ function renderBpsShop(externalUserData = null) {
     const isExpired = expirationDate && expirationDate < now;
 
     currentBpsItems.forEach(item => {
-        const finalCost = getEffectiveCost(item.cost);
+        const activeSalePrice = getActiveSalePrice(item, now);
+        const saleEndsAt = activeSalePrice !== null ? new Date(item.saleEndsAt) : null;
+        const priceBeforeInsurance = activeSalePrice ?? Number(item.cost);
+        const finalCost = getEffectiveCost(priceBeforeInsurance);
         const affordable = userBPS >= finalCost;
         const isGiftCard = item.type === "giftcard";
         const isLoanDiscount = item.type === "loan_discount";
@@ -222,17 +236,13 @@ function renderBpsShop(externalUserData = null) {
             ? `<span style="display: inline-block; font-size: 0.6rem; color: #8e44ad; font-weight: 900; text-transform: uppercase; margin-top: 4px; background: rgba(142, 68, 173, 0.12); padding: 2px 6px; border-radius: 4px;">Applies to one active loan</span>`
             : "";
 
-        const priceHTML = hasInsuranceDiscount 
-            ? `
+        const priceHTML = `
             <div style="margin: 10px 0;">
-                <span style="text-decoration: line-through; color: ${isGiftCard ? '#eee' : 'var(--text-muted)'}; font-size: 0.8rem; opacity: 0.8;">${item.cost} BPS</span>
+                ${activeSalePrice !== null ? `<span style="text-decoration: line-through; color: ${isGiftCard ? '#eee' : 'var(--text-muted)'}; font-size: 0.8rem; opacity: 0.8;">${Number(item.cost)} BPS</span>` : ""}
+                ${hasInsuranceDiscount ? `<span style="display: block; text-decoration: line-through; color: ${isGiftCard ? '#eee' : 'var(--text-muted)'}; font-size: 0.75rem; opacity: 0.8;">${priceBeforeInsurance} BPS</span>` : ""}
                 <div style="color: ${priceColor}; font-weight: 900; font-size: 1.3rem; letter-spacing: -0.5px;">${finalCost} <span style="font-size: 0.7rem; opacity: 0.8;">BPS</span></div>
-                <div style="display: inline-block; font-size: 0.6rem; color: #2ecc71; font-weight: 800; text-transform: uppercase; margin-top: 4px; background: rgba(255, 255, 255, 0.15); padding: 2px 6px; border-radius: 4px;">🛡️ Insurance -10%</div>
-                ${itemBadge}
-            </div>`
-            : `
-            <div style="margin: 10px 0;">
-                <div style="color: ${priceColor}; font-weight: 900; font-size: 1.3rem; letter-spacing: -0.5px;">${item.cost} <span style="font-size: 0.7rem; opacity: 0.8;">BPS</span></div>
+                ${activeSalePrice !== null ? `<div style="display: inline-block; font-size: 0.6rem; color: #fff; font-weight: 800; text-transform: uppercase; margin-top: 4px; background: #e74c3c; padding: 2px 6px; border-radius: 4px;">⚡ Flash sale · ends ${saleEndsAt.toLocaleDateString()}</div>` : ""}
+                ${hasInsuranceDiscount ? `<div style="display: inline-block; font-size: 0.6rem; color: #2ecc71; font-weight: 800; text-transform: uppercase; margin-top: 4px; background: rgba(255, 255, 255, 0.15); padding: 2px 6px; border-radius: 4px;">🛡️ Insurance -10%</div>` : ""}
                 ${itemBadge}
             </div>`;
 
@@ -266,6 +276,20 @@ function renderBpsShop(externalUserData = null) {
  }
 
  attachBpsListeners();
+ scheduleSaleExpiryRefresh();
+}
+
+function scheduleSaleExpiryRefresh() {
+ if (saleExpiryTimer) clearTimeout(saleExpiryTimer);
+ const now = Date.now();
+ const nextExpiry = currentBpsItems
+   .map(item => new Date(item.saleEndsAt).getTime())
+   .filter(expiry => Number.isFinite(expiry) && expiry > now)
+   .sort((left, right) => left - right)[0];
+ if (nextExpiry) {
+   const refreshDelay = Math.min(nextExpiry - now + 100, 2147483647);
+   saleExpiryTimer = setTimeout(() => renderBpsShop(), refreshDelay);
+ }
 }
 
 function attachBpsListeners() {
@@ -302,7 +326,6 @@ function attachBpsListeners() {
  document.querySelectorAll(".buy-bps-btn").forEach(btn => {
    btn.addEventListener("click", () => {
        const itemId = btn.dataset.id;
-       const cost = Number(btn.dataset.cost);
 
        if (!currentUserData?.isLoyaltyRegistered) {
            openPinModal('register', () => {
@@ -313,14 +336,14 @@ function attachBpsListeners() {
                btn.disabled = true;
                btn.style.opacity = "0.7";
                btn.textContent = "Processing...";
-               await buyBpsItem(itemId, cost, btn);
+               await buyBpsItem(itemId, btn);
            });
        }
    });
  });
 }
 
-async function buyBpsItem(itemId, finalCost, btnElement) {
+async function buyBpsItem(itemId, btnElement) {
  const user = auth.currentUser;
  if (!user) return;
 
@@ -329,15 +352,20 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
 
  try {
    const [userSnap, itemSnap] = await Promise.all([getDoc(userRef), getDoc(itemRef)]);
+   if (!userSnap.exists()) {
+       alert("Your account could not be loaded. Please try again.");
+       return resetBtn(btnElement);
+   }
    const userData = userSnap.data();
-         const itemData = itemSnap.exists() ? itemSnap.data() : null;
-     if (!itemData) {
-             alert("That shop item is unavailable right now.");
-             return resetBtn(btnElement);
-     }
+   const itemData = itemSnap.exists() ? itemSnap.data() : null;
+   if (!itemData) {
+       alert("That shop item is unavailable right now.");
+       return resetBtn(btnElement);
+   }
    const senderName = userData.username || userData.displayName || user.uid;
 
    const now = new Date();
+   const finalCost = getEffectiveCost(getActiveSalePrice(itemData, now) ?? Number(itemData.cost), userData);
    const timestampStr = now.toLocaleString();
    const expirationDate = userData.expirationDate ? new Date(userData.expirationDate) : null;
    if (expirationDate && expirationDate < now) {
@@ -345,7 +373,7 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
        return resetBtn(btnElement);
    }
 
-   if(userData.bpsBalance < finalCost) {
+   if(Number(userData.bpsBalance || 0) < finalCost) {
        alert("Not enough BPS Tokens!");
        return resetBtn(btnElement);
    }
@@ -422,7 +450,7 @@ async function buyBpsItem(itemId, finalCost, btnElement) {
        if (!success) return resetBtn(btnElement);
    } else {
        // Standard Coupon Logic
-       const newBpsBalance = userData.bpsBalance - finalCost;
+       const newBpsBalance = Number(userData.bpsBalance || 0) - finalCost;
        await updateDoc(userRef, { bpsBalance: newBpsBalance });
 
        const inventoryRef = collection(db, "users", user.uid, "inventory");
@@ -458,7 +486,17 @@ function resetBtn(btn) {
    }
 }
 
-auth.onAuthStateChanged(user => { if(user) loadBpsShop(); });
+auth.onAuthStateChanged(user => {
+ if (user) loadBpsShop();
+ else {
+   if (bpsShopUnsubscribe) bpsShopUnsubscribe();
+   bpsShopUnsubscribe = null;
+   if (saleExpiryTimer) clearTimeout(saleExpiryTimer);
+   saleExpiryTimer = null;
+   currentUserData = null;
+   currentBpsItems = [];
+ }
+});
 
 // setInterval(() => {
 //  if (currentUserData) {

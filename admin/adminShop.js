@@ -1,13 +1,16 @@
 import { db, auth } from "../firebaseConfig.js";
 import { 
-  collection, addDoc, onSnapshot, getDocs, updateDoc, doc, deleteDoc, query, where 
+  collection, addDoc, onSnapshot, getDocs, updateDoc, doc, deleteDoc, query, where, writeBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getDOMElements, logAdminAction } from "./adminUtils.js";
+import { sendSlackMessage } from "../slackNotifier.js";
 
 let shopItems = [];
+let bpsShopItems = [];
 let subscriptionItems = [];
 let stockCompanies = [];
 let activeShopListener = null;
+let activeBpsShopListener = null;
 let activeSubListener = null;
 let activeStockListener = null;
 
@@ -24,7 +27,222 @@ export function initShopUI() {
     console.warn("❌ Admin shop inventory container not found - buttons won't work");
   }
 
+  if (el.adminBpsShopInventory) {
+    el.adminBpsShopInventory.addEventListener("click", handleBpsShopActions);
+  }
+  if (el.applyBpsSaleToAllBtn) {
+    el.applyBpsSaleToAllBtn.addEventListener("click", () => applyBpsSale("all"));
+  }
+  if (el.applyBpsSaleToSelectedBtn) {
+    el.applyBpsSaleToSelectedBtn.addEventListener("click", () => applyBpsSale("selected"));
+  }
+
   listenForShopItems();
+  listenForBpsShopItems();
+}
+
+function listenForBpsShopItems() {
+  if (activeBpsShopListener) activeBpsShopListener();
+
+  activeBpsShopListener = onSnapshot(collection(db, "bpsShop"), (snapshot) => {
+    bpsShopItems = snapshot.docs.map((itemDoc) => ({ id: itemDoc.id, ...itemDoc.data() }));
+    renderAdminBpsShopUI();
+  }, (err) => {
+    console.error("❌ Failed to listen to BPS shop items:", err);
+    const inventory = getDOMElements().adminBpsShopInventory;
+    if (inventory) inventory.textContent = "Unable to load BPS shop items. Check console for details.";
+  });
+}
+
+function renderAdminBpsShopUI() {
+  const inventory = getDOMElements().adminBpsShopInventory;
+  if (!inventory) return;
+
+  inventory.replaceChildren();
+  if (bpsShopItems.length === 0) {
+    inventory.textContent = "No BPS shop items found.";
+    return;
+  }
+
+  bpsShopItems.forEach((item) => {
+    const card = document.createElement("div");
+    card.style.cssText = "background: rgba(0,0,0,0.2); border: 1px solid #49305d; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px;";
+
+    const title = document.createElement("strong");
+    title.textContent = item.name || item.id;
+    title.style.color = "#fff";
+    card.appendChild(title);
+
+    const currentPrice = document.createElement("span");
+    currentPrice.textContent = `Current base price: ${Number(item.cost || 0).toLocaleString()} BPS`;
+    currentPrice.style.cssText = "font-size: 0.8rem; color: #aaa;";
+    card.appendChild(currentPrice);
+
+    const priceControls = document.createElement("div");
+    priceControls.style.cssText = "display: flex; gap: 8px;";
+    const priceInput = document.createElement("input");
+    priceInput.type = "number";
+    priceInput.min = "1";
+    priceInput.step = "1";
+    priceInput.value = String(Number(item.cost || 0));
+    priceInput.dataset.bpsPriceInput = item.id;
+    priceInput.setAttribute("aria-label", `Base price for ${item.name || item.id}`);
+    priceInput.style.cssText = "min-width: 0; flex: 1; padding: 8px; background: #111; border: 1px solid #444; border-radius: 6px; color: #fff;";
+    const savePrice = document.createElement("button");
+    savePrice.type = "button";
+    savePrice.dataset.bpsAction = "save-price";
+    savePrice.dataset.itemId = item.id;
+    savePrice.textContent = "Save price";
+    savePrice.style.cssText = "background: #3498db; color: white; border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer;";
+    priceControls.append(priceInput, savePrice);
+    card.appendChild(priceControls);
+
+    const selection = document.createElement("label");
+    selection.style.cssText = "display: flex; gap: 8px; align-items: center; color: #ddd; font-size: 0.8rem;";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.bpsSaleSelection = item.id;
+    selection.append(checkbox, document.createTextNode("Include in selected-item sale"));
+    card.appendChild(selection);
+
+    const saleEndsAt = item.saleEndsAt ? new Date(item.saleEndsAt) : null;
+    const saleActive = Number.isFinite(saleEndsAt?.getTime()) && saleEndsAt > new Date() &&
+      Number.isSafeInteger(Number(item.salePrice)) && Number(item.salePrice) > 0 && Number(item.salePrice) < Number(item.cost);
+    const saleStatus = document.createElement("span");
+    saleStatus.textContent = saleActive
+      ? `Sale: ${Number(item.salePrice).toLocaleString()} BPS until ${saleEndsAt.toLocaleString()}`
+      : item.saleEndsAt
+        ? "Sale expired"
+        : "No active sale";
+    saleStatus.style.cssText = `font-size: 0.75rem; color: ${saleActive ? "#2ecc71" : "#888"};`;
+    card.appendChild(saleStatus);
+
+    if (item.salePrice || item.saleEndsAt) {
+      const clearSale = document.createElement("button");
+      clearSale.type = "button";
+      clearSale.dataset.bpsAction = "clear-sale";
+      clearSale.dataset.itemId = item.id;
+      clearSale.textContent = "End sale now";
+      clearSale.style.cssText = "background: #8e44ad; color: white; border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer;";
+      card.appendChild(clearSale);
+    }
+    inventory.appendChild(card);
+  });
+}
+
+async function handleBpsShopActions(event) {
+  const button = event.target.closest("button[data-bps-action]");
+  if (!button) return;
+
+  const { bpsAction, itemId } = button.dataset;
+  const item = bpsShopItems.find((entry) => entry.id === itemId);
+  if (!item) return;
+
+  if (bpsAction === "save-price") {
+    const input = button.closest("div")?.querySelector("input[data-bps-price-input]");
+    const cost = Number(input?.value);
+    if (!Number.isSafeInteger(cost) || cost < 1) {
+      alert("Enter a whole-number BPS price greater than zero.");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "bpsShop", itemId), { cost });
+      await logAdminAction(auth.currentUser.uid, `Changed BPS shop price for ${item.name || itemId} to ${cost} BPS`);
+      alert(`Updated ${item.name || "item"} to ${cost} BPS.`);
+    } catch (err) {
+      console.error("❌ Failed to update BPS shop price:", err);
+      alert("Failed to update BPS shop price. Check console for details.");
+    }
+  } else if (bpsAction === "clear-sale") {
+    try {
+      await updateDoc(doc(db, "bpsShop", itemId), {
+        salePrice: deleteField(),
+        saleEndsAt: deleteField()
+      });
+      await logAdminAction(auth.currentUser.uid, `Ended BPS shop sale for ${item.name || itemId}`);
+      await sendSlackMessage(`🛑 *BPS Shop Flash Sale Ended*\n*Item:* ${item.name || itemId}\n*Time:* ${new Date().toLocaleString()}`);
+    } catch (err) {
+      console.error("❌ Failed to end BPS shop sale:", err);
+      alert("Failed to end BPS shop sale. Check console for details.");
+    }
+  }
+}
+
+function getBpsSaleExpiry(duration, unit) {
+  const expiry = new Date();
+  if (unit === "months") {
+    const dayOfMonth = expiry.getDate();
+    expiry.setDate(1);
+    expiry.setMonth(expiry.getMonth() + duration);
+    const lastDayOfMonth = new Date(expiry.getFullYear(), expiry.getMonth() + 1, 0).getDate();
+    expiry.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+  } else {
+    expiry.setDate(expiry.getDate() + duration);
+  }
+  return expiry.toISOString();
+}
+
+async function applyBpsSale(target) {
+  const el = getDOMElements();
+  const discount = Number(el.bpsSaleDiscount?.value);
+  const duration = Number(el.bpsSaleDuration?.value);
+  const unit = el.bpsSaleDurationUnit?.value;
+
+  if (!Number.isFinite(discount) || discount < 1 || discount > 99) {
+    alert("Enter a sale discount from 1% to 99%.");
+    return;
+  }
+  if (!Number.isSafeInteger(duration) || duration < 1 || duration > 3650) {
+    alert("Enter a whole-number duration from 1 to 3650 days or months.");
+    return;
+  }
+  if (!["days", "months"].includes(unit)) {
+    alert("Choose days or months for the sale duration.");
+    return;
+  }
+
+  const selectedIds = target === "all"
+    ? bpsShopItems.map((item) => item.id)
+    : Array.from(el.adminBpsShopInventory?.querySelectorAll("input[data-bps-sale-selection]:checked") || [])
+      .map((checkbox) => checkbox.dataset.bpsSaleSelection);
+  const items = bpsShopItems.filter((item) => selectedIds.includes(item.id));
+  if (items.length === 0) {
+    alert(target === "all" ? "There are no BPS shop items to put on sale." : "Select at least one BPS shop item first.");
+    return;
+  }
+  if (items.some((item) => !Number.isSafeInteger(Number(item.cost)) || Number(item.cost) < 1)) {
+    alert("Every selected item must have a valid whole-number base price before a sale can be applied.");
+    return;
+  }
+  if (target === "all" && !confirm(`Apply a ${discount}% sale to all ${items.length} BPS shop items for ${duration} ${unit}?`)) return;
+
+  const saleEndsAt = getBpsSaleExpiry(duration, unit);
+  if (!Number.isFinite(new Date(saleEndsAt).getTime())) {
+    alert("That sale duration is too long to calculate an end date.");
+    return;
+  }
+  try {
+    for (let start = 0; start < items.length; start += 500) {
+      const batch = writeBatch(db);
+      items.slice(start, start + 500).forEach((item) => {
+        const salePrice = Math.max(1, Math.floor(Number(item.cost) * (1 - discount / 100)));
+        batch.update(doc(db, "bpsShop", item.id), { salePrice, saleEndsAt });
+      });
+      await batch.commit();
+    }
+    const targetName = target === "all" ? "all items" : `${items.length} selected item(s)`;
+    await logAdminAction(auth.currentUser.uid, `Applied ${discount}% BPS shop sale to ${targetName} for ${duration} ${unit}`);
+    const saleSummary = items.map((item) => {
+      const salePrice = Math.max(1, Math.floor(Number(item.cost) * (1 - discount / 100)));
+      return `${item.name || item.id}: ${Number(item.cost).toLocaleString()} → ${salePrice.toLocaleString()} BPS`;
+    }).join("\n");
+    await sendSlackMessage(`⚡ *BPS Shop Flash Sale Started*\n*Discount:* ${discount}%\n*Items:* ${targetName}\n*Duration:* ${duration} ${unit}\n*Ends:* ${new Date(saleEndsAt).toLocaleString()}\n${saleSummary}`);
+    alert(`Flash sale applied to ${targetName} until ${new Date(saleEndsAt).toLocaleString()}.`);
+  } catch (err) {
+    console.error("❌ Failed to apply BPS shop sale:", err);
+    alert("Failed to apply the BPS shop sale. Check console for details.");
+  }
 }
 
 export function listenForShopItems() {

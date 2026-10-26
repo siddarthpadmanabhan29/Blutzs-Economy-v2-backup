@@ -157,6 +157,12 @@ export function getDOMElements() {
     newItemStock: document.getElementById("new-item-stock"),
     newItemImage: document.getElementById("new-item-image"),
     adminShopInventory: document.getElementById("admin-shop-inventory"),
+    adminBpsShopInventory: document.getElementById("admin-bps-shop-inventory"),
+    bpsSaleDiscount: document.getElementById("bps-sale-discount"),
+    bpsSaleDuration: document.getElementById("bps-sale-duration"),
+    bpsSaleDurationUnit: document.getElementById("bps-sale-duration-unit"),
+    applyBpsSaleToAllBtn: document.getElementById("apply-bps-sale-all"),
+    applyBpsSaleToSelectedBtn: document.getElementById("apply-bps-sale-selected"),
     
     // Subscription Shop
     addSubscriptionBtn: document.getElementById("add-subscription-btn"),

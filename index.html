@@ -948,7 +948,42 @@
             </div>
         </div>
 
-        <div class="admin-section" style="border: 1px solid #2ecc71; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <div class="admin-section" style="border: 1px solid #8e44ad; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.2rem;">🪙</span>
+                    <h3 style="color: #bb86fc; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">BPS Shop Pricing & Flash Sales</h3>
+                </div>
+                <span style="font-size: 0.6rem; background: rgba(142, 68, 173, 0.15); color: #bb86fc; padding: 4px 10px; border-radius: 20px; font-weight: 800; border: 1px solid rgba(142, 68, 173, 0.35);">ADMIN CONTROLS</span>
+            </div>
+            <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px 0;">Change an item's regular BPS price, or apply a percentage flash sale to every item or selected items for a chosen number of days or months. Active insurance discounts continue to apply.</p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; background: rgba(0, 0, 0, 0.2); border: 1px solid #49305d; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                <div>
+                    <label for="bps-sale-discount" style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 7px;">Discount (%)</label>
+                    <input id="bps-sale-discount" type="number" min="1" max="99" step="1" value="10" style="width: 100%; box-sizing: border-box; height: 40px; padding: 0 10px; background: #111; border: 1px solid #49305d; border-radius: 6px; color: #fff;">
+                </div>
+                <div>
+                    <label for="bps-sale-duration" style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 7px;">Duration</label>
+                    <input id="bps-sale-duration" type="number" min="1" max="3650" step="1" value="7" style="width: 100%; box-sizing: border-box; height: 40px; padding: 0 10px; background: #111; border: 1px solid #49305d; border-radius: 6px; color: #fff;">
+                </div>
+                <div>
+                    <label for="bps-sale-duration-unit" style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 7px;">Duration unit</label>
+                    <select id="bps-sale-duration-unit" style="width: 100%; height: 40px; padding: 0 10px; background: #111; border: 1px solid #49305d; border-radius: 6px; color: #fff;">
+                        <option value="days">Days</option>
+                        <option value="months">Months</option>
+                    </select>
+                </div>
+                <button id="apply-bps-sale-all" type="button" style="height: 40px; background: #8e44ad; color: #fff; border: 0; border-radius: 6px; font-weight: 800; cursor: pointer;">Apply to all</button>
+                <button id="apply-bps-sale-selected" type="button" style="height: 40px; background: #6c5ce7; color: #fff; border: 0; border-radius: 6px; font-weight: 800; cursor: pointer;">Apply to selected</button>
+            </div>
+
+            <div id="admin-bps-shop-inventory" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-height: 600px; overflow-y: auto;">
+                <p style="color: #666; font-size: 0.9rem; grid-column: 1/-1; text-align: center; padding: 24px;">Loading BPS shop items...</p>
+            </div>
+        </div>
+
+                <div class="admin-section" style="border: 1px solid #2ecc71; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
         <span style="font-size: 1.2rem;">🧹</span>
         <h3 style="color: #2ecc71; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Chore Management</h3>
