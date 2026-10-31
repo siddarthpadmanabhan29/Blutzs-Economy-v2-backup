@@ -815,6 +815,34 @@ body.dark-mode #login-screen input:focus {
     #new-volatility-input { width: 100% !important; box-sizing: border-box !important; height: 45px !important; }
     #update-volatility-btn { width: 100% !important; margin: 0 !important; height: 45px !important; }
     #admin-current-volatility { font-size: 1.8rem !important; word-break: break-all; }
+    #central-bank-controls > div:first-child {
+        flex-wrap: wrap !important;
+        align-items: flex-start !important;
+    }
+    #central-bank-controls > div:first-child > div:first-child {
+        min-width: 0 !important;
+        flex: 1 1 180px !important;
+    }
+    #central-bank-controls > div:first-child h3 {
+        line-height: 1.25 !important;
+        overflow-wrap: anywhere;
+    }
+    #central-bank-resistance-controls {
+        display: flex !important;
+        flex-direction: column !important;
+        min-width: 0 !important;
+    }
+    #central-bank-resistance-controls #new-volatility-input,
+    #central-bank-resistance-controls #update-volatility-btn {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+    #central-bank-resistance-controls #update-volatility-btn {
+        padding: 0 12px !important;
+        white-space: normal !important;
+    }
 
     .top-stats-bar {
         flex-wrap: wrap !important;
@@ -928,6 +956,78 @@ body.dark-mode .admin-section select {
     background-position: right 10px center;
     background-size: 1em;
     padding-right: 40px !important; /* Space for the arrow */
+    color-scheme: dark;
+}
+
+body.dark-mode .admin-section select option {
+    background-color: #111;
+    color: #fff;
+}
+
+.admin-debt-type-picker {
+    position: relative;
+}
+
+.admin-debt-type-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 45px;
+    padding: 10px 15px;
+    background: #111;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 8px;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-debt-type-trigger:focus-visible,
+.admin-debt-type-option:focus-visible {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
+}
+
+.admin-debt-type-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    display: grid;
+    padding: 4px;
+    background: #111;
+    border: 1px solid #555;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+.admin-debt-type-menu[hidden] {
+    display: none;
+}
+
+.admin-debt-type-option {
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    color: #fff;
+    border: 0;
+    border-radius: 5px;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-debt-type-option:hover,
+.admin-debt-type-option[aria-checked="true"] {
+    background: #2b3d50;
+    color: #fff;
+}
+
+.admin-pricing-panel[hidden] {
+    display: none !important;
 }
 
 /* 1. Make the 3-lines button visible on Desktop too */
@@ -1779,6 +1879,65 @@ html {
 
 /* Small phones */
 @media (max-width: 480px) {
+    .contract-request-actions {
+        gap: 8px !important;
+    }
+
+    .contract-request-actions button {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 4px !important;
+        font-size: 0.62rem !important;
+        line-height: 1.2 !important;
+        letter-spacing: 0 !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+    }
+
+    #renewal-requests,
+    #renewal-requests .renew-request,
+    #renewal-requests .renew-request-actions {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    #renewal-requests .renew-request-user {
+        overflow-wrap: anywhere;
+    }
+
+    #renewal-requests .renew-request-actions {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+
+    #renewal-requests .renew-request-actions label {
+        width: 100%;
+    }
+
+    #renewal-requests .renew-expiration-date,
+    #renewal-requests .renew-request-actions button {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        min-height: 42px;
+        box-sizing: border-box !important;
+    }
+
+    #admin-membership-actions {
+        flex-direction: column !important;
+    }
+
+    #admin-membership-actions button {
+        width: 100% !important;
+        flex: none !important;
+        min-height: 45px !important;
+        padding: 10px 12px !important;
+        font-size: 0.8rem !important;
+        white-space: normal !important;
+    }
+
     #stock-market-list {
         grid-template-columns: 1fr !important;
         gap: 10px !important;

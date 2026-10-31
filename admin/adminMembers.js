@@ -285,13 +285,13 @@ export function loadRenewalRequests() {
         div.style.padding = "15px 0";
         div.style.borderBottom = "1px solid #eee";
         div.innerHTML = `
-          <div style="margin-bottom: 5px;">
+          <div class="renew-request-user" style="margin-bottom: 5px;">
             <strong style="font-size: 1.2em;">${userData.username}</strong><br>
             <span style="font-size: 0.9em; color: #888;">Requested: ${reqDate}</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+          <div class="renew-request-actions" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
             <label style="color: #888; font-size: 0.9em;">Expires:</label>
-            <input type="date" id="date-${docSnap.id}" style="background: #222; color: #fff; border: 1px solid #444; padding: 8px 12px; border-radius: 5px; flex-grow: 1;">
+            <input type="date" id="date-${docSnap.id}" class="renew-expiration-date" style="background: #222; color: #fff; border: 1px solid #444; padding: 8px 12px; border-radius: 5px; flex-grow: 1;">
             <button data-id="${docSnap.id}" class="approve-renew" style="background: #58d68d; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer;">Approve</button>
             <button data-id="${docSnap.id}" class="deny-renew" style="background: #e74c3c; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer;">Deny</button>
           </div>`;

@@ -16,6 +16,7 @@ let activeStockListener = null;
 
 export function initShopUI() {
   const el = getDOMElements();
+  initPricingCategoryPicker();
   
   if (el.addItemBtn) {
     el.addItemBtn.addEventListener("click", addShopItem);
@@ -39,6 +40,54 @@ export function initShopUI() {
 
   listenForShopItems();
   listenForBpsShopItems();
+}
+
+function initPricingCategoryPicker() {
+  const picker = document.getElementById("admin-pricing-category-picker");
+  const category = document.getElementById("admin-pricing-category");
+  const trigger = document.getElementById("admin-pricing-category-trigger");
+  const menu = document.getElementById("admin-pricing-category-menu");
+  const selectedLabel = document.getElementById("admin-pricing-category-selected");
+  const options = menu?.querySelectorAll(".admin-debt-type-option");
+  const bpsPanel = document.getElementById("admin-bps-pricing-panel");
+  const membershipPanel = document.getElementById("admin-membership-pricing-panel");
+
+  if (!picker || !category || !trigger || !menu || !selectedLabel || !options || !bpsPanel || !membershipPanel) return;
+
+  const closeMenu = () => {
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+  };
+
+  trigger.addEventListener("click", () => {
+    const isOpen = !menu.hidden;
+    menu.hidden = isOpen;
+    trigger.setAttribute("aria-expanded", String(!isOpen));
+  });
+
+  options.forEach((option) => {
+    option.addEventListener("click", () => {
+      const selectedCategory = option.dataset.value;
+      category.value = selectedCategory;
+      selectedLabel.textContent = option.textContent;
+      options.forEach((item) => item.setAttribute("aria-checked", String(item === option)));
+      bpsPanel.hidden = selectedCategory !== "bps";
+      membershipPanel.hidden = selectedCategory !== "membership";
+      closeMenu();
+      trigger.focus();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!picker.contains(event.target)) closeMenu();
+  });
+
+  picker.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !menu.hidden) {
+      closeMenu();
+      trigger.focus();
+    }
+  });
 }
 
 function listenForBpsShopItems() {

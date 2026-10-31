@@ -952,12 +952,29 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 1.2rem;">🪙</span>
-                    <h3 style="color: #bb86fc; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">BPS Shop Pricing & Flash Sales</h3>
+                    <h3 style="color: #bb86fc; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Shop Pricing & Flash Sales</h3>
                 </div>
                 <span style="font-size: 0.6rem; background: rgba(142, 68, 173, 0.15); color: #bb86fc; padding: 4px 10px; border-radius: 20px; font-weight: 800; border: 1px solid rgba(142, 68, 173, 0.35);">ADMIN CONTROLS</span>
             </div>
-            <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px 0;">Change an item's regular BPS price, or apply a percentage flash sale to every item or selected items for a chosen number of days or months. Active insurance discounts continue to apply.</p>
+            <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px 0;">Manage BPS shop prices and sales, or adjust membership prices and flash sales.</p>
 
+            <div style="margin-bottom: 15px;">
+                <label id="admin-pricing-category-label" style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 7px;">Pricing Category</label>
+                <input id="admin-pricing-category" type="hidden" value="bps">
+                <div id="admin-pricing-category-picker" class="admin-debt-type-picker">
+                    <button id="admin-pricing-category-trigger" class="admin-debt-type-trigger" type="button" aria-labelledby="admin-pricing-category-label admin-pricing-category-selected" aria-haspopup="menu" aria-expanded="false">
+                        <span id="admin-pricing-category-selected">BPS Shop</span>
+                        <span aria-hidden="true">▾</span>
+                    </button>
+                    <div id="admin-pricing-category-menu" class="admin-debt-type-menu" role="menu" hidden>
+                        <button class="admin-debt-type-option" type="button" role="menuitemradio" aria-checked="true" data-value="bps">BPS Shop</button>
+                        <button class="admin-debt-type-option" type="button" role="menuitemradio" aria-checked="false" data-value="membership">Membership</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-bps-pricing-panel" class="admin-pricing-panel">
+            <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px 0;">Change an item's regular BPS price, or apply a percentage flash sale to every item or selected items for a chosen number of days or months. Active insurance discounts continue to apply.</p>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; background: rgba(0, 0, 0, 0.2); border: 1px solid #49305d; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
                 <div>
                     <label for="bps-sale-discount" style="font-size: 0.65rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 7px;">Discount (%)</label>
@@ -980,6 +997,43 @@
 
             <div id="admin-bps-shop-inventory" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-height: 600px; overflow-y: auto;">
                 <p style="color: #666; font-size: 0.9rem; grid-column: 1/-1; text-align: center; padding: 24px;">Loading BPS shop items...</p>
+            </div>
+            </div>
+
+            <div id="admin-membership-pricing-panel" class="admin-pricing-panel" hidden>
+                <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px;">Price edits take effect at signup or the member's next renewal. Sales apply only when a signup or renewal is charged before the sale ends.</p>
+                <div id="admin-membership-pricing-status" role="status" style="padding: 10px; margin-bottom: 14px; background: rgba(0,0,0,0.2); border-left: 3px solid #f1c40f; color: #ddd; font-size: 0.8rem;">No active membership sale.</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end; margin-bottom: 18px;">
+                    <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">PLAN PRICE
+                        <select id="admin-membership-price-plan" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                            <option value="basic">Basic</option><option value="premium">Premium</option><option value="platinum">Platinum</option>
+                        </select>
+                    </label>
+                    <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">NEW MONTHLY PRICE
+                        <input id="admin-membership-price" type="number" min="0" step="1" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                    </label>
+                    <button id="admin-save-membership-price" type="button" class="btn-primary" style="height: 40px;">Save Price</button>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end;">
+                    <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">SALE PLANS
+                        <select id="admin-membership-sale-plan" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                            <option value="all">All paid plans</option><option value="basic">Basic</option><option value="premium">Premium</option><option value="platinum">Platinum</option>
+                        </select>
+                    </label>
+                    <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">PERCENT OFF
+                        <input id="admin-membership-sale-percent" type="number" min="1" max="100" step="1" placeholder="20" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                    </label>
+                    <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">DURATION
+                        <input id="admin-membership-sale-duration" type="number" min="1" step="1" placeholder="3" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                    </label>
+                    <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">DURATION UNIT
+                        <select id="admin-membership-sale-unit" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
+                            <option value="days">Days</option><option value="months">Months</option>
+                        </select>
+                    </label>
+                    <button id="admin-save-membership-sale" type="button" class="btn-primary" style="height: 40px; background: #f1c40f; color: #111;">Start Flash Sale</button>
+                    <button id="admin-clear-membership-sale" type="button" class="btn-danger" style="height: 40px;" disabled>End Sale</button>
+                </div>
             </div>
         </div>
 
@@ -1031,22 +1085,6 @@
         </div>
     </div>
 </div>
-
-        <div class="admin-section" style="border: 1px solid #f39c12; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                <span style="font-size: 1.2rem;">🧾</span>
-                <h3 style="color: #f39c12; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Admin Debt Waivers</h3>
-            </div>
-            <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px 0;">Waive individual admin-issued debt entries. Judicial fines are not listed or affected.</p>
-            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                <input id="admin-debt-waiver-username" placeholder="Enter username..." autocomplete="off"
-                       style="flex: 1; min-width: 0; height: 40px; background: #111; border: 1px solid #333; color: #fff; padding: 0 12px; border-radius: 8px; box-sizing: border-box;">
-                <button id="admin-load-debts-btn" type="button" class="btn-primary" style="height: 40px; padding: 0 16px;">Load Debts</button>
-            </div>
-            <div id="admin-debt-waiver-list" style="display: flex; flex-direction: column; gap: 10px;">
-                <p style="color: gray; font-style: italic; margin: 0;">Search for a user to review their admin debts.</p>
-            </div>
-        </div>
 
         <div class="admin-section" style="border: 1px solid #3498db; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
@@ -1121,58 +1159,31 @@
     </button>
 </div>
 
-        <div class="admin-section" style="border: 1px solid #f1c40f; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="color: #f1c40f; margin: 0 0 6px; font-size: 1rem; text-transform: uppercase;">Membership Pricing & Flash Sales</h3>
-            <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px;">Price edits take effect at signup or the member's next renewal. Sales apply only when a signup or renewal is charged before the sale ends.</p>
-            <div id="admin-membership-pricing-status" role="status" style="padding: 10px; margin-bottom: 14px; background: rgba(0,0,0,0.2); border-left: 3px solid #f1c40f; color: #ddd; font-size: 0.8rem;">No active membership sale.</div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end; margin-bottom: 18px;">
-                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">PLAN PRICE
-                    <select id="admin-membership-price-plan" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
-                        <option value="basic">Basic</option><option value="premium">Premium</option><option value="platinum">Platinum</option>
-                    </select>
-                </label>
-                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">NEW MONTHLY PRICE
-                    <input id="admin-membership-price" type="number" min="0" step="1" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
-                </label>
-                <button id="admin-save-membership-price" type="button" class="btn-primary" style="height: 40px;">Save Price</button>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end;">
-                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">SALE PLANS
-                    <select id="admin-membership-sale-plan" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
-                        <option value="all">All paid plans</option><option value="basic">Basic</option><option value="premium">Premium</option><option value="platinum">Platinum</option>
-                    </select>
-                </label>
-                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">PERCENT OFF
-                    <input id="admin-membership-sale-percent" type="number" min="1" max="100" step="1" placeholder="20" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
-                </label>
-                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">DURATION
-                    <input id="admin-membership-sale-duration" type="number" min="1" step="1" placeholder="3" style="display: block; width: 100%; height: 40px; box-sizing: border-box; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
-                </label>
-                <label style="font-size: 0.7rem; color: #aaa; font-weight: 800;">DURATION UNIT
-                    <select id="admin-membership-sale-unit" style="display: block; width: 100%; height: 40px; margin-top: 5px; background: #111; border: 1px solid #444; color: #fff; border-radius: 6px; padding: 0 8px;">
-                        <option value="days">Days</option><option value="months">Months</option>
-                    </select>
-                </label>
-                <button id="admin-save-membership-sale" type="button" class="btn-primary" style="height: 40px; background: #f1c40f; color: #111;">Start Flash Sale</button>
-                <button id="admin-clear-membership-sale" type="button" class="btn-danger" style="height: 40px;" disabled>End Sale</button>
-            </div>
-        </div>
-
         <div class="admin-section" style="border: 1px solid #e74c3c; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
         <span style="font-size: 1.2rem;">⚖️</span>
-            <h3 style="color: #e74c3c; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Judicial Fines & Debt Issuance</h3>
+            <h3 style="color: #e74c3c; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Judicial & Debt Management</h3>
     </div>
-        <p style="font-size: 0.75rem; color: #888; margin: 0 0 20px 0;">Issue a fine or admin debt entry. Debts remain visible in the user debt ledger and no longer lock the account.</p>
+        <p style="font-size: 0.75rem; color: #888; margin: 0 0 20px 0;">Issue fines or admin debt, waive admin-issued debt, and review judicial appeals. Debts remain visible in the user debt ledger and no longer lock the account.</p>
 
         <div style="margin-bottom: 12px;">
-            <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Debt Type</label>
-            <select id="admin-debt-type" style="width: 100%; height: 40px; background: #111; border: 1px solid #333; color: #fff; padding: 0 12px; border-radius: 8px; box-sizing: border-box; outline: none;">
-                <option value="fine">Judicial Fine</option>
-                <option value="admin">Admin Debt</option>
-            </select>
+            <label id="admin-debt-type-label" style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Admin Action</label>
+            <input id="admin-debt-type" type="hidden" value="fine">
+            <div id="admin-debt-type-picker" class="admin-debt-type-picker">
+                <button id="admin-debt-type-trigger" class="admin-debt-type-trigger" type="button" aria-labelledby="admin-debt-type-label admin-debt-type-selected" aria-haspopup="menu" aria-expanded="false">
+                    <span id="admin-debt-type-selected">Judicial Fine</span>
+                    <span aria-hidden="true">▾</span>
+                </button>
+                <div id="admin-debt-type-menu" class="admin-debt-type-menu" role="menu" hidden>
+                    <button class="admin-debt-type-option" type="button" role="menuitemradio" aria-checked="true" data-value="fine">Judicial Fine</button>
+                    <button class="admin-debt-type-option" type="button" role="menuitemradio" aria-checked="false" data-value="admin">Admin Debt</button>
+                    <button class="admin-debt-type-option" type="button" role="menuitemradio" aria-checked="false" data-value="waiver">Admin Debt Waiver</button>
+                    <button class="admin-debt-type-option" type="button" role="menuitemradio" aria-checked="false" data-value="appeals">Judicial Appeals</button>
+                </div>
+            </div>
         </div>
 
+        <div id="admin-debt-issuance-fields">
     <div style="margin-bottom: 12px;">
         <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Target Username</label>
         <input id="admin-fine-username" placeholder="Search user..." autocomplete="off" 
@@ -1181,7 +1192,7 @@
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
         <div>
-            <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Fine Amount ($)</label>
+            <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Amount ($)</label>
             <input id="admin-fine-amount" type="number" placeholder="0.00" 
                    style="width: 100%; height: 40px; background: #111; border: 1px solid #333; color: #e74c3c; padding: 0 12px; border-radius: 8px; box-sizing: border-box; font-weight: bold; outline: none;">
         </div>
@@ -1193,7 +1204,7 @@
     </div>
 
     <div style="margin-bottom: 15px;">
-        <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Reason for Citation</label>
+        <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 5px;">Reason</label>
         <input id="admin-fine-reason" type="text" placeholder="e.g., Conduct Violation, Debt Default" 
                style="width: 100%; height: 40px; background: #111; border: 1px solid #333; color: #fff; padding: 0 12px; border-radius: 8px; box-sizing: border-box; outline: none;">
     </div>
@@ -1207,8 +1218,20 @@
             style="width: 100%; height: 45px; background: #e74c3c; color: #fff; border: none; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: 0.2s;">
         Issue Debt
     </button>
-</div>
+    </div>
 
+    <div id="admin-debt-waiver-fields" hidden>
+        <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px 0;">Waive individual admin-issued debt entries. Judicial fines are not listed or affected.</p>
+        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+            <input id="admin-debt-waiver-username" placeholder="Enter username..." autocomplete="off"
+                   style="flex: 1; min-width: 0; height: 40px; background: #111; border: 1px solid #333; color: #fff; padding: 0 12px; border-radius: 8px; box-sizing: border-box;">
+            <button id="admin-load-debts-btn" type="button" class="btn-primary" style="height: 40px; padding: 0 16px;">Load Debts</button>
+        </div>
+        <div id="admin-debt-waiver-list" style="display: flex; flex-direction: column; gap: 10px;">
+            <p style="color: gray; font-style: italic; margin: 0;">Search for a user to review their admin debts.</p>
+        </div>
+    </div>
+<div id="admin-judicial-appeals-fields" hidden>
 <div class="admin-section" style="border: 1px solid #3498db; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
         <div style="display: flex; align-items: center; gap: 10px;">
@@ -1235,8 +1258,10 @@
         <span style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Queue syncs automatically with database</span>
     </div>
 </div>
+</div>
+</div>
 
-    <div class="admin-section" style="border: 1px solid #f1c40f; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+    <div id="central-bank-controls" class="admin-section" style="border: 1px solid #f1c40f; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
         <div style="display: flex; align-items: center; gap: 10px;">
             <span style="font-size: 1.2rem;">🏛️</span>
@@ -1257,7 +1282,7 @@
 
     <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid #333; border-radius: 10px; padding: 15px;">
         <label style="font-size: 0.6rem; color: #aaa; text-transform: uppercase; font-weight: 800; display: block; margin-bottom: 10px;">Adjust Resistance (Full Integer Input)</label>
-        <div style="display: flex; gap: 10px;">
+        <div id="central-bank-resistance-controls" style="display: flex; gap: 10px;">
             <input type="number" id="new-volatility-input" placeholder="e.g. 54000000" 
                    style="flex: 1; height: 42px; background: #111; border: 1px solid #444; color: #fff; padding: 0 12px; border-radius: 8px; outline: none; font-size: 0.9rem; font-family: monospace;">
             <button id="update-volatility-btn" class="btn-primary" 
@@ -1587,10 +1612,10 @@
         </div>
     </div>
 
-    <div style="display: flex; gap: 10px;">
+    <div id="admin-membership-actions" style="display: flex; gap: 10px;">
         <button id="admin-grant-trial-btn" class="btn-primary" 
                 style="flex: 2; height: 45px; background: #2ecc71; color: #000; border: none; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer;">
-            Grant Membership / Trial
+            Grant Membership
         </button>
         <button id="admin-revoke-trial-btn" class="btn-danger" 
                 style="flex: 1; height: 45px; background: #e74c3c; color: #fff; border: none; border-radius: 8px; font-weight: 800; text-transform: uppercase; font-size: 0.7rem; cursor: pointer;">

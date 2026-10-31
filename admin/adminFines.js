@@ -12,6 +12,62 @@ const ENABLE_DEBT_SLACK_NOTIFICATIONS = true;
 export function initFinesUI() {
   const el = getDOMElements();
   
+  if (el.adminDebtType) {
+    const picker = document.getElementById("admin-debt-type-picker");
+    const trigger = document.getElementById("admin-debt-type-trigger");
+    const menu = document.getElementById("admin-debt-type-menu");
+    const selectedLabel = document.getElementById("admin-debt-type-selected");
+    const options = menu?.querySelectorAll(".admin-debt-type-option");
+
+    const updateDebtTypeFields = () => {
+      const selectedAction = el.adminDebtType.value;
+      const issuanceFields = document.getElementById("admin-debt-issuance-fields");
+      const waiverFields = document.getElementById("admin-debt-waiver-fields");
+      const appealsFields = document.getElementById("admin-judicial-appeals-fields");
+      if (issuanceFields) issuanceFields.hidden = selectedAction === "waiver" || selectedAction === "appeals";
+      if (waiverFields) waiverFields.hidden = selectedAction !== "waiver";
+      if (appealsFields) appealsFields.hidden = selectedAction !== "appeals";
+    };
+
+    el.adminDebtType.addEventListener("change", updateDebtTypeFields);
+    if (picker && trigger && menu && selectedLabel && options) {
+      const closeMenu = () => {
+        menu.hidden = true;
+        trigger.setAttribute("aria-expanded", "false");
+      };
+
+      trigger.addEventListener("click", () => {
+        const isOpen = !menu.hidden;
+        menu.hidden = isOpen;
+        trigger.setAttribute("aria-expanded", String(!isOpen));
+      });
+
+      options.forEach((option) => {
+        option.addEventListener("click", () => {
+          el.adminDebtType.value = option.dataset.value;
+          selectedLabel.textContent = option.textContent;
+          options.forEach((item) => item.setAttribute("aria-checked", String(item === option)));
+          closeMenu();
+          el.adminDebtType.dispatchEvent(new Event("change", { bubbles: true }));
+          trigger.focus();
+        });
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!picker.contains(event.target)) closeMenu();
+      });
+
+      picker.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !menu.hidden) {
+          closeMenu();
+          trigger.focus();
+        }
+      });
+    }
+
+    updateDebtTypeFields();
+  }
+
   if (el.issueFineBtn) {
     el.issueFineBtn.addEventListener("click", issueJudicialFine);
   }

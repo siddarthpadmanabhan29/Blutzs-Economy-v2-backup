@@ -195,9 +195,9 @@ function renderActiveContract(docId, data, userData) {
             </div>
         </div>
 
-        <div style="display: flex; gap: 10px;">
-            <button id="request-trade-btn-${docId}" class="btn-secondary" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;" ${data.tradePending ? 'disabled' : ''}>REQUEST TRADE</button>
-            <button id="request-release-btn-${docId}" class="btn-danger" style="flex:1; font-weight:800; height: 40px; border-radius: 8px;" ${data.releasePending ? 'disabled' : ''}>REQUEST RELEASE</button>
+        <div class="contract-request-actions" style="display: flex; gap: 10px;">
+            <button id="request-trade-btn-${docId}" class="btn-secondary" style="flex:1; min-width:0; font-weight:800; height:40px; padding:4px 6px; border-radius:8px; line-height:1.15; white-space:normal; overflow-wrap:anywhere;" ${data.tradePending ? 'disabled' : ''}>REQUEST TRADE</button>
+            <button id="request-release-btn-${docId}" class="btn-danger" style="flex:1; min-width:0; font-weight:800; height:40px; padding:4px 6px; border-radius:8px; line-height:1.15; white-space:normal; overflow-wrap:anywhere;" ${data.releasePending ? 'disabled' : ''}>REQUEST RELEASE</button>
         </div>
     `;
     contractSection.appendChild(div);
