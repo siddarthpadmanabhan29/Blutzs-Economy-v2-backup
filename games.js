@@ -237,10 +237,10 @@ function renderGamesUI(userData, claimState) {
   }
 
   if (claimState.status === "recoverable-miss") {
-    setStatus("You missed the previous day. You can recover once for the cost below.", "#f1c40f");
+    setStatus("You missed the previous day. Restart for free or purchase recovery below.", "#f1c40f");
     confirmBtn.disabled = false;
-    confirmBtn.textContent = "Recover & Continue";
-    confirmBtn.style.background = "linear-gradient(135deg, #e74c3c, #c0392b)";
+    confirmBtn.textContent = "Restart Streak (Free)";
+    confirmBtn.style.background = "linear-gradient(135deg, #f39c12, #d68910)";
     return;
   }
 
@@ -334,50 +334,19 @@ export async function initGamesUI() {
       return;
     }
 
-    const recoveryCost = gamesConfig.recoveryCost || { money: 5000, bps: 2 };
+    if (claimState.status === "recoverable-miss") {
+      await updateDoc(userRef, {
+        lastDailyLoginDate: new Date().toISOString(),
+        dailyLoginDay: 2
+      });
+      await logHistory(user.uid, "Restarted daily login streak for free", "usage");
+      setStatus("Streak restarted. You are now on Day 1.", "#2ecc71");
+      return;
+    }
+
     const claimDay = Number(claimState.dayToClaim || 1);
     const streakDay = Number(claimState.streakDayToClaim || 1);
     const prize = getPrizeForDay(gamesConfig, claimDay);
-
-    if (claimState.status === "recoverable-miss") {
-      const hasMoney = Number(userData.balance || 0) >= Number(recoveryCost.money || 0);
-      const hasBps = Number(userData.bpsBalance || 0) >= Number(recoveryCost.bps || 0);
-      if (!hasMoney && !hasBps) {
-        setStatus("You need enough funds or BPS to recover the lost streak.", "#e74c3c");
-        return;
-      }
-
-      let paymentMethod = null;
-      if (hasMoney && !hasBps) {
-        paymentMethod = "money";
-      } else if (hasBps && !hasMoney) {
-        paymentMethod = "bps";
-      } else {
-        // Both affordable — let the user pick via the custom modal
-        // (real Cancel option, no forced either/or).
-        paymentMethod = await showRecoveryChoiceModal({
-          costMoney: Number(recoveryCost.money || 0),
-          costBps: Number(recoveryCost.bps || 0),
-          hasMoney,
-          hasBps
-        });
-      }
-
-      if (!paymentMethod) {
-        setStatus("Recovery cancelled.", "#888");
-        return;
-      }
-
-      if (paymentMethod === "money") {
-        await updateDoc(userRef, { balance: increment(-Number(recoveryCost.money || 0)), lastDailyLoginDate: getTodayKey(), dailyLoginDay: Number(userData.dailyLoginDay || 1) });
-      } else {
-          await updateDoc(userRef, { ...buildBpsBalanceUpdate(userData, -Number(recoveryCost.bps || 0), new Date()), lastDailyLoginDate: getTodayKey(), dailyLoginDay: Number(userData.dailyLoginDay || 1) });
-      }
-
-      await logHistory(user.uid, "Recovered daily login streak", "usage");
-      setStatus("Streak recovered. Your next login day is ready.", "#2ecc71");
-      return;
-    }
 
     const payout = prize || { money: 0, bps: 0 };
 
