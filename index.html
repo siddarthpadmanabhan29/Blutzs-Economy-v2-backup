@@ -1032,6 +1032,22 @@
     </div>
 </div>
 
+        <div class="admin-section" style="border: 1px solid #f39c12; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                <span style="font-size: 1.2rem;">🧾</span>
+                <h3 style="color: #f39c12; margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">Admin Debt Waivers</h3>
+            </div>
+            <p style="font-size: 0.75rem; color: #888; margin: 0 0 16px 0;">Waive individual admin-issued debt entries. Judicial fines are not listed or affected.</p>
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                <input id="admin-debt-waiver-username" placeholder="Enter username..." autocomplete="off"
+                       style="flex: 1; min-width: 0; height: 40px; background: #111; border: 1px solid #333; color: #fff; padding: 0 12px; border-radius: 8px; box-sizing: border-box;">
+                <button id="admin-load-debts-btn" type="button" class="btn-primary" style="height: 40px; padding: 0 16px;">Load Debts</button>
+            </div>
+            <div id="admin-debt-waiver-list" style="display: flex; flex-direction: column; gap: 10px;">
+                <p style="color: gray; font-style: italic; margin: 0;">Search for a user to review their admin debts.</p>
+            </div>
+        </div>
+
         <div class="admin-section" style="border: 1px solid #3498db; background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
         <span style="font-size: 1.2rem;">📈</span>

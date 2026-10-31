@@ -1,5 +1,5 @@
-import { db } from "../firebaseConfig.js";
-import { collection, doc, getDoc, getDocs, updateDoc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { auth, db } from "../firebaseConfig.js";
+import { collection, doc, getDoc, getDocs, updateDoc, query, where, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { logHistory } from "../historyManager.js";
 import { sendSlackMessage } from "../slackNotifier.js";
 import { getDOMElements, handleUserLookup } from "./adminUtils.js";
@@ -20,6 +20,133 @@ export function initFinesUI() {
     el.adminFineUsername.addEventListener("input", () => 
       handleUserLookup(el.adminFineUsername, el.adminFineInfo, el.issueFineBtn, "fine")
     );
+  }
+}
+
+export function initAdminDebtWaivers() {
+  const { adminDebtWaiverUsername, adminLoadDebtsBtn, adminDebtWaiverList } = getDOMElements();
+  if (!adminDebtWaiverUsername || !adminLoadDebtsBtn || !adminDebtWaiverList) return;
+
+  adminLoadDebtsBtn.addEventListener("click", async () => {
+    const username = adminDebtWaiverUsername.value.trim().toLowerCase();
+    if (!username) {
+      alert("Enter a username to load admin debts.");
+      return;
+    }
+
+    adminDebtWaiverList.textContent = "Loading admin debts...";
+    try {
+      const userQuery = query(collection(db, "users"), where("username", "==", username));
+      const userSnapshot = await getDocs(userQuery);
+      if (userSnapshot.empty) {
+        adminDebtWaiverList.textContent = "User not found.";
+        return;
+      }
+
+      const userDoc = userSnapshot.docs[0];
+      renderAdminDebtWaivers(userDoc.id, userDoc.data(), adminDebtWaiverList);
+    } catch (error) {
+      console.error("Failed to load admin debts for waiver:", error);
+      adminDebtWaiverList.textContent = "Could not load this user's admin debts. Try again.";
+    }
+  });
+}
+
+function renderAdminDebtWaivers(userId, userData, listEl) {
+  listEl.replaceChildren();
+  const userLabel = document.createElement("strong");
+  userLabel.style.color = "#f39c12";
+  userLabel.textContent = `Admin debts for ${userData.username || userId}`;
+  listEl.appendChild(userLabel);
+
+  const activeDebts = Object.entries(userData.adminDebts || {})
+    .map(([id, debt]) => ({ ...debt, id, remaining: Number(debt.remaining ?? debt.amount ?? 0) }))
+    .filter((debt) => debt.remaining > 0);
+
+  if (!activeDebts.length) {
+    const emptyMessage = document.createElement("p");
+    emptyMessage.style.cssText = "color:gray; font-style:italic; margin:0;";
+    emptyMessage.textContent = "This user has no active admin-issued debts to waive.";
+    listEl.appendChild(emptyMessage);
+    return;
+  }
+
+  activeDebts.forEach((debt) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; justify-content:space-between; align-items:center; gap:12px; background:rgba(243,156,18,0.06); border:1px solid rgba(243,156,18,0.35); padding:12px; border-radius:8px;";
+
+    const details = document.createElement("div");
+    details.style.cssText = "min-width:0; font-size:0.85rem;";
+    const title = document.createElement("strong");
+    title.textContent = `$${debt.remaining.toLocaleString()} remaining`;
+    const reason = document.createElement("div");
+    reason.style.cssText = "color:#aaa; margin-top:4px; overflow-wrap:anywhere;";
+    reason.textContent = debt.reason || "Admin-issued debt";
+    details.append(title, reason);
+
+    const waiveButton = document.createElement("button");
+    waiveButton.type = "button";
+    waiveButton.textContent = "Waive Debt";
+    waiveButton.style.cssText = "flex-shrink:0; background:#f39c12; color:#111; border:0; padding:9px 12px; border-radius:6px; cursor:pointer; font-weight:800;";
+    waiveButton.addEventListener("click", () => waiveAdminDebt(userId, debt.id, debt.remaining, debt.reason, listEl));
+
+    row.append(details, waiveButton);
+    listEl.appendChild(row);
+  });
+}
+
+async function waiveAdminDebt(userId, debtId, amount, reason, listEl) {
+  if (!confirm(`Waive the $${amount.toLocaleString()} admin debt "${reason || "Admin-issued debt"}"? This does not affect judicial fines.`)) return;
+
+  const userRef = doc(db, "users", userId);
+  try {
+    const result = await runTransaction(db, async (transaction) => {
+      const userSnapshot = await transaction.get(userRef);
+      if (!userSnapshot.exists()) throw new Error("User no longer exists.");
+
+      const debt = userSnapshot.data().adminDebts?.[debtId];
+      const remaining = Number(debt?.remaining ?? debt?.amount ?? 0);
+      if (!debt || !Number.isFinite(remaining) || remaining <= 0) {
+        throw new Error("This admin debt is no longer active.");
+      }
+
+      const waivedAt = new Date().toISOString();
+      transaction.update(userRef, {
+        [`adminDebts.${debtId}.remaining`]: 0,
+        [`adminDebts.${debtId}.status`]: "waived",
+        [`adminDebts.${debtId}.waivedAt`]: waivedAt,
+        [`adminDebts.${debtId}.waivedBy`]: auth.currentUser?.uid || "admin"
+      });
+
+      const updatedUserData = userSnapshot.data();
+      updatedUserData.adminDebts = {
+        ...(updatedUserData.adminDebts || {}),
+        [debtId]: {
+          ...debt,
+          remaining: 0,
+          status: "waived",
+          waivedAt,
+          waivedBy: auth.currentUser?.uid || "admin"
+        }
+      };
+      return { amount: remaining, reason: debt.reason || "Admin-issued debt", userData: updatedUserData };
+    });
+
+    await logHistory(userId, `🏛️ ADMIN DEBT WAIVED: $${result.amount.toLocaleString()} for "${result.reason}"`, "admin");
+    if (ENABLE_DEBT_SLACK_NOTIFICATIONS) {
+      await sendSlackMessage(
+        `🏛️ *ADMIN DEBT WAIVED*\n` +
+        `👤 *User:* ${result.userData.username || userId}\n` +
+        `🛡️ *Waived by admin:* ${auth.currentUser?.uid || "Unknown"}\n` +
+        `💰 *Amount:* $${result.amount.toLocaleString()}\n` +
+        `📝 *Reason:* ${result.reason}`
+      );
+    }
+    renderAdminDebtWaivers(userId, result.userData, listEl);
+    alert(`Admin debt waived ($${result.amount.toLocaleString()}). Judicial fines were not changed.`);
+  } catch (error) {
+    console.error("Failed to waive admin debt:", error);
+    alert(`Could not waive this admin debt: ${error.message}`);
   }
 }
 

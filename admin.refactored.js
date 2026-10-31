@@ -40,7 +40,7 @@ export async function initializeAdminPanel() {
     const { initAdminUI } = await import("./admin/adminUtils.js");
     const { initEconomyUI, listenToEconomyStats } = await import("./admin/adminEconomy.js");
     const { listenForAdminLottery, listenToGlobalTickets, listenForAdminRoster } = await import("./admin/adminLottery.js");
-    const { listenForAppeals, initFinesUI } = await import("./admin/adminFines.js");
+    const { listenForAppeals, initFinesUI, initAdminDebtWaivers } = await import("./admin/adminFines.js");
     const { listenToAllEscrow } = await import("./admin/adminEscrow.js");
     const { initMembershipsUI, loadRenewalRequests } = await import("./admin/adminMembers.js");
     const { initCosmeticsUI } = await import("./admin/adminCosmetics.js");
@@ -57,6 +57,7 @@ export async function initializeAdminPanel() {
     initStockMarketAdminUI();
     initMembershipsUI();
     initFinesUI();
+    initAdminDebtWaivers();
     initCosmeticsUI();
     initEmploymentUI();
     initContractsUI();

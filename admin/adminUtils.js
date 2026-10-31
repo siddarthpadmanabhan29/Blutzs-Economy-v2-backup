@@ -246,6 +246,9 @@ export function getDOMElements() {
     adminFineInfo: document.getElementById("admin-fine-info"),
     issueFineBtn: document.getElementById("admin-issue-fine-btn"),
     adminAppealsList: document.getElementById("admin-appeals-list"),
+    adminDebtWaiverUsername: document.getElementById("admin-debt-waiver-username"),
+    adminLoadDebtsBtn: document.getElementById("admin-load-debts-btn"),
+    adminDebtWaiverList: document.getElementById("admin-debt-waiver-list"),
     
     // Cosmetics
     adminCosmeticsUsername: document.getElementById("admin-cosmetics-username"),
