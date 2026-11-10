@@ -85,6 +85,7 @@ function renderBpsShop(externalUserData = null) {
 
  // --- UNIFIED BPS HEADER (Merged Registration & Rewards) ---
  const headerDiv = document.createElement("div");
+ headerDiv.classList.add("bps-rewards-header");
  headerDiv.style.cssText = `
     grid-column: 1 / -1;
     background: ${isRegistered ? 'var(--card-bg)' : 'linear-gradient(135deg, #8e44ad, #6c5ce7)'};
@@ -194,6 +195,8 @@ function renderBpsShop(externalUserData = null) {
 
         const div = document.createElement("div");
         div.classList.add("shop-item", "bps-item");
+        div.classList.add("bps-centered-details", "bps-token-card");
+        if (isGiftCard) div.classList.add("bps-gift-card");
         
         const cardBg = isGiftCard 
             ? 'linear-gradient(135deg, #f1c40f, #d35400)' 
@@ -247,7 +250,7 @@ function renderBpsShop(externalUserData = null) {
             </div>`;
 
         div.innerHTML = `
-            <div style="position: relative; z-index: 2;">
+            <div class="bps-item-details" style="position: relative; z-index: 2;">
             <h4 style="margin:0; font-size: 1rem; font-weight: 700; color: ${isGiftCard ? '#fff' : 'var(--text-main)'}; line-height: 1.2;">${isGiftCard ? '🎁 ' : ''}${item.name}</h4>
             ${priceHTML}
             </div>

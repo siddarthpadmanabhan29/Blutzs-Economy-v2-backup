@@ -103,6 +103,15 @@ export async function createOrUpdateUserDoc(uid, username, email) {
 }
 
 // ---------- Login Flow ----------
+function submitLoginOnEnter(event) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    loginBtn.click();
+}
+
+loginUsername.addEventListener("keydown", submitLoginOnEnter);
+loginPassword.addEventListener("keydown", submitLoginOnEnter);
+
 loginBtn.addEventListener("click", async () => {
     if (isAuthenticating) return;
 

@@ -99,12 +99,8 @@ let subscriptionShopLoaded = false;
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
 
-/* =========================================================
-    INSTANT THEME APPLY
-========================================================= */
-const savedTheme = localStorage.getItem("theme");
-if (savedTheme === "dark") document.body.classList.add("dark-mode");
-if (savedTheme === "light") document.body.classList.add("light-mode");
+document.body.classList.add("dark-mode");
+document.body.classList.remove("light-mode");
 
 // ---------- UI Elements ----------
 const dashboard = document.getElementById("dashboard");
@@ -119,7 +115,6 @@ const bpsRiskNewEl = document.getElementById("bps-risk-new");
 const bpsRiskExpiresEl = document.getElementById("bps-risk-expires");
 const logoutBtn = document.getElementById("logout-btn");
 const openAdminBtn = document.getElementById("open-admin");
-const themeToggleBtn = document.getElementById("theme-toggle-btn");
 
 const profileUsername = document.getElementById("profile-username");
 const profileUid = document.getElementById("profile-uid");
@@ -478,20 +473,6 @@ window.requestFineAppeal = async () => {
     }
 };
 
-function applyTheme(theme) {
-  if (theme === "light") {
-    document.body.classList.add("light-mode");
-    document.body.classList.remove("dark-mode");
-    if (themeToggleBtn) themeToggleBtn.textContent = "🌙";
-  } else {
-    document.body.classList.add("dark-mode");
-   document.body.classList.remove("light-mode");
-    if (themeToggleBtn) themeToggleBtn.textContent = "☀️";
-  }
-  localStorage.setItem("theme", theme);
-    if (currentDashboardData) renderSavings(currentDashboardData);
-}
-
 /* =========================================================
     THROTTLED MARKET RATE FETCH
     Returns cached rate if fetched within the last minute,
@@ -560,7 +541,6 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   const userRef = doc(db, "users", user.uid);
-  let themeAppliedOnce = false; 
   let billingCheckedOnce = false;
 
   unsubUser = onSnapshot(userRef, async snap => { 
@@ -587,14 +567,6 @@ onAuthStateChanged(auth, async (user) => {
 
     await applyInterest(user.uid, currentDashboardData);
     await applyFineInterestIfNeeded(userRef, currentDashboardData);
-
-    if (!themeAppliedOnce) {
-        const theme = currentDashboardData.cosmeticsOwned?.darkMode
-            ? (currentDashboardData.theme || localStorage.getItem("theme") || "dark")
-            : "light"; 
-        applyTheme(theme);
-        themeAppliedOnce = true; 
-    }
 
     // --- THROTTLED: only fetch market rate once per minute to prevent excess reads ---
     const liveRate = await getThrottledMarketRate();
@@ -748,7 +720,7 @@ function renderUnifiedHistory() {
     }
 
          unifiedHistoryList.innerHTML += `
-    <div class="history-entry-row" style="display: flex; align-items: center; padding: 16px 12px; border-bottom: 1px solid var(--border-color); gap: 20px; width: 100%; box-sizing: border-box; overflow: hidden;">
+    <div class="history-entry-row ledger-entry-row" style="display: flex; align-items: center; padding: 16px 12px; border-bottom: 1px solid var(--border-color); gap: 20px; width: 100%; box-sizing: border-box; overflow: hidden;">
         <div class="history-icon-wrapper" style="flex-shrink: 0; width: 48px; height: 48px; background: var(--input-bg); border: 2.5px solid ${accentColor}; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1.2rem; box-shadow: 0 4px 8px rgba(0,0,0,0.15);">
             ${icon}
         </div>
@@ -810,7 +782,10 @@ function updateDashboardUI(user, dynamicRate) {
   const vIndex = Number(data.volatilityIndex) || 34000000;
 
   if(userName) userName.textContent = data.username || user.email.split("@")[0];
-  if(userBalance) userBalance.textContent = `$${balance.toLocaleString()}`; 
+  if(userBalance) userBalance.textContent = `$${balance.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
 
   const volDisplay = document.getElementById("volatility-display");
   if (volDisplay) {
@@ -843,27 +818,16 @@ function updateDashboardUI(user, dynamicRate) {
       if (data.isLoyaltyRegistered) {
           if (securityLockIcon) securityLockIcon.innerText = "🔒";
           walletSecurityStatus.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items: flex-start; gap:4px;">
-              <div style="display:flex; align-items:center; gap:6px; color:#2ecc71; font-weight:700; font-size:0.85rem; letter-spacing: 0.5px;">
-                  <span style="font-size: 0.9rem;">🔒</span> WALLET SECURED
+            <div class="wallet-security-content">
+              <div class="wallet-security-heading">
+                  <span aria-hidden="true">🔒</span><span>Wallet secured</span>
               </div>
-              <button id="change-pin-sidebar-btn" style="
-                  background: rgba(52, 152, 219, 0.1); 
-                  border: 1px solid rgba(52, 152, 219, 0.3); 
-                  color: #3498db; 
-                  cursor: pointer; 
-                  font-size: 0.65rem; 
-                  font-weight: 800;
-                  text-transform: uppercase;
-                  padding: 3px 8px; 
-                  border-radius: 4px;
-                  transition: 0.2s;
-              ">
+              <button id="change-pin-sidebar-btn" class="wallet-security-action" type="button">
                   Change PIN
               </button>
             </div>`;
-          walletSecurityStatus.style.background = "rgba(46, 204, 113, 0.1)";
-          walletSecurityStatus.style.border = "1px solid rgba(46, 204, 113, 0.2)";
+          walletSecurityStatus.classList.add("is-secured");
+          walletSecurityStatus.classList.remove("is-unsecured");
 
           const changeBtn = document.getElementById("change-pin-sidebar-btn");
           if (changeBtn) {
@@ -894,14 +858,16 @@ function updateDashboardUI(user, dynamicRate) {
       } else {
           if (securityLockIcon) securityLockIcon.innerText = "🔓";
           walletSecurityStatus.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:5px;">
-                <span>🔓 Wallet Unsecured</span>
-                <button id="register-wallet-sidebar-btn" style="background:#8e44ad; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.7rem; font-weight:bold; text-transform:uppercase;">
+            <div class="wallet-security-content">
+                <div class="wallet-security-heading">
+                    <span aria-hidden="true">🔓</span><span>Wallet unsecured</span>
+                </div>
+                <button id="register-wallet-sidebar-btn" class="wallet-security-action is-register" type="button">
                     Register Wallet
                 </button>
             </div>`;
-          walletSecurityStatus.style.background = "rgba(0,0,0,0.2)";
-          walletSecurityStatus.style.border = "1px solid rgba(255,255,255,0.05)";
+          walletSecurityStatus.classList.add("is-unsecured");
+          walletSecurityStatus.classList.remove("is-secured");
 
           const regBtn = document.getElementById("register-wallet-sidebar-btn");
           if (regBtn) {
@@ -930,11 +896,9 @@ function updateDashboardUI(user, dynamicRate) {
       } else if (tier === btnPlan) {
           btn.disabled = true;
           btn.textContent = "Current ✅";
-          btn.style.backgroundColor = "#27ae60";
       } else {
           btn.disabled = false;
           btn.textContent = `Join ${PLANS[btnPlan].label}`;
-          btn.style.backgroundColor = ""; 
           btn.style.opacity = "1";
       }
   });
@@ -1266,15 +1230,6 @@ clearFiltersBtn?.addEventListener("click", () => {
     endDateFilterInput.value = getESTDate(0);
     searchFilterInput.value = "";
     renderUnifiedHistory();
-});
-
-themeToggleBtn?.addEventListener("click", async () => {
-  if(!auth.currentUser) return;
-  if(!currentDashboardData?.cosmeticsOwned?.darkMode) return alert("Buy Dark Mode first.");
-  const isLight = document.body.classList.contains("light-mode");
-  const newTheme = isLight ? "dark" : "light";
-  applyTheme(newTheme);
-  await updateDoc(doc(db, "users", auth.currentUser.uid), { theme: newTheme });
 });
 
 takeLoanBtn?.addEventListener("click", () => takeOutLoan(parseInt(loanAmountSelect.value)));

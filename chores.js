@@ -269,19 +269,19 @@ function renderChores() {
 
   statsEl.innerHTML = `
     <div style="display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
-      <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
+      <div class="chore-stat-card" style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
         <div style="font-size:0.65rem; color:#888; text-transform:uppercase; font-weight:800; letter-spacing:1px;">Completed</div>
         <div style="font-size:1.25rem; font-weight:800; color:#2ecc71; margin-top:4px;">${stats.completed}</div>
       </div>
-      <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
+      <div class="chore-stat-card" style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
         <div style="font-size:0.65rem; color:#888; text-transform:uppercase; font-weight:800; letter-spacing:1px;">Chore Points</div>
         <div style="font-size:1.25rem; font-weight:800; color:#f1c40f; margin-top:4px;">${stats.points}</div>
       </div>
-      <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
+      <div class="chore-stat-card" style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
         <div style="font-size:0.65rem; color:#888; text-transform:uppercase; font-weight:800; letter-spacing:1px;">Declines</div>
         <div style="font-size:1.25rem; font-weight:800; color:#e74c3c; margin-top:4px;">${stats.declines}</div>
       </div>
-      <div style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
+      <div class="chore-stat-card" style="background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px;">
         <div style="font-size:0.65rem; color:#888; text-transform:uppercase; font-weight:800; letter-spacing:1px;">Pending Review</div>
         <div style="font-size:1.25rem; font-weight:800; color:#3498db; margin-top:4px;">${stats.pending}</div>
       </div>
@@ -294,7 +294,7 @@ function renderChores() {
 
   leaderboardEl.innerHTML = leaderboardRows.length
     ? leaderboardRows.map((user, index) => `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+        <div class="chore-leaderboard-row" style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
           <div>
             <div style="font-weight:800; color:var(--text-main);">#${index + 1} ${escapeHtml(user.username || "Unknown")}</div>
             <div style="font-size:0.75rem; color:var(--text-muted);">${Number(user.choresCompleted || 0)} chores • ${Number(user.chorePoints || 0)} points</div>
@@ -307,7 +307,7 @@ function renderChores() {
   if (adminReviewEl) {
     adminReviewEl.innerHTML = pendingReview.length
       ? pendingReview.map((chore) => `
-          <div class="chore-card chore-card--compact" style="background: var(--input-bg); border:1px solid var(--border-color); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+          <div class="chore-card chore-card--compact chore-review-card" style="background: var(--input-bg); border:1px solid var(--border-color); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px;">
             <div class="chore-title-row" style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">
               <strong style="color:var(--text-main);">${escapeHtml(chore.title)}</strong>
               <span style="font-size:0.7rem; text-transform:uppercase; color:#f1c40f; font-weight:800;">${getStatusLabel(chore.status)}</span>
@@ -337,7 +337,7 @@ function renderChores() {
         const canDone = isAssignedToMe && chore.status === "in_progress";
 
         return `
-          <div class="chore-card" style="background: var(--input-bg); border:1px solid var(--border-color); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+          <div class="chore-card chore-task-card" style="background: var(--input-bg); border:1px solid var(--border-color); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
             <div class="chore-title-row" style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:center;">
               <div>
                 <div style="font-weight:800; color:var(--text-main);">${escapeHtml(chore.title)}</div>

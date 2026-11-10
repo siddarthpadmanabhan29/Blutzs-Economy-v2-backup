@@ -127,7 +127,7 @@ export function initInsurance(userData) {
         }
 
         const badgesHTML = `
-            <div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:12px;
+            <div class="insurance-status-badges" style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:12px;
                         font-weight:900;font-family:sans-serif;font-size:0.6rem;letter-spacing:1px;">
                 <span style="background:#3498db;color:#fff;padding:3px 10px;border-radius:4px;
                              box-shadow:0 2px 8px rgba(52,152,219,0.3);">ACTIVE [${activeCount}]</span>

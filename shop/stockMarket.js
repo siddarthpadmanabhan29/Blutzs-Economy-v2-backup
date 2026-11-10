@@ -282,7 +282,11 @@ function renderPriceChart(company, containerId, initialTimeframe = 'daily') {
         scales: {
           y: {
             beginAtZero: false,
-            grid: { color: 'rgba(255,255,255,0.05)' },
+            grid: {
+              color: document.body.classList.contains('dark-mode')
+                ? 'rgba(148,163,184,0.16)'
+                : 'rgba(15,23,42,0.1)'
+            },
             ticks: { color: '#aaa', callback: (val) => `$${val.toFixed(2)}` }
           },
           x: {
@@ -379,23 +383,23 @@ function renderStockMarket() {
         </div>
 
         <div class="stock-info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.75rem; color: #ddd;">
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div class="stock-metric" style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Live Price<br><strong style="color: #f1c40f; font-size: 1rem;">$${livePrice.toLocaleString()}</strong>
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div class="stock-metric" style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Market Change<br><strong style="color: ${changeClass}; font-size: 1rem;">${delta >= 0 ? '+' : ''}$${delta.toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</strong>
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div class="stock-metric" style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Shares Available<br><strong style="color: #2ecc71; font-size: 1rem;">${availableShares}</strong>
           </div>
-          <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
+          <div class="stock-metric" style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; min-width: 0;">
             Dividend Yield<br><strong style="color: #8e44ad; font-size: 1rem;">${Number(company.dividendRate || 0)}%</strong>
             <span style="display: block; font-size: 0.6rem; color: #888;">Paid weekly · 15% tax</span>
           </div>
         </div>
 
         <!-- CHART SECTION -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.05);">
+        <div class="stock-chart-panel" style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.05);">
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
             <span style="color: #aaa; font-size: 0.7rem; text-transform: uppercase; font-weight: 800;">Performance</span>
             <div class="chart-timeframe-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -413,7 +417,7 @@ function renderStockMarket() {
           <div id="chart-stats-${company.id}" class="chart-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; font-size: 0.7rem; color: #aaa;"></div>
         </div>
 
-        <div style="background: rgba(231,76,60,0.06); border: 1px solid rgba(231,76,60,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.7rem; color: #e74c3c; word-break: break-word;">
+        <div class="stock-sell-tax" style="background: rgba(231,76,60,0.06); border: 1px solid rgba(231,76,60,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.7rem; color: #e74c3c; word-break: break-word;">
           ⚠️ Sell Tax: 10% deducted from proceeds (~$${estimatedSellTax.toFixed(2)} per share at current price)
         </div>
 
@@ -509,16 +513,16 @@ function updateChartStats(company, timeframe) {
     const stats = calculateChartStats(data);
     
     statsContainer.innerHTML = `
-      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      <div class="chart-stat-cell" style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
         Min: <strong style="color: #aaa;">$${stats.min}</strong>
       </div>
-      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      <div class="chart-stat-cell" style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
         Max: <strong style="color: #aaa;">$${stats.max}</strong>
       </div>
-      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      <div class="chart-stat-cell" style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
         Avg: <strong style="color: #aaa;">$${stats.avg}</strong>
       </div>
-      <div style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+      <div class="chart-stat-cell" style="padding: 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
         Change: <strong style="color: ${stats.change >= 0 ? '#2ecc71' : '#e74c3c'};">${stats.change >= 0 ? '+' : ''}$${stats.change} (${stats.changePercent >= 0 ? '+' : ''}${stats.changePercent}%)</strong>
       </div>
     `;

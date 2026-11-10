@@ -259,6 +259,7 @@ function renderSubscriptionShop() {
 
     const itemCard = document.createElement("div");
     itemCard.classList.add("subscription-item");
+    itemCard.classList.add("recurring-service-card");
     itemCard.style.cssText = `
       background: var(--card-bg);
       border: 1px solid #2ecc71;
@@ -357,6 +358,7 @@ function renderUserSubscriptions() {
     }
 
     const subscriptionCard = document.createElement("div");
+    subscriptionCard.classList.add("active-subscription-card");
     subscriptionCard.style.cssText = `
       background: var(--input-bg);
       border: 1px solid #2ecc71;

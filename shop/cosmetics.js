@@ -2,7 +2,6 @@
 console.log("cosmetics.js loaded");
 
 import { db, auth } from "../firebaseConfig.js";
-import { renderSavings } from "../finance/retirement.js";
 import {
   doc, getDoc, updateDoc,
   collection, getDocs, addDoc
@@ -30,24 +29,12 @@ async function getCosmeticsMap() {
   return cosmeticsCache;
 }
 
-// ---------- THEME ----------
-function applySavedTheme() {
-  const savedTheme = localStorage.getItem("theme");
-  if (savedTheme === "dark") {
-    document.body.classList.add("dark-mode");
-    document.body.classList.remove("light-mode");
-  } else if (savedTheme === "light") {
-    document.body.classList.add("light-mode");
-    document.body.classList.remove("dark-mode");
-  }
-}
-applySavedTheme();
-
 // ---------- APPLY NAVBAR & BACKGROUND (OWNERSHIP SAFE) ----------
 // ---------- APPLY NAVBAR & BACKGROUND (SOLID BLEND + HIGH VISIBILITY) ----------
 // ---------- APPLY NAVBAR & BACKGROUND (CLEAN HIGH-VISIBILITY) ----------
 async function applyCosmeticsFromFirestore(userData, cosmeticsMap) {
   if (!userData || !dashboardNavbar) return;
+  dashboardNavbar.classList.toggle("has-custom-navbar-color", Boolean(userData.navbarColor));
 
   if (userData.navbarColor) {
     const color = userData.navbarColor;
@@ -144,6 +131,7 @@ async function loadCosmetics(userData = null) {
   cosmeticsShopEl.innerHTML = "";
 
   Object.entries(cosmeticsMap).forEach(([docId, item]) => {
+    if (docId === "darkMode") return;
     const owned = localUserData.cosmeticsOwned[docId] === true;
     
     // Check if equipped
@@ -261,18 +249,7 @@ cosmeticsShopEl.addEventListener("click", async (e) => {
 
     const userRef = doc(db, "users", user.uid);
 
-    // 1. Dark mode toggle
-    if (featureId === "darkMode") {
-      const isDark = document.body.classList.contains("dark-mode");
-      const newMode = !isDark ? "dark" : "light";
-      document.body.classList.toggle("dark-mode", !isDark);
-      document.body.classList.toggle("light-mode", isDark);
-      localStorage.setItem("theme", newMode);
-      if (localUserData) renderSavings(localUserData);
-      await updateDoc(userRef, { theme: newMode });
-    }
-
-    // 2. Navbar Toggle Logic
+    // Navbar Toggle Logic
     if (itemData.type === "navbarColor") {
       const isCurrentlyEquipped = localUserData.navbarColor === itemData.color;
       const colorToSet = isCurrentlyEquipped ? "" : itemData.color;

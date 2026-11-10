@@ -100,7 +100,7 @@ function renderShop(externalUserData = null) {
     let btnText = isFree ? "Claim" : (affordable ? "Purchase" : "Insufficient");
 
     const itemCard = document.createElement("div");
-    itemCard.classList.add("shop-item");
+    itemCard.classList.add("shop-item", "asset-exchange-item");
     
     // FIXED: Added missing colons (:) and semicolons (;) for position and overflow
     itemCard.style.cssText = `
@@ -246,7 +246,10 @@ async function populateSummaryBar(data) {
     const bpsRateHeader = document.getElementById("dynamic-bps-rate");
 
     if (totalWealthEl) totalWealthEl.textContent = `$${netWorth.toLocaleString()}`;
-    if (balanceEl) balanceEl.textContent = `$${balance.toLocaleString()}`;
+    if (balanceEl) balanceEl.textContent = `$${balance.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    })}`;
     if (bpsEl) bpsEl.textContent = `${bps.toLocaleString()}`;
     if (bpsRateHeader) bpsRateHeader.textContent = `$${rate.toLocaleString()}`;
 

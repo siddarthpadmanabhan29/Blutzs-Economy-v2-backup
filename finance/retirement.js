@@ -97,10 +97,9 @@ function renderSavings(userData) {
     if (totalEarnedEl) {
         totalEarnedEl.textContent = totalEarned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-    
+
     const calculatedInterest = savings * activeInterestRate;
-    
-    // UI Notice for boosts
+
     let boostLabels = "";
     if (hasInsuranceBoost) boostLabels += '<span style="color: #2ecc71; font-size: 0.7rem; margin-left: 5px;">🚀 INSURED BOOST</span>';
     if (bpsBoostActive) {
@@ -153,7 +152,9 @@ function renderGrowthChart(currentSavings, interestRate) {
     const ctx = canvas.getContext('2d');
     const styles = getComputedStyle(document.body);
     const textMuted = styles.getPropertyValue('--text-muted').trim() || '#6c757d';
-    const borderColor = styles.getPropertyValue('--contract-border').trim() || '#dcdde1';
+    const borderColor = document.body.classList.contains('dark-mode')
+        ? 'rgba(148, 163, 184, 0.18)'
+        : styles.getPropertyValue('--contract-border').trim() || '#dcdde1';
     
     const months = ["Now", "Mo 1", "Mo 2", "Mo 3", "Mo 4", "Mo 5", "Mo 6"];
     const dataPoints = [currentSavings];
@@ -180,6 +181,7 @@ function renderGrowthChart(currentSavings, interestRate) {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
                 x: { ticks: { color: textMuted }, grid: { color: borderColor } },

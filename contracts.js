@@ -160,12 +160,12 @@ function renderActiveContract(docId, data, userData) {
             <strong style="color: var(--text-color, #eee);">$${sBonus.toLocaleString()}</strong>
         </div>
 
-        <div style="border-top:1px solid var(--border-color, #333); padding-top:15px; margin-bottom:15px;">
+        <div class="contract-progress-section" style="border-top:1px solid var(--border-color, #333); padding-top:15px; margin-bottom:15px;">
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                 <span style="font-size:0.6rem; font-weight:800; color:#3498db; text-transform:uppercase;">All Seasons Progress</span>
                 <span style="font-size:0.65rem; color:#3498db; font-weight:900;">${seasonsRemaining.toFixed(2)} Seasons Left</span>
             </div>
-            <div style="width:100%; height:8px; background: var(--input-bg, #222); border-radius:4px; overflow:hidden; margin-bottom:10px;">
+            <div class="contract-progress-track" style="width:100%; height:8px; background: var(--input-bg, #222); border-radius:4px; overflow:hidden; margin-bottom:10px;">
                 <div style="width:${totalProgress}%; height:100%; background:#3498db; transition: width 1s;"></div>
             </div>
             <div style="display:flex; flex-direction:column; gap:5px; font-size:0.8rem;">
@@ -174,12 +174,12 @@ function renderActiveContract(docId, data, userData) {
             </div>
         </div>
 
-        <div style="border-top:1px solid var(--border-color, #333); padding-top:15px; margin-bottom:15px;">
+        <div class="contract-progress-section" style="border-top:1px solid var(--border-color, #333); padding-top:15px; margin-bottom:15px;">
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                 <span style="font-size:0.6rem; font-weight:800; color:#2ecc71; text-transform:uppercase;">Season ${currentSeasonNum} Progress</span>
                 <span style="font-size:0.65rem; color:#2ecc71; font-weight:900;">${(seasonsRemaining % 1 || (seasonsRemaining > 0 ? 1 : 0)).toFixed(2)} LEFT</span>
             </div>
-            <div style="width:100%; height:8px; background: var(--input-bg, #222); border-radius:4px; overflow:hidden; margin-bottom:10px;">
+            <div class="contract-progress-track" style="width:100%; height:8px; background: var(--input-bg, #222); border-radius:4px; overflow:hidden; margin-bottom:10px;">
                 <div style="width:${seasonProgressPercent}%; height:100%; background:#2ecc71; transition: width 1s;"></div>
             </div>
             <div style="display:flex; flex-direction:column; gap:5px; font-size:0.8rem;">
@@ -190,13 +190,13 @@ function renderActiveContract(docId, data, userData) {
 
         <div style="margin-bottom:20px;">
             <span style="display:block; font-size:0.6rem; color: var(--text-muted, #888); font-weight:800; text-transform:uppercase; margin-bottom:5px;">Agreed Incentives:</span>
-            <div style="background: var(--input-bg, rgba(255,255,255,0.02)); padding:10px; border-radius:6px; font-size:0.75rem; color: var(--text-muted, #999); border: 1px solid var(--border-color, transparent);">
+            <div class="contract-incentives-box" style="background: var(--input-bg, rgba(255,255,255,0.02)); padding:10px; border-radius:6px; font-size:0.75rem; color: var(--text-muted, #999); border: 1px solid var(--border-color, transparent);">
                 ${terms.incentives || "No specific clauses."}
             </div>
         </div>
 
         <div class="contract-request-actions" style="display: flex; gap: 10px;">
-            <button id="request-trade-btn-${docId}" class="btn-secondary" style="flex:1; min-width:0; font-weight:800; height:40px; padding:4px 6px; border-radius:8px; line-height:1.15; white-space:normal; overflow-wrap:anywhere;" ${data.tradePending ? 'disabled' : ''}>REQUEST TRADE</button>
+            <button id="request-trade-btn-${docId}" class="btn-secondary request-trade-btn" style="flex:1; min-width:0; font-weight:800; height:40px; padding:4px 6px; border-radius:8px; line-height:1.15; white-space:normal; overflow-wrap:anywhere;" ${data.tradePending ? 'disabled' : ''}>REQUEST TRADE</button>
             <button id="request-release-btn-${docId}" class="btn-danger" style="flex:1; min-width:0; font-weight:800; height:40px; padding:4px 6px; border-radius:8px; line-height:1.15; white-space:normal; overflow-wrap:anywhere;" ${data.releasePending ? 'disabled' : ''}>REQUEST RELEASE</button>
         </div>
     `;

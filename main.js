@@ -32,15 +32,15 @@ export function updateBalanceDisplay(balance, elemId = "user-balance", changeTyp
   if (!el) return;
   if (balance === undefined || balance === null) return;   // 👈 bail out safely
 
-  let displayValue = balance;
-
-  // If it's a raw number, format it properly. If it's already a string, leave it alone.
-  if (typeof balance === 'number') {
-      displayValue = `$${balance.toLocaleString()}`;
-  } else if (typeof balance === 'string' && !balance.includes('$')) {
-      // If it's a string number but missing the symbol
-      displayValue = `$${Number(balance).toLocaleString()}`;
-  }
+  const numericBalance = typeof balance === "number"
+    ? balance
+    : Number(String(balance).replace(/[^0-9.-]+/g, ""));
+  const displayValue = Number.isFinite(numericBalance)
+    ? `$${numericBalance.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`
+    : String(balance);
 
   // 2. Set text content safely (prevents $NaN)
   if (displayValue.includes("NaN")) {
