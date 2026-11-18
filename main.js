@@ -17,14 +17,6 @@ import "./finance/retirement.js";
 import "./chores.js";
 
 
-// ---------- Global UI Helpers (optional) ----------
-
-// Simple helper for switching screens (login, dashboard, admin, etc.)
-export function showScreen(id) {
-  document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden"));
-  document.getElementById(id).classList.remove("hidden");
-}
-
 // Fancy balance updater (used by dashboard, shop, admin, etc.)
 // Fancy balance updater (Fixed for formatting and CSS preservation)
 export function updateBalanceDisplay(balance, elemId = "user-balance", changeType = null) {

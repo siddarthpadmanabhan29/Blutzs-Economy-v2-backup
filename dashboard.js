@@ -169,6 +169,7 @@ let currentDashboardData = null;
 let interestTimerInterval = null; 
 let cachedHistory = []; 
 let debtCountdownInterval = null;
+let tabSystemInitialized = false;
 
 // Read-only accessors so other modules (e.g. aiChat.js) can reuse the already-live
 // snapshot data instead of issuing their own extra Firestore reads.
@@ -220,36 +221,37 @@ function initTabSystem() {
     const activeMobileBtn = document.getElementById('mobile-menu-btn');
     const activeOverlay = document.getElementById('sidebar-overlay');
 
-    activeMobileBtn?.removeEventListener('click', toggleSidebar);
-    activeOverlay?.removeEventListener('click', toggleSidebar);
+    if (!tabSystemInitialized) {
+        activeMobileBtn?.addEventListener('click', toggleSidebar);
+        activeOverlay?.addEventListener('click', toggleSidebar);
 
-    activeMobileBtn?.addEventListener('click', toggleSidebar);
-    activeOverlay?.addEventListener('click', toggleSidebar);
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const targetTab = item.getAttribute('data-tab');
+                if (!targetTab) return;
 
-    navItems.forEach(item => {
-        item.addEventListener('click', () => {
-            const targetTab = item.getAttribute('data-tab');
-            if (!targetTab) return;
+                navItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
 
-            navItems.forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
+                tabs.forEach(tab => tab.classList.remove('active'));
+                const targetEl = document.getElementById(targetTab);
+                if (targetEl) targetEl.classList.add('active');
 
-            tabs.forEach(tab => tab.classList.remove('active'));
-            const targetEl = document.getElementById(targetTab);
-            if (targetEl) targetEl.classList.add('active');
+                localStorage.setItem('activeDashboardTab', targetTab);
 
-            localStorage.setItem('activeDashboardTab', targetTab);
+                if (targetTab === 'tab-admin') {
+                    import('./admin.refactored.js').then(m => m.initializeAdminPanel());
+                }
 
-            if (targetTab === 'tab-admin') {
-                import('./admin.refactored.js').then(m => m.initializeAdminPanel());
-            }
-
-            const activeSidebar = document.querySelector('.sidebar');
-            if (window.innerWidth <= 900 && activeSidebar) {
-                activeSidebar.classList.remove('mobile-open');
-            }
+                const activeSidebar = document.querySelector('.sidebar');
+                if (window.innerWidth <= 900 && activeSidebar) {
+                    activeSidebar.classList.remove('mobile-open');
+                }
+            });
         });
-    });
+
+        tabSystemInitialized = true;
+    }
 
     const savedTab = localStorage.getItem('activeDashboardTab') || 'tab-overview';
     const tabToClick = document.querySelector(`[data-tab="${savedTab}"]`);
