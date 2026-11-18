@@ -557,6 +557,19 @@ onAuthStateChanged(auth, async (user) => {
     if (!snap.exists()) return;
     currentDashboardData = snap.data();
 
+    const rawBpsBalance = currentDashboardData.bpsBalance;
+    const bpsBalance = typeof rawBpsBalance === "object" && rawBpsBalance !== null
+        ? Number(rawBpsBalance.value || rawBpsBalance.amount || 0)
+        : Number(rawBpsBalance || 0);
+    const userBps = document.getElementById("user-bps");
+    if (userBps) userBps.textContent = bpsBalance.toLocaleString();
+
+    const bpsShopKey = `${bpsBalance}`;
+    if (bpsShopKey !== _prevBpsShopKey) {
+        if (typeof renderBpsShop === "function") renderBpsShop(currentDashboardData);
+        _prevBpsShopKey = bpsShopKey;
+    }
+
     await maybeSyncBpsDecayState(userRef, currentDashboardData);
 
     if (!billingCheckedOnce) {
@@ -574,18 +587,11 @@ onAuthStateChanged(auth, async (user) => {
 
     // --- GUARDED RENDERS: only re-render when relevant data actually changed ---
 
-    // Shop: depends on membershipLevel, balance, shopOrderCount
-    const shopKey = `${currentDashboardData.membershipLevel}|${currentDashboardData.balance}|${currentDashboardData.shopOrderCount}`;
+    // Shop: depends on membershipLevel, balance, shopOrderCount, and active coupon discount
+    const shopKey = `${currentDashboardData.membershipLevel}|${currentDashboardData.balance}|${currentDashboardData.shopOrderCount}|${currentDashboardData.activeDiscount}`;
     if (shopKey !== _prevShopKey) {
         if (typeof renderShop === "function") renderShop(currentDashboardData);
         _prevShopKey = shopKey;
-    }
-
-    // BPS Shop: depends on bpsBalance
-    const bpsShopKey = `${currentDashboardData.bpsBalance}`;
-    if (bpsShopKey !== _prevBpsShopKey) {
-        if (typeof renderBpsShop === "function") renderBpsShop(currentDashboardData);
-        _prevBpsShopKey = bpsShopKey;
     }
 
     // Cosmetics: depends on cosmeticsOwned and equippedBackground

@@ -27,6 +27,7 @@ let currentUserData = null;
 let isAdmin = false;
 let choresUnsub = null;
 let usersUnsub = null;
+let currentUserUnsub = null;
 let choresCache = [];
 let usersCache = [];
 let choresLoaded = false;
@@ -594,8 +595,6 @@ function subscribeToChores() {
     choresLoaded = true;
     choresLoadError = null;
     choresCache = [...choresCacheById.values()];
-    choresLoaded = true;
-    choresLoadError = null;
     renderChores();
   }, (error) => {
     console.error("Failed to subscribe to chores:", error);
@@ -613,9 +612,18 @@ function subscribeToUsers() {
   });
 }
 
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, (user) => {
+  if (currentUserUnsub) {
+    currentUserUnsub();
+    currentUserUnsub = null;
+  }
+
   currentUser = user;
   if (!user) {
+    choresUnsub?.();
+    choresUnsub = null;
+    usersUnsub?.();
+    usersUnsub = null;
     currentUserData = null;
     isAdmin = false;
     choresCache = [];
@@ -636,7 +644,7 @@ onAuthStateChanged(auth, async (user) => {
   subscribeToUsers();
 
   const userRef = doc(db, "users", user.uid);
-  onSnapshot(userRef, (snap) => {
+  currentUserUnsub = onSnapshot(userRef, (snap) => {
     currentUserData = snap.exists() ? snap.data() : {};
     isAdmin = Boolean(currentUserData?.isAdmin);
     renderChores();
@@ -644,5 +652,3 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 initializeChoresUI();
-subscribeToChores();
-subscribeToUsers();
